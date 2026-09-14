@@ -36,6 +36,7 @@ cp .env.example .env
 docker compose up -d --build --wait
 curl http://127.0.0.1:8787/health
 curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:3000
 ```
 
 The default local topology is:
@@ -61,7 +62,12 @@ RELAY_NODE_TOKEN=replace-with-a-different-long-random-node-token
 
 Use TLS and firewall rules before exposing Relay directly to the public internet.
 
-Run `npm run dev` separately for the Web client.
+Compose also starts Steer Web on port `3000`. For a remote host, replace
+`localhost` in `NEXT_PUBLIC_STEER_API_URL`, `STEER_ALLOWED_ORIGINS`, and
+`RELAY_PUBLIC_URL` with the browser- and Node-reachable host or HTTPS domain
+before building the images.
+
+Run `npm run dev` separately only when developing the Web client with hot reload.
 
 ## Public deployment
 

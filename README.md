@@ -38,7 +38,7 @@ Every Run has a conversational response; artifacts are optional. Steer only trea
 
 Requirements: Docker, Go 1.26+, and Node.js 22+.
 
-Start the complete local stack. Compose runs Steer Server, Relay Server, and one shared PostgreSQL instance with separate `steer` and `relay` databases:
+Start the complete stack. Compose runs Steer Web, Steer Server, Relay Server, and one shared PostgreSQL instance with separate `steer` and `relay` databases:
 
 ```bash
 cp .env.example .env
@@ -54,7 +54,7 @@ RELAY_HOST_TOKEN=your-host-token \
 docker compose up -d --build postgres steer-server
 ```
 
-Start the Web client:
+For frontend development with hot reload, run the Web client outside Compose:
 
 ```bash
 npm install
@@ -93,8 +93,11 @@ These tests cover Projects, persistent conversations, Run projection, artifact d
 | `RELAY_BIND_ADDRESS`         | `127.0.0.1`                              | Host interface used by bundled Relay               |
 | `RELAY_HOST_TOKEN`           | empty                                    | Relay host access token                            |
 | `RELAY_NODE_TOKEN`           | local development token                  | Token used by Nodes registering with bundled Relay |
-| `RELAY_VERSION`              | `v0.2.0`                                 | Relay version built by the local Compose stack     |
+| `RELAY_VERSION`              | pinned Relay commit                      | Relay revision built by the bundled Compose stack  |
 | `STEER_ADDR`                 | `:8080`                                  | Steer Server listen address                        |
 | `STEER_DEFAULT_WORKSPACE_ID` | `default`                                | Workspace used before authentication is introduced |
 | `STEER_ALLOWED_ORIGINS`      | local Web origin                         | Browser CORS allowlist                             |
 | `NEXT_PUBLIC_STEER_API_URL`  | `http://localhost:8080/api/v1`           | Web client API base URL                            |
+| `STEER_SERVER_PORT`          | `8080`                                   | Published Steer Server port                        |
+| `STEER_WEB_BIND_ADDRESS`     | `0.0.0.0`                                | Host interface used by Steer Web                   |
+| `STEER_WEB_PORT`             | `3000`                                   | Published Steer Web port                           |
