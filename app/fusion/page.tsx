@@ -31,7 +31,9 @@ import {
   Server,
   Square,
   SquarePen,
+  SquareTerminal,
   Trash2,
+  Wrench,
   X,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -192,7 +194,15 @@ function ProcessTranscript({
         item.kind === 'update' && item.detail ? (
           <Markdown key={item.id}>{item.detail}</Markdown>
         ) : (
-          <div className="ws-chat-process-action" key={item.id}>
+          <div
+            className={`ws-chat-process-action${item.kind === 'action-active' ? ' is-active' : ''}`}
+            key={item.id}
+          >
+            {item.kind === 'action-active' ? (
+              <SquareTerminal aria-hidden="true" />
+            ) : (
+              <Wrench aria-hidden="true" />
+            )}
             <strong>{item.label}</strong>
             {item.detail && <small>{item.detail}</small>}
           </div>
@@ -1595,11 +1605,16 @@ function ChatView({
                     },
                   ];
               const processActivityItems = activityItems.filter(
-                (item) => item.kind === 'update' || item.kind === 'action',
+                (item) =>
+                  item.kind === 'update' ||
+                  item.kind === 'action' ||
+                  item.kind === 'action-active',
               );
               const visibleProcessItems = processActivityItems.length
                 ? processActivityItems
                 : activityItems.slice(-1);
+              const hasActiveTool =
+                visibleProcessItems.at(-1)?.kind === 'action-active';
               return (
                 <div
                   className={`ws-chat-message ${message.role}`}
@@ -1612,42 +1627,53 @@ function ChatView({
                     <strong>
                       {message.role === 'user' ? 'You' : agent.name}
                     </strong>
-                    {message.role === 'agent' && processCollapsible && (
-                      <div className="ws-chat-response-process">
-                        <button
-                          type="button"
-                          className={`ws-chat-response-meta ${terminal ? 'is-complete' : 'is-running'}`}
-                          aria-expanded={activityExpanded}
-                          onClick={() =>
-                            setExpandedActivity((current) => ({
-                              ...current,
-                              [messageKey]: !activityExpanded,
-                            }))
-                          }
-                        >
-                          <span aria-live={terminal ? undefined : 'polite'}>
-                            {responseStatusLabel(message, now)}
-                          </span>
-                          <ChevronRight aria-hidden="true" />
-                        </button>
-                        {activityExpanded && (
-                          <ProcessTranscript items={visibleProcessItems} />
+                    {message.role === 'agent' && (
+                      <div
+                        className={`ws-chat-response-process${processCollapsible ? '' : ' is-live'}`}
+                      >
+                        {processCollapsible ? (
+                          <button
+                            type="button"
+                            className={`ws-chat-response-meta ${terminal ? 'is-complete' : 'is-running'}`}
+                            aria-expanded={activityExpanded}
+                            onClick={() =>
+                              setExpandedActivity((current) => ({
+                                ...current,
+                                [messageKey]: !activityExpanded,
+                              }))
+                            }
+                          >
+                            <span aria-live={terminal ? undefined : 'polite'}>
+                              {responseStatusLabel(message, now)}
+                            </span>
+                            <ChevronRight aria-hidden="true" />
+                          </button>
+                        ) : (
+                          <div className="ws-chat-response-meta is-running">
+                            <span aria-live="polite">
+                              {responseStatusLabel(message, now)}
+                            </span>
+                          </div>
                         )}
                         <div
                           className="ws-chat-response-divider"
                           aria-hidden="true"
                         />
+                        {(activityExpanded || !processCollapsible) && (
+                          <ProcessTranscript
+                            items={visibleProcessItems}
+                            live={!processCollapsible}
+                          />
+                        )}
+                        {!processCollapsible && !hasActiveTool && (
+                          <div
+                            className="ws-chat-current-status"
+                            aria-live="polite"
+                          >
+                            {message.activity || 'Thinking'}
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {message.role === 'agent' && !processCollapsible && (
-                      <>
-                        <ProcessTranscript items={visibleProcessItems} live />
-                        <div className="ws-chat-response-meta ws-chat-live-status is-running">
-                          <span aria-live="polite">
-                            {responseStatusLabel(message, now)}
-                          </span>
-                        </div>
-                      </>
                     )}
                     {message.role === 'agent' ? (
                       message.text ? (
@@ -2817,7 +2843,7 @@ function responseStatusLabel(message: ChatMessage, now: number) {
   if (message.status === 'succeeded') return `Completed in ${elapsed}`;
   if (message.status === 'failed') return `Failed after ${elapsed}`;
   if (message.status === 'cancelled') return `Stopped after ${elapsed}`;
-  return `${message.activity || 'Thinking'} · ${elapsed}`;
+  return `Working for ${elapsed}`;
 }
 
 function runActivity(events?: RelayEvent[] | null) {
@@ -2833,13 +2859,16 @@ function runActivity(events?: RelayEvent[] | null) {
     const combined = `${eventType} ${itemType}`;
     if (combined.includes('agentmessage') || eventType.includes('assistant'))
       return 'Writing a response';
-    if (combined.includes('command')) return 'Running a command';
+    if (combined.includes('command'))
+      return eventType.endsWith('item.started')
+        ? 'Running a command'
+        : 'Thinking';
     if (combined.includes('filechange') || combined.includes('edit'))
-      return 'Updating files';
+      return eventType.endsWith('item.started') ? 'Updating files' : 'Thinking';
     if (combined.includes('websearch') || combined.includes('search'))
-      return 'Searching';
+      return eventType.endsWith('item.started') ? 'Searching' : 'Thinking';
     if (combined.includes('mcp') || combined.includes('tool'))
-      return 'Using a tool';
+      return eventType.endsWith('item.started') ? 'Using a tool' : 'Thinking';
     if (combined.includes('reasoning')) return 'Thinking';
     if (eventType.includes('hook')) return 'Preparing the workspace';
     if (eventType.includes('turn.started')) return 'Thinking';
@@ -2855,12 +2884,7 @@ function runActivityLog(
   events?: RelayEvent[] | null,
   excludeFinalMessage = false,
 ) {
-  const activities: Array<{
-    id: string;
-    label: string;
-    detail?: string;
-    kind?: 'stage' | 'update' | 'action';
-  }> = [];
+  const activities: ProcessActivity[] = [];
   const streamedAgentMessages = runtimeAgentMessages(events);
   const streamedMessageByEndSequence = new Map(
     streamedAgentMessages.map((message) => [message.endSequence, message]),
@@ -2888,7 +2912,7 @@ function runActivityLog(
     id: string,
     label: string,
     detail?: unknown,
-    kind: 'stage' | 'update' | 'action' = 'stage',
+    kind: 'stage' | 'update' | 'action' | 'action-active' = 'stage',
   ) => {
     const normalizedDetail =
       typeof detail === 'string'
@@ -2897,7 +2921,11 @@ function runActivityLog(
           : detail.replace(/\s+/g, ' ').trim().slice(0, 600)
         : '';
     const key = `${label}:${normalizedDetail}`;
-    if (activities.some((item) => `${item.label}:${item.detail || ''}` === key))
+    if (
+      kind !== 'action' &&
+      kind !== 'action-active' &&
+      activities.some((item) => `${item.label}:${item.detail || ''}` === key)
+    )
       return;
     activities.push({
       id,
@@ -2931,10 +2959,7 @@ function runActivityLog(
       );
     else if (eventType.includes('runtime') && eventType.endsWith('.started'))
       add(id, 'Runtime started', event.type.split('.')[1]);
-    else if (
-      eventType.endsWith('hook.completed') &&
-      !hasPreparedWorkspaceEvent
-    )
+    else if (eventType.endsWith('hook.completed') && !hasPreparedWorkspaceEvent)
       add(id, 'Workspace prepared');
     else if (reasoningByEndSequence.has(event.sequence)) {
       const update = reasoningByEndSequence.get(event.sequence);
@@ -2956,14 +2981,33 @@ function runActivityLog(
             ? 'Ran a command'
             : 'Running a command',
           item.command || item.commandLine,
-          'action',
+          eventType.endsWith('item.completed') ? 'action' : 'action-active',
         );
       else if (itemType.includes('filechange') || itemType.includes('edit'))
-        add(id, 'Updated files', item.path || item.filePath, 'action');
+        add(
+          id,
+          eventType.endsWith('item.completed')
+            ? 'Updated files'
+            : 'Updating files',
+          item.path || item.filePath,
+          eventType.endsWith('item.completed') ? 'action' : 'action-active',
+        );
       else if (itemType.includes('websearch') || itemType.includes('search'))
-        add(id, 'Searched for information', item.query, 'action');
+        add(
+          id,
+          eventType.endsWith('item.completed')
+            ? 'Searched for information'
+            : 'Searching for information',
+          item.query,
+          eventType.endsWith('item.completed') ? 'action' : 'action-active',
+        );
       else if (itemType.includes('mcp') || itemType.includes('tool'))
-        add(id, 'Used a tool', item.name || item.toolName, 'action');
+        add(
+          id,
+          eventType.endsWith('item.completed') ? 'Used a tool' : 'Using a tool',
+          item.name || item.toolName,
+          eventType.endsWith('item.completed') ? 'action' : 'action-active',
+        );
     } else if (
       eventType === 'assistant.message.completed' &&
       event.sequence !== finalMessageSequence
@@ -2978,7 +3022,90 @@ function runActivityLog(
     else if (eventType.includes('run.cancelled')) add(id, 'Run stopped');
   }
 
-  return activities;
+  return compactProcessActivities(activities);
+}
+
+function compactProcessActivities(items: ProcessActivity[]) {
+  const compacted: ProcessActivity[] = [];
+  let actions: ProcessActivity[] = [];
+
+  const flushActions = () => {
+    if (!actions.length) return;
+    const completed = actions.filter((item) => item.kind === 'action');
+    const completedKeys = new Set(
+      completed.map(
+        (item) => `${actionFamily(item.label)}:${item.detail || ''}`,
+      ),
+    );
+    const active = [...actions]
+      .reverse()
+      .find(
+        (item) =>
+          item.kind === 'action-active' &&
+          !completedKeys.has(
+            `${actionFamily(item.label)}:${item.detail || ''}`,
+          ),
+      );
+
+    if (completed.length) {
+      compacted.push({
+        id: `actions-${completed[0].id}-${completed.at(-1)?.id}`,
+        label: summarizeCompletedActions(completed),
+        kind: 'action',
+      });
+    }
+    if (active) compacted.push(active);
+    actions = [];
+  };
+
+  for (const item of items) {
+    if (item.kind === 'action' || item.kind === 'action-active') {
+      actions.push(item);
+      continue;
+    }
+    flushActions();
+    compacted.push(item);
+  }
+  flushActions();
+  return compacted;
+}
+
+function actionFamily(label: string) {
+  const normalized = label.toLowerCase();
+  if (normalized.includes('command')) return 'command';
+  if (normalized.includes('file')) return 'file';
+  if (normalized.includes('search')) return 'search';
+  return 'tool';
+}
+
+function summarizeCompletedActions(items: ProcessActivity[]) {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const family = actionFamily(item.label);
+    counts.set(family, (counts.get(family) || 0) + 1);
+  }
+  const summaries: string[] = [];
+  const commands = counts.get('command') || 0;
+  const files = counts.get('file') || 0;
+  const searches = counts.get('search') || 0;
+  const tools = counts.get('tool') || 0;
+  if (commands)
+    summaries.push(
+      commands === 1 ? 'Ran a command' : `Ran ${commands} commands`,
+    );
+  if (files)
+    summaries.push(
+      files === 1 ? 'Updated files' : `Updated files ${files} times`,
+    );
+  if (searches)
+    summaries.push(
+      searches === 1
+        ? 'Searched for information'
+        : `Searched ${searches} times`,
+    );
+  if (tools)
+    summaries.push(tools === 1 ? 'Used a tool' : `Used ${tools} tools`);
+  return summaries.join(' · ');
 }
 
 function runtimeAgentMessages(events?: RelayEvent[] | null) {

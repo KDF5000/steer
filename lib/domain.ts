@@ -58,7 +58,7 @@ export type ChatMessage = {
     id: string;
     label: string;
     detail?: string;
-    kind?: 'stage' | 'update' | 'action';
+    kind?: 'stage' | 'update' | 'action' | 'action-active';
   }>;
   attachments?: ChatAttachment[];
 };
