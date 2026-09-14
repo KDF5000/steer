@@ -1,8 +1,9 @@
-FROM node:22-alpine AS build
+FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install --global npm@11.17.0 \
+  && npm ci --no-audit --no-fund
 COPY . ./
 
 ARG NEXT_PUBLIC_STEER_API_URL=http://localhost:8080/api/v1
