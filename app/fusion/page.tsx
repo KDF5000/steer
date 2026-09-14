@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  memo,
   useCallback,
   useEffect,
   useRef,
@@ -167,17 +168,17 @@ function artifactFromRecord(artifact: ArtifactRecord): Artifact {
   };
 }
 
-function Markdown({ children }: { children: string }) {
+const Markdown = memo(function Markdown({ children }: { children: string }) {
   return (
     <div className="ws-markdown">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>
     </div>
   );
-}
+});
 
 type ProcessActivity = NonNullable<ChatMessage['activityLog']>[number];
 
-function ProcessTranscript({
+const ProcessTranscript = memo(function ProcessTranscript({
   items,
   live = false,
 }: {
@@ -210,7 +211,7 @@ function ProcessTranscript({
       )}
     </div>
   );
-}
+});
 
 export default function Fusion() {
   const [view, setView] = useState<View>('chat');
@@ -376,7 +377,7 @@ export default function Fusion() {
       !mounted.current ||
       pollingRun.current === runID
     )
-      return;
+      return null;
     pollingRun.current = runID;
     try {
       const result = await steer.run(runID);
@@ -420,14 +421,16 @@ export default function Fusion() {
         activeRun.current = '';
         setActiveRunID('');
         setChatWorking(false);
-        return;
+        return result;
       }
+      return result;
     } catch (error) {
       setNotice(
         error instanceof Error
           ? error.message
           : 'Run status could not be loaded.',
       );
+      return null;
     } finally {
       if (pollingRun.current === runID) pollingRun.current = '';
     }
@@ -435,9 +438,91 @@ export default function Fusion() {
 
   useEffect(() => {
     if (!activeRunID) return;
-    void pollRun(activeRunID);
-    const interval = window.setInterval(() => void pollRun(activeRunID), 700);
-    return () => window.clearInterval(interval);
+    const controller = new AbortController();
+    let stopped = false;
+    let retryTimer = 0;
+    let renderTimer = 0;
+    let renderFrame = 0;
+    let events: RelayEvent[] = [];
+    let lastSequence = 0;
+
+    const flushEvents = () => {
+      renderFrame = 0;
+      if (stopped || activeRun.current !== activeRunID) return;
+      const snapshot = [...events];
+      const finalDraft = liveFinalContent(snapshot);
+      setMessages((current) =>
+        current.map((message) =>
+          message.runId === activeRunID
+            ? {
+                ...message,
+                text: finalDraft || message.text,
+                activity: runActivity(snapshot),
+                activityLog: runActivityLog(snapshot, Boolean(finalDraft)),
+              }
+            : message,
+        ),
+      );
+    };
+
+    const scheduleRender = () => {
+      if (renderTimer || renderFrame) return;
+      renderTimer = window.setTimeout(() => {
+        renderTimer = 0;
+        renderFrame = window.requestAnimationFrame(flushEvents);
+      }, 32);
+    };
+
+    const connect = async () => {
+      try {
+        await steer.streamRunEvents(
+          activeRunID,
+          lastSequence,
+          controller.signal,
+          (event) => {
+            if (event.sequence <= lastSequence) return;
+            lastSequence = event.sequence;
+            events.push(event);
+            scheduleRender();
+          },
+        );
+        if (!stopped) await pollRun(activeRunID);
+      } catch {
+        if (stopped || controller.signal.aborted) return;
+        const latest = await pollRun(activeRunID);
+        if (
+          stopped ||
+          !latest ||
+          isTerminalStatus(latest.run.status) ||
+          activeRun.current !== activeRunID
+        )
+          return;
+        events = latest.events;
+        lastSequence = events.at(-1)?.sequence || lastSequence;
+        retryTimer = window.setTimeout(() => void connect(), 600);
+      }
+    };
+
+    void pollRun(activeRunID).then((initial) => {
+      if (
+        stopped ||
+        !initial ||
+        isTerminalStatus(initial.run.status) ||
+        activeRun.current !== activeRunID
+      )
+        return;
+      events = initial.events;
+      lastSequence = events.at(-1)?.sequence || 0;
+      void connect();
+    });
+
+    return () => {
+      stopped = true;
+      controller.abort();
+      window.clearTimeout(retryTimer);
+      window.clearTimeout(renderTimer);
+      if (renderFrame) window.cancelAnimationFrame(renderFrame);
+    };
   }, [activeRunID, pollRun]);
 
   const openChatSession = useCallback(
@@ -1419,7 +1504,11 @@ function ChatView({
   };
   useEffect(() => {
     const area = scrollArea.current;
-    if (area && followBottom.current) area.scrollTop = area.scrollHeight;
+    if (!area || !followBottom.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (followBottom.current) area.scrollTop = area.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [messages, working]);
   useEffect(() => {
     if (!working) return;

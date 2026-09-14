@@ -107,6 +107,60 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function streamRunEvents(
+  id: string,
+  after: number,
+  signal: AbortSignal,
+  onEvent: (event: RelayEvent) => void,
+) {
+  const response = await fetch(
+    `${baseURL}/runs/${encodeURIComponent(id)}/events/stream?after=${after}`,
+    { headers: { Accept: 'text/event-stream' }, signal },
+  );
+  if (!response.ok || !response.body) {
+    const body = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(body?.error || `Steer HTTP ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let completed = false;
+  const consume = (block: string) => {
+    let eventType = 'message';
+    const data: string[] = [];
+    for (const line of block.split(/\r?\n/)) {
+      if (line.startsWith('event:')) eventType = line.slice(6).trim();
+      if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
+    }
+    if (eventType === 'steer.done') {
+      completed = true;
+      return;
+    }
+    if (!data.length) return;
+    if (eventType === 'steer.error') {
+      const payload = JSON.parse(data.join('\n')) as { error?: string };
+      throw new Error(payload.error || 'Run event stream was interrupted.');
+    }
+    if (eventType === 'relay.event') {
+      onEvent(JSON.parse(data.join('\n')) as RelayEvent);
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() || '';
+    for (const block of blocks) consume(block);
+    if (done) break;
+  }
+  if (buffer.trim()) consume(buffer);
+  if (!completed) throw new Error('Run event stream ended unexpectedly.');
+}
+
 export const steer = {
   bootstrap: () => request<Bootstrap>('/bootstrap'),
   createAgent: (input: Partial<AgentRecord>) =>
@@ -200,6 +254,7 @@ export const steer = {
       events: RelayEvent[];
       artifacts: unknown[];
     }>(`/runs/${id}`),
+  streamRunEvents,
   cancelRun: (id: string) =>
     request<RelayRun>(`/runs/${id}/cancel`, { method: 'POST' }),
 };

@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -59,6 +60,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/messages/{messageId}/attachments/{attachmentId}", s.messageAttachment)
 	mux.HandleFunc("POST /api/v1/chat", s.chat)
 	mux.HandleFunc("GET /api/v1/runs/{id}", s.run)
+	mux.HandleFunc("GET /api/v1/runs/{id}/events/stream", s.streamRunEvents)
 	mux.HandleFunc("POST /api/v1/runs/{id}/cancel", s.cancelRun)
 	return s.recover(s.cors(s.logRequests(mux)))
 }
@@ -673,6 +675,58 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"run": run, "content": content, "error": runErr, "events": events, "artifacts": deliverableArtifacts})
 }
+
+func (s *Server) streamRunEvents(w http.ResponseWriter, r *http.Request) {
+	runID := r.PathValue("id")
+	if _, err := s.store.RunLink(r.Context(), s.workspace(r), runID); err != nil {
+		writeError(w, err)
+		return
+	}
+	after := 0
+	if value := r.URL.Query().Get("after"); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "after must be a non-negative event sequence"})
+			return
+		}
+		after = parsed
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "streaming is unavailable"})
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache, no-transform")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+
+	err := s.relay.StreamEvents(r.Context(), runID, after, func(event relay.Event) error {
+		encoded, err := json.Marshal(event)
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(w, "id: %d\nevent: relay.event\ndata: %s\n\n", event.Sequence, encoded); err != nil {
+			return err
+		}
+		flusher.Flush()
+		return nil
+	})
+	if err != nil {
+		if r.Context().Err() == nil {
+			slog.Warn("Relay event stream interrupted", "run_id", runID, "error", err)
+			encoded, _ := json.Marshal(map[string]string{"error": err.Error()})
+			_, _ = fmt.Fprintf(w, "event: steer.error\ndata: %s\n\n", encoded)
+			flusher.Flush()
+		}
+		return
+	}
+	_, _ = fmt.Fprint(w, "event: steer.done\ndata: {}\n\n")
+	flusher.Flush()
+}
+
 func (s *Server) cancelRun(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.store.RunLink(r.Context(), s.workspace(r), r.PathValue("id")); err != nil {
 		writeError(w, err)

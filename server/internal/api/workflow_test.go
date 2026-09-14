@@ -51,6 +51,9 @@ func TestConversationWorkflowHTTP(t *testing.T) {
 			writeJSON(w, 202, map[string]any{"id": uuid.NewString(), "status": "running"})
 		case r.URL.Path == "/v1/nodes":
 			writeJSON(w, 200, []map[string]any{{"id": "test-node", "runtimes": []map[string]any{{"id": "test-node/test", "provider": "test"}}}})
+		case strings.HasSuffix(r.URL.Path, "/events/stream"):
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprint(w, "id: 1\nevent: relay.event\ndata: {\"id\":\"event-1\",\"sequence\":1,\"type\":\"run.succeeded\"}\n\n")
 		case strings.HasSuffix(r.URL.Path, "/events"):
 			writeJSON(w, 200, []any{})
 		case strings.HasSuffix(r.URL.Path, "/artifacts"):
@@ -86,6 +89,13 @@ func TestConversationWorkflowHTTP(t *testing.T) {
 	json.Unmarshal(call("POST", "/chat", fmt.Sprintf(`{"prompt":"Inspect","agentId":%q,"projectId":%q}`, agent.ID, project.ID), 202).Body.Bytes(), &started)
 	call("POST", "/chat", fmt.Sprintf(`{"prompt":"Continue","agentId":%q,"sessionId":%q}`, reviewer.ID, started.SessionID), 202)
 	call("GET", "/runs/"+started.RunID, "", 200)
+	stream := call("GET", "/runs/"+started.RunID+"/events/stream?after=0", "", 200)
+	if contentType := stream.Header().Get("Content-Type"); contentType != "text/event-stream" {
+		t.Fatalf("stream content type=%q", contentType)
+	}
+	if body := stream.Body.String(); !strings.Contains(body, "event: relay.event") || !strings.Contains(body, "event: steer.done") {
+		t.Fatalf("unexpected stream body: %q", body)
+	}
 	mu.Lock()
 	sent := append([]relay.Request(nil), requests...)
 	mu.Unlock()
