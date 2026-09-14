@@ -528,6 +528,9 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	} else {
 		request.Workspace = relay.WorkspaceSpec{Kind: value(agent.WorkspaceKind), Source: value(agent.WorkspaceSource), Ref: value(agent.WorkspaceRef)}
 	}
+	if request.Workspace.Kind == "git" {
+		request.Instructions.Turn = append(request.Instructions.Turn, gitProjectWorkspaceInstruction())
+	}
 	var run relay.Run
 	workspaceKind := request.Workspace.Kind
 	executionMode := value(session.ExecutionMode)
@@ -553,6 +556,15 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"sessionId": sessionID, "runId": run.ID, "status": run.Status, "userMessage": user, "assistantMessage": assistant})
+}
+
+func gitProjectWorkspaceInstruction() relay.InstructionFragment {
+	return relay.InstructionFragment{
+		ID:      "steer-git-project-worktree",
+		Version: "1",
+		Title:   "Steer Git Project",
+		Content: "Relay has already prepared an isolated Git worktree for the selected Project and starts you inside it. Treat the current working directory as the only authoritative checkout for this conversation. Perform all edits, commits, rebases, builds, and tests in that worktree, and ensure every final change remains there. Do not clone or copy the primary repository into /tmp or another host directory, and do not search the machine for alternate checkouts. If the task requires a second repository that is not contained in the selected Project, explain that constraint to the user instead of modifying an unmanaged checkout.",
+	}
 }
 
 func (s *Server) runtimeProvider(ctx context.Context, runtimeID string) (string, error) {

@@ -92,6 +92,20 @@ func TestConversationPrompt(t *testing.T) {
 	}
 }
 
+func TestGitProjectWorkspaceInstructionKeepsChangesInWorktree(t *testing.T) {
+	instruction := gitProjectWorkspaceInstruction()
+	for _, want := range []string{
+		"only authoritative checkout",
+		"all edits, commits, rebases, builds, and tests in that worktree",
+		"Do not clone or copy the primary repository into /tmp",
+		"second repository",
+	} {
+		if !strings.Contains(instruction.Content, want) {
+			t.Fatalf("workspace instruction %q does not contain %q", instruction.Content, want)
+		}
+	}
+}
+
 func TestDeliverableArtifactExcludesRuntimeMessages(t *testing.T) {
 	for _, artifact := range []relay.Artifact{
 		{Type: "codex_final_message", Name: "codex-last-message.txt"},
