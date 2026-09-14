@@ -624,6 +624,51 @@
   margin: 0 auto;
 }
 
+.ws-chat-session-loading {
+  display: grid;
+  width: min(900px, 100%);
+  gap: 12px;
+  margin: 4px auto 0;
+  color: transparent;
+  font-size: 0;
+}
+
+.ws-chat-session-loading span {
+  display: block;
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f0f0f2 25%, #f7f7f8 50%, #f0f0f2 75%);
+  background-size: 200% 100%;
+  animation: ws-session-loading 1.4s ease-in-out infinite;
+}
+
+.ws-chat-session-loading span:nth-child(1) {
+  width: 38%;
+}
+
+.ws-chat-session-loading span:nth-child(2) {
+  width: 76%;
+}
+
+.ws-chat-session-loading span:nth-child(3) {
+  width: 58%;
+}
+
+@keyframes ws-session-loading {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-chat-session-loading span {
+    animation: none;
+  }
+}
+
 .ws-chat-message {
   display: block;
   margin-bottom: 30px;
@@ -805,6 +850,21 @@
 }
 
 .ws-chat-response-meta.is-running > span {
+  animation: ws-status-pulse 1.8s ease-in-out infinite;
+}
+
+.ws-chat-live-status {
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ws-chat-live-status::before {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #9899a1;
+  content: '';
   animation: ws-status-pulse 1.8s ease-in-out infinite;
 }
 

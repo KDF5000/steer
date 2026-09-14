@@ -222,6 +222,7 @@ export default function Fusion() {
   const [chatInput, setChatInput] = useState('');
   const [chatImages, setChatImages] = useState<PendingImage[]>([]);
   const [chatWorking, setChatWorking] = useState(false);
+  const [chatSessionLoading, setChatSessionLoading] = useState(false);
   const [activeRunID, setActiveRunID] = useState('');
   const [chatSession, setChatSession] = useState('');
   const [chatSessions, setChatSessions] = useState<ChatSessionRecord[]>([]);
@@ -248,6 +249,7 @@ export default function Fusion() {
   }>({ executionRuntimeID: null });
   const pollingRun = useRef('');
   const mounted = useRef(true);
+  const sessionLoadSequence = useRef(0);
   const routeReady = useRef(false);
   const skipRouteWrite = useRef(false);
   const createAgentLock = useRef(false);
@@ -439,11 +441,24 @@ export default function Fusion() {
       pollingRun.current = '';
       setActiveRunID('');
       setChatWorking(false);
+      const loadSequence = ++sessionLoadSequence.current;
+      const sessionSummary = chatSessions.find(
+        (session) => session.id === sessionID,
+      );
+      setChatSession(sessionID);
+      setMessages([]);
+      setChatSessionLoading(true);
+      setView('chat');
+      if (sessionSummary) {
+        setChatAgent(sessionSummary.agentId);
+        setChatProject(sessionSummary.projectId || 'none');
+      }
       try {
         const data = await steer.session(sessionID);
+        if (loadSequence !== sessionLoadSequence.current || !mounted.current)
+          return;
         chatImages.forEach((image) => URL.revokeObjectURL(image.url));
         setChatImages([]);
-        setChatSession(data.session.id);
         setChatAgent(data.session.agentId);
         setChatProject(data.session.projectId || 'none');
         if (data.project) {
@@ -474,6 +489,23 @@ export default function Fusion() {
             url: steer.messageAttachmentURL(message.id, attachment.id),
           })),
         }));
+        setMessages(sessionMessages);
+        setChatSessionLoading(false);
+        const storedRunningMessage = sessionMessages.findLast(
+          (message) =>
+            message.role === 'agent' &&
+            Boolean(message.runId) &&
+            !isTerminalStatus(message.status),
+        );
+        if (storedRunningMessage?.runId) {
+          activeRun.current = storedRunningMessage.runId;
+          activeRunContext.current = {
+            project: data.project,
+            executionRuntimeID: data.session.executionRuntimeId,
+          };
+          setActiveRunID(storedRunningMessage.runId);
+          setChatWorking(true);
+        }
         const enrichedMessages = await Promise.all(
           sessionMessages.map(async (message) => {
             if (message.role !== 'agent' || !message.runId) return message;
@@ -499,7 +531,23 @@ export default function Fusion() {
             };
           }),
         );
-        setMessages(enrichedMessages);
+        if (loadSequence !== sessionLoadSequence.current || !mounted.current)
+          return;
+        const enrichedByID = new Map(
+          enrichedMessages.map((message) => [message.id, message]),
+        );
+        setMessages((current) =>
+          current.map((message) => {
+            const enriched = enrichedByID.get(message.id);
+            if (!enriched) return message;
+            if (
+              isTerminalStatus(message.status) &&
+              !isTerminalStatus(enriched.status)
+            )
+              return message;
+            return enriched;
+          }),
+        );
         const runningMessage = enrichedMessages.findLast(
           (message) =>
             message.role === 'agent' &&
@@ -515,8 +563,10 @@ export default function Fusion() {
           setActiveRunID(runningMessage.runId);
           setChatWorking(true);
         }
-        setView('chat');
       } catch (error) {
+        if (loadSequence !== sessionLoadSequence.current || !mounted.current)
+          return;
+        setChatSessionLoading(false);
         setNotice(
           error instanceof Error
             ? error.message
@@ -524,7 +574,7 @@ export default function Fusion() {
         );
       }
     },
-    [chatImages, chatSession],
+    [chatImages, chatSession, chatSessions],
   );
 
   useEffect(() => {
@@ -576,11 +626,13 @@ export default function Fusion() {
   }, [agentTab, artifactList, chatSession, selectedArtifact, view]);
 
   const startNewChat = (projectID = 'none') => {
+    sessionLoadSequence.current += 1;
     activeRun.current = '';
     pollingRun.current = '';
     activeRunContext.current = { executionRuntimeID: null };
     setActiveRunID('');
     setChatWorking(false);
+    setChatSessionLoading(false);
     setMessages([]);
     setChatSession('');
     setChatInput('');
@@ -1080,6 +1132,8 @@ export default function Fusion() {
             project={chatProject}
             artifacts={conversationArtifacts}
             messages={messages}
+            sessionTitle={activeChatSession?.title}
+            sessionLoading={chatSessionLoading}
             input={chatInput}
             images={chatImages}
             working={chatWorking}
@@ -1278,6 +1332,8 @@ function ChatView({
   project,
   artifacts,
   messages,
+  sessionTitle,
+  sessionLoading,
   input,
   images,
   working,
@@ -1300,6 +1356,8 @@ function ChatView({
   project: string;
   artifacts: Artifact[];
   messages: ChatMessage[];
+  sessionTitle?: string;
+  sessionLoading: boolean;
   input: string;
   images: PendingImage[];
   working: boolean;
@@ -1334,7 +1392,7 @@ function ChatView({
         firstUserMessage.attachments?.[0]?.name ||
         'Image'
       ).slice(0, 72)
-    : 'New chat';
+    : sessionTitle || 'New chat';
   const composerPreview = images.find(
     (image) => image.id === composerPreviewID,
   );
@@ -1394,7 +1452,7 @@ function ChatView({
     );
   return (
     <section
-      className={`ws-chat-page ${hasMessages ? 'has-messages' : 'is-empty'}`}
+      className={`ws-chat-page ${hasMessages || sessionLoading ? 'has-messages' : 'is-empty'}`}
     >
       <header className="ws-chat-appbar">
         <SidebarTrigger aria-label="Toggle sidebar" />
@@ -1493,7 +1551,15 @@ function ChatView({
               area.scrollHeight - area.scrollTop - area.clientHeight < 100;
         }}
       >
-        {!hasMessages && (
+        {sessionLoading && (
+          <output className="ws-chat-session-loading" aria-live="polite">
+            <span />
+            <span />
+            <span />
+            Loading conversation…
+          </output>
+        )}
+        {!sessionLoading && !hasMessages && (
           <div className="ws-chat-welcome">
             <span className="ws-chat-mark">
               <MessageSquareText aria-hidden="true" />
@@ -1506,7 +1572,7 @@ function ChatView({
             </p>
           </div>
         )}
-        {hasMessages && (
+        {!sessionLoading && hasMessages && (
           <div className="ws-chat-thread">
             {messages.map((message, index) => {
               const messageKey = message.id || `${message.role}-${index}`;
@@ -1546,45 +1612,42 @@ function ChatView({
                     <strong>
                       {message.role === 'user' ? 'You' : agent.name}
                     </strong>
-                    {message.role === 'agent' && (
+                    {message.role === 'agent' && processCollapsible && (
                       <div className="ws-chat-response-process">
-                        {processCollapsible ? (
-                          <button
-                            type="button"
-                            className={`ws-chat-response-meta ${terminal ? 'is-complete' : 'is-running'}`}
-                            aria-expanded={activityExpanded}
-                            onClick={() =>
-                              setExpandedActivity((current) => ({
-                                ...current,
-                                [messageKey]: !activityExpanded,
-                              }))
-                            }
-                          >
-                            <span aria-live={terminal ? undefined : 'polite'}>
-                              {responseStatusLabel(message, now)}
-                            </span>
-                            <ChevronRight aria-hidden="true" />
-                          </button>
-                        ) : (
-                          <div className="ws-chat-response-meta is-running">
-                            <span aria-live="polite">
-                              {responseStatusLabel(message, now)}
-                            </span>
-                          </div>
-                        )}
-                        {processCollapsible && activityExpanded && (
+                        <button
+                          type="button"
+                          className={`ws-chat-response-meta ${terminal ? 'is-complete' : 'is-running'}`}
+                          aria-expanded={activityExpanded}
+                          onClick={() =>
+                            setExpandedActivity((current) => ({
+                              ...current,
+                              [messageKey]: !activityExpanded,
+                            }))
+                          }
+                        >
+                          <span aria-live={terminal ? undefined : 'polite'}>
+                            {responseStatusLabel(message, now)}
+                          </span>
+                          <ChevronRight aria-hidden="true" />
+                        </button>
+                        {activityExpanded && (
                           <ProcessTranscript items={visibleProcessItems} />
                         )}
-                        {processCollapsible && (
-                          <div
-                            className="ws-chat-response-divider"
-                            aria-hidden="true"
-                          />
-                        )}
+                        <div
+                          className="ws-chat-response-divider"
+                          aria-hidden="true"
+                        />
                       </div>
                     )}
                     {message.role === 'agent' && !processCollapsible && (
-                      <ProcessTranscript items={visibleProcessItems} live />
+                      <>
+                        <ProcessTranscript items={visibleProcessItems} live />
+                        <div className="ws-chat-response-meta ws-chat-live-status is-running">
+                          <span aria-live="polite">
+                            {responseStatusLabel(message, now)}
+                          </span>
+                        </div>
+                      </>
                     )}
                     {message.role === 'agent' ? (
                       message.text ? (
@@ -2745,7 +2808,12 @@ function formatElapsed(start?: string, end?: string, now = Date.now()) {
 }
 
 function responseStatusLabel(message: ChatMessage, now: number) {
-  const elapsed = formatElapsed(message.createdAt, message.updatedAt, now);
+  const terminal = isTerminalStatus(message.status);
+  const elapsed = formatElapsed(
+    message.createdAt,
+    terminal ? message.updatedAt : undefined,
+    now,
+  );
   if (message.status === 'succeeded') return `Completed in ${elapsed}`;
   if (message.status === 'failed') return `Failed after ${elapsed}`;
   if (message.status === 'cancelled') return `Stopped after ${elapsed}`;
@@ -2813,6 +2881,9 @@ function runActivityLog(
   const reasoningByEndSequence = new Map(
     reasoningUpdates.map((update) => [update.endSequence, update]),
   );
+  const hasPreparedWorkspaceEvent = (events || []).some(
+    (event) => event.type.toLowerCase() === 'workspace.prepared',
+  );
   const add = (
     id: string,
     label: string,
@@ -2852,9 +2923,18 @@ function runActivityLog(
     else if (eventType === 'attempt.leased')
       add(id, 'Runtime reserved', data.node_id);
     else if (eventType === 'attempt.started') add(id, 'Execution started');
+    else if (eventType === 'workspace.prepared')
+      add(
+        id,
+        data.kind === 'git' ? 'Git worktree ready' : 'Workspace ready',
+        data.work_dir,
+      );
     else if (eventType.includes('runtime') && eventType.endsWith('.started'))
       add(id, 'Runtime started', event.type.split('.')[1]);
-    else if (eventType.endsWith('hook.completed'))
+    else if (
+      eventType.endsWith('hook.completed') &&
+      !hasPreparedWorkspaceEvent
+    )
       add(id, 'Workspace prepared');
     else if (reasoningByEndSequence.has(event.sequence)) {
       const update = reasoningByEndSequence.get(event.sequence);
