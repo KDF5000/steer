@@ -1,6 +1,10 @@
 @import 'tailwindcss';
 
 :root {
+  --steer-accent: #5556cf;
+  --steer-accent-soft: #f0f0ff;
+  --steer-border: #e6e8ed;
+  --steer-secondary: #677080;
   --ink: #18202f;
   --muted: #687386;
   --line: #e4e8ef;

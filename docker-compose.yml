@@ -1,0 +1,90 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: steer
+      POSTGRES_USER: steer
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-steer}
+    ports:
+      - "54329:5432"
+    volumes:
+      - steer-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U steer -d steer"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  relay-db-init:
+    image: postgres:17-alpine
+    restart: "no"
+    environment:
+      PGHOST: postgres
+      PGUSER: steer
+      PGPASSWORD: ${POSTGRES_PASSWORD:-steer}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        if ! psql -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = 'relay'" | grep -q 1; then
+          psql -d postgres -c "CREATE DATABASE relay"
+        fi
+
+  relay-server:
+    build:
+      context: .
+      dockerfile: deploy/relay/Dockerfile
+      args:
+        RELAY_VERSION: ${RELAY_VERSION:-v0.2.0}
+    image: steer-relay-server:${RELAY_VERSION:-v0.2.0}
+    restart: unless-stopped
+    init: true
+    environment:
+      RELAY_DATABASE_URL: postgres://steer:${POSTGRES_PASSWORD:-steer}@postgres:5432/relay?sslmode=disable
+      RELAY_ARTIFACT_BACKEND: file
+      RELAY_ARTIFACT_ROOT: /var/lib/relay/artifacts
+      RELAY_HOST_TOKEN: ${RELAY_HOST_TOKEN:-local-only-change-me-host-token}
+      RELAY_NODE_TOKEN: ${RELAY_NODE_TOKEN:-local-only-change-me-node-token}
+      RELAY_TENANT_ID: ${RELAY_TENANT_ID:-default}
+      RELAY_PROJECT_ID: ${RELAY_PROJECT_ID:-default}
+    ports:
+      - "${RELAY_BIND_ADDRESS:-127.0.0.1}:${RELAY_SERVER_PORT:-8787}:8787"
+    volumes:
+      - relay-artifacts:/var/lib/relay/artifacts
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      relay-db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8787/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+
+  steer-server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      DATABASE_URL: postgres://steer:${POSTGRES_PASSWORD:-steer}@postgres:5432/steer
+      RELAY_BASE_URL: ${RELAY_BASE_URL:-http://relay-server:8787}
+      RELAY_PUBLIC_URL: ${RELAY_PUBLIC_URL:-http://localhost:8787}
+      RELAY_HOST_TOKEN: ${RELAY_HOST_TOKEN:-local-only-change-me-host-token}
+      STEER_ALLOWED_ORIGINS: ${STEER_ALLOWED_ORIGINS:-http://localhost:3000}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  steer-postgres:
+  relay-artifacts:

@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS goal_reviews;
+DROP TABLE IF EXISTS goal_agents;
+DROP TABLE IF EXISTS goals;
+
+ALTER TABLE chat_sessions DROP COLUMN IF EXISTS goal_id;
+ALTER TABLE run_links DROP COLUMN IF EXISTS goal_id;
+ALTER TABLE artifacts DROP COLUMN IF EXISTS goal_id;

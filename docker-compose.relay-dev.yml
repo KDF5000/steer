@@ -1,0 +1,8 @@
+services:
+  relay-server:
+    build:
+      context: ${RELAY_SOURCE_DIR:-../relay}
+      dockerfile: Dockerfile
+      args:
+        VERSION: dev
+    image: steer-relay-server:dev
