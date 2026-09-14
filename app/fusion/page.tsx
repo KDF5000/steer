@@ -222,6 +222,7 @@ export default function Fusion() {
   const [chatInput, setChatInput] = useState('');
   const [chatImages, setChatImages] = useState<PendingImage[]>([]);
   const [chatWorking, setChatWorking] = useState(false);
+  const [activeRunID, setActiveRunID] = useState('');
   const [chatSession, setChatSession] = useState('');
   const [chatSessions, setChatSessions] = useState<ChatSessionRecord[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -241,7 +242,11 @@ export default function Fusion() {
   const [agentRuntime, setAgentRuntime] = useState('');
   const [agentModel, setAgentModel] = useState('Runtime default');
   const activeRun = useRef('');
-  const timer = useRef<number | null>(null);
+  const activeRunContext = useRef<{
+    project?: ProjectRecord;
+    executionRuntimeID: string | null;
+  }>({ executionRuntimeID: null });
+  const pollingRun = useRef('');
   const mounted = useRef(true);
   const routeReady = useRef(false);
   const skipRouteWrite = useRef(false);
@@ -314,7 +319,6 @@ export default function Fusion() {
     return () => {
       mounted.current = false;
       window.removeEventListener('keydown', shortcut);
-      if (timer.current) window.clearTimeout(timer.current);
     };
   }, []);
 
@@ -354,9 +358,87 @@ export default function Fusion() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
+  const pollRun = useCallback(async (runID: string) => {
+    if (
+      activeRun.current !== runID ||
+      !mounted.current ||
+      pollingRun.current === runID
+    )
+      return;
+    pollingRun.current = runID;
+    try {
+      const result = await steer.run(runID);
+      if (activeRun.current !== runID || !mounted.current) return;
+      const terminal = isTerminalStatus(result.run.status);
+      const finalDraft = terminal
+        ? result.content
+        : liveFinalContent(result.events);
+      setMessages((current) =>
+        current.map((message) =>
+          message.runId === runID
+            ? {
+                ...message,
+                text: finalDraft,
+                status: result.run.status,
+                error: projectRunError(
+                  result.error || undefined,
+                  activeRunContext.current.project,
+                  activeRunContext.current.executionRuntimeID,
+                ),
+                activity: runActivity(result.events),
+                activityLog: runActivityLog(
+                  result.events,
+                  result.run.status === 'succeeded' || Boolean(finalDraft),
+                ),
+                createdAt:
+                  result.run.started_at || message.createdAt || undefined,
+                updatedAt:
+                  result.run.completed_at ||
+                  (isTerminalStatus(result.run.status)
+                    ? new Date().toISOString()
+                    : message.updatedAt),
+              }
+            : message,
+        ),
+      );
+      if (['succeeded', 'failed', 'cancelled'].includes(result.run.status)) {
+        const refreshed = await steer.bootstrap().catch(() => null);
+        if (refreshed)
+          setArtifactList(refreshed.artifacts.map(artifactFromRecord));
+        activeRun.current = '';
+        setActiveRunID('');
+        setChatWorking(false);
+        return;
+      }
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Run status could not be loaded.',
+      );
+    } finally {
+      if (pollingRun.current === runID) pollingRun.current = '';
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeRunID) return;
+    void pollRun(activeRunID);
+    const interval = window.setInterval(() => void pollRun(activeRunID), 700);
+    return () => window.clearInterval(interval);
+  }, [activeRunID, pollRun]);
+
   const openChatSession = useCallback(
     async (sessionID: string) => {
-      if (chatWorking || sessionID === chatSession) return;
+      if (sessionID === chatSession) {
+        setView('chat');
+        return;
+      }
+
+      activeRun.current = '';
+      pollingRun.current = '';
+      setActiveRunID('');
+      setChatWorking(false);
       try {
         const data = await steer.session(sessionID);
         chatImages.forEach((image) => URL.revokeObjectURL(image.url));
@@ -418,6 +500,21 @@ export default function Fusion() {
           }),
         );
         setMessages(enrichedMessages);
+        const runningMessage = enrichedMessages.findLast(
+          (message) =>
+            message.role === 'agent' &&
+            Boolean(message.runId) &&
+            !isTerminalStatus(message.status),
+        );
+        if (runningMessage?.runId) {
+          activeRun.current = runningMessage.runId;
+          activeRunContext.current = {
+            project: data.project,
+            executionRuntimeID: data.session.executionRuntimeId,
+          };
+          setActiveRunID(runningMessage.runId);
+          setChatWorking(true);
+        }
         setView('chat');
       } catch (error) {
         setNotice(
@@ -427,7 +524,7 @@ export default function Fusion() {
         );
       }
     },
-    [chatImages, chatSession, chatWorking],
+    [chatImages, chatSession],
   );
 
   useEffect(() => {
@@ -478,65 +575,12 @@ export default function Fusion() {
     if (window.location.hash !== hash) window.history.pushState(null, '', hash);
   }, [agentTab, artifactList, chatSession, selectedArtifact, view]);
 
-  const pollRun = async (runID: string) => {
-    if (activeRun.current !== runID || !mounted.current) return;
-    try {
-      const result = await steer.run(runID);
-      if (activeRun.current !== runID || !mounted.current) return;
-      const terminal = isTerminalStatus(result.run.status);
-      const finalDraft = terminal
-        ? result.content
-        : liveFinalContent(result.events);
-      setMessages((current) =>
-        current.map((message) =>
-          message.runId === runID
-            ? {
-                ...message,
-                text: finalDraft,
-                status: result.run.status,
-                error: projectRunError(
-                  result.error || undefined,
-                  selectedProject,
-                  composerExecutionRuntimeId,
-                ),
-                activity: runActivity(result.events),
-                activityLog: runActivityLog(
-                  result.events,
-                  result.run.status === 'succeeded' || Boolean(finalDraft),
-                ),
-                createdAt:
-                  result.run.started_at || message.createdAt || undefined,
-                updatedAt:
-                  result.run.completed_at ||
-                  (isTerminalStatus(result.run.status)
-                    ? new Date().toISOString()
-                    : message.updatedAt),
-              }
-            : message,
-        ),
-      );
-      if (['succeeded', 'failed', 'cancelled'].includes(result.run.status)) {
-        const refreshed = await steer.bootstrap().catch(() => null);
-        if (refreshed)
-          setArtifactList(refreshed.artifacts.map(artifactFromRecord));
-        activeRun.current = '';
-        setChatWorking(false);
-        timer.current = null;
-        return;
-      }
-      timer.current = window.setTimeout(() => void pollRun(runID), 600);
-    } catch (error) {
-      setNotice(
-        error instanceof Error
-          ? error.message
-          : 'Run status could not be loaded.',
-      );
-      if (mounted.current && activeRun.current === runID)
-        timer.current = window.setTimeout(() => void pollRun(runID), 3000);
-    }
-  };
-
   const startNewChat = (projectID = 'none') => {
+    activeRun.current = '';
+    pollingRun.current = '';
+    activeRunContext.current = { executionRuntimeID: null };
+    setActiveRunID('');
+    setChatWorking(false);
     setMessages([]);
     setChatSession('');
     setChatInput('');
@@ -606,6 +650,11 @@ export default function Fusion() {
         return [session, ...current.filter((item) => item.id !== session.id)];
       });
       activeRun.current = result.runId;
+      activeRunContext.current = {
+        project: selectedProject,
+        executionRuntimeID: composerExecutionRuntimeId,
+      };
+      setActiveRunID(result.runId);
       setMessages((current) => [
         ...current.map((item) =>
           item.id === optimisticID
@@ -627,7 +676,6 @@ export default function Fusion() {
           activityLog: [{ id: 'starting-agent', label: 'Starting Agent' }],
         },
       ]);
-      void pollRun(result.runId);
     } catch (error) {
       setMessages((current) =>
         current.filter((message) => message.id !== optimisticID),
@@ -2991,13 +3039,49 @@ function reasoningSummary(text: string) {
 }
 
 async function writeClipboard(content: string) {
-  if (!navigator.clipboard?.writeText) return false;
-  try {
-    await navigator.clipboard.writeText(content);
-    return true;
-  } catch {
-    return false;
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(content);
+      return true;
+    } catch {
+      // HTTP deployments and restricted browser contexts can reject the
+      // asynchronous Clipboard API. Fall through to the selection-based copy.
+    }
   }
+
+  const activeElement = document.activeElement;
+  const textarea = document.createElement('textarea');
+  textarea.value = content;
+  textarea.setAttribute('readonly', '');
+  textarea.setAttribute('aria-hidden', 'true');
+  Object.assign(textarea.style, {
+    position: 'fixed',
+    top: '0',
+    left: '-9999px',
+    width: '1px',
+    height: '1px',
+    opacity: '0',
+    pointerEvents: 'none',
+  });
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+
+  let copied = false;
+  try {
+    const legacyCopy = Reflect.get(document, 'execCommand') as
+      | ((command: string) => boolean)
+      | undefined;
+    copied = legacyCopy?.call(document, 'copy') ?? false;
+  } catch {
+    copied = false;
+  } finally {
+    textarea.remove();
+    if (activeElement instanceof HTMLElement) activeElement.focus();
+  }
+
+  return copied;
 }
 
 function downloadText(content: string, fileName: string) {
