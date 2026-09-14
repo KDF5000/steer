@@ -14,24 +14,36 @@ import (
 	"github.com/KDF5000/steer/server/internal/store"
 )
 
-func TestSubmitReusableRunAddsGenericWorkspaceLifecycle(t *testing.T) {
+func TestSubmitRelayRunRetriesEmptySuccessResponse(t *testing.T) {
 	var received map[string]any
+	requests := 0
 	relayServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
 		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
 			t.Fatal(err)
+		}
+		if requests == 1 {
+			w.WriteHeader(http.StatusAccepted)
+			return
 		}
 		writeJSON(w, http.StatusAccepted, map[string]any{"id": "run-1", "status": "queued"})
 	}))
 	defer relayServer.Close()
 	server := New(nil, relayServer.URL, "token", relayServer.URL, "workspace", nil)
-	run, err := server.submitReusableRun(context.Background(), relay.Request{
+	run, err := server.submitRelayRun(context.Background(), relay.Request{
 		AgentID:        "agent-1",
 		IdempotencyKey: "request-1",
 		Runtime:        relay.RuntimeRequirement{ID: "node/codex", Provider: "codex"},
-		Workspace:      relay.WorkspaceSpec{Kind: "git", Source: "https://example.test/repo.git", Ref: "main"},
-	}, "opaque-key", "steer/session-1")
+		Workspace: relay.WorkspaceSpec{
+			Kind: "git", Source: "https://example.test/repo.git", Ref: "main",
+			Lifecycle: "reusable", ReuseKey: "opaque-key", Branch: "steer/session-1",
+		},
+	})
 	if err != nil || run.ID != "run-1" {
 		t.Fatalf("run=%+v err=%v", run, err)
+	}
+	if requests != 2 {
+		t.Fatalf("requests=%d, want 2", requests)
 	}
 	workspaceValue, ok := received["workspace"].(map[string]any)
 	if !ok {

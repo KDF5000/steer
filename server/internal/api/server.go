@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -542,10 +541,11 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		if key == "" {
 			key = "steer/" + wid + "/" + sessionID
 		}
-		run, err = s.submitReusableRun(r.Context(), request, key, "steer/"+sessionID)
-	} else {
-		run, err = s.relay.Submit(r.Context(), request)
+		request.Workspace.Lifecycle = "reusable"
+		request.Workspace.ReuseKey = key
+		request.Workspace.Branch = "steer/" + sessionID
 	}
+	run, err = s.submitRelayRun(r.Context(), request)
 	if err != nil {
 		writeError(w, fmt.Errorf("submit Relay run: %w", err))
 		return
@@ -582,66 +582,26 @@ func (s *Server) runtimeProvider(ctx context.Context, runtimeID string) (string,
 	return "", fmt.Errorf("execution Runtime %q is unavailable", runtimeID)
 }
 
-// submitReusableRun is a narrow compatibility bridge for the reusable
-// Workspace fields introduced after the currently released Relay SDK. The
-// request remains Relay's public wire contract; remove this helper once Steer
-// consumes the Relay release that exposes these fields in WorkspaceSpec.
-func (s *Server) submitReusableRun(ctx context.Context, request relay.Request, reuseKey, branch string) (relay.Run, error) {
-	payload, err := json.Marshal(request)
-	if err != nil {
-		return relay.Run{}, err
-	}
-	var body map[string]any
-	if err := json.Unmarshal(payload, &body); err != nil {
-		return relay.Run{}, err
-	}
-	workspaceValue, ok := body["workspace"].(map[string]any)
-	if !ok {
-		workspaceValue = map[string]any{}
-		body["workspace"] = workspaceValue
-	}
-	workspaceValue["lifecycle"] = "reusable"
-	workspaceValue["reuse_key"] = reuseKey
-	workspaceValue["branch"] = branch
-	payload, err = json.Marshal(body)
-	if err != nil {
-		return relay.Run{}, err
-	}
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, s.relayHTTP.BaseURL+"/v1/runs", bytes.NewReader(payload))
-	if err != nil {
-		return relay.Run{}, err
-	}
-	httpRequest.Header.Set("Content-Type", "application/json")
-	if s.relayHTTP.Token != "" {
-		httpRequest.Header.Set("Authorization", "Bearer "+s.relayHTTP.Token)
-	}
-	client := s.relayHTTP.HTTP
-	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
-	}
-	response, err := client.Do(httpRequest)
-	if err != nil {
-		return relay.Run{}, err
-	}
-	defer response.Body.Close()
-	responseBody, err := io.ReadAll(io.LimitReader(response.Body, 8<<20))
-	if err != nil {
-		return relay.Run{}, err
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		var failure map[string]string
-		_ = json.Unmarshal(responseBody, &failure)
-		message := failure["error"]
-		if message == "" {
-			message = string(responseBody)
+// submitRelayRun retries an ambiguous successful response once. Relay submissions
+// are idempotent, so using the same IdempotencyKey recovers the already-created
+// Run without creating a duplicate when a proxy truncates the first response.
+func (s *Server) submitRelayRun(ctx context.Context, request relay.Request) (relay.Run, error) {
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		run, err := s.relay.Submit(ctx, request)
+		if err == nil && run.ID != "" {
+			return run, nil
 		}
-		return relay.Run{}, fmt.Errorf("relay HTTP %s: %s", response.Status, message)
+		if err != nil && !strings.Contains(err.Error(), "decode Relay response") {
+			return relay.Run{}, err
+		}
+		if err != nil {
+			lastErr = err
+		} else {
+			lastErr = errors.New("Relay returned a successful response without a Run payload")
+		}
 	}
-	var run relay.Run
-	if err := json.Unmarshal(responseBody, &run); err != nil {
-		return relay.Run{}, fmt.Errorf("decode Relay response: %w", err)
-	}
-	return run, nil
+	return relay.Run{}, lastErr
 }
 
 func (s *Server) messageAttachment(w http.ResponseWriter, r *http.Request) {
