@@ -2531,7 +2531,16 @@ function RuntimeDialog({
   onURL: (value: string) => void;
   onRefresh: () => void;
 }) {
+  const [commandCopied, setCommandCopied] = useState(false);
   const command = `curl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh | RELAY_NODE_TOKEN='YOUR_NODE_TOKEN' sh -s -- --server ${publicURL || 'https://relay.example.com'} --install-service`;
+
+  async function copyInstallCommand() {
+    const copied = await writeClipboard(command);
+    if (!copied) return;
+    setCommandCopied(true);
+    window.setTimeout(() => setCommandCopied(false), 1600);
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpen}>
       <DialogContent className="ws-runtime-dialog">
@@ -2578,10 +2587,16 @@ function RuntimeDialog({
                 </pre>
                 <button
                   type="button"
-                  aria-label="Copy Relay Node install command"
-                  onClick={() => void navigator.clipboard?.writeText(command)}
+                  aria-label={
+                    commandCopied
+                      ? 'Relay Node install command copied'
+                      : 'Copy Relay Node install command'
+                  }
+                  title={commandCopied ? 'Copied' : 'Copy command'}
+                  className={commandCopied ? 'is-copied' : undefined}
+                  onClick={() => void copyInstallCommand()}
                 >
-                  <Copy />
+                  {commandCopied ? <Check /> : <Copy />}
                 </button>
               </div>
               <a

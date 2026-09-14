@@ -2215,29 +2215,56 @@
 }
 
 .ws-runtime-command pre {
-  overflow-x: auto;
-  padding: 14px 50px 14px 14px;
+  overflow: hidden;
+  padding: 13px 48px 13px 14px;
   color: #f1f1f3;
-  font: 10.5px/1.65 var(--font-geist-mono);
-  white-space: pre;
+  font: 10.5px/1.6 var(--font-geist-mono);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .ws-runtime-command button {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 9px;
+  right: 9px;
   display: grid;
-  width: 31px;
-  height: 31px;
+  width: 27px;
+  height: 27px;
   place-items: center;
-  border: 1px solid #ffffff24;
-  border-radius: 7px;
-  background: #ffffff12;
-  color: #fff;
+  border: 1px solid #5b5c64;
+  border-radius: 6px;
+  background: #3c3d44;
+  box-shadow: 0 1px 2px #00000030;
+  color: #f5f5f6;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    transform 120ms ease;
 }
 
 .ws-runtime-command button:hover {
-  background: #ffffff20;
+  border-color: #73747d;
+  background: #4a4b53;
+}
+
+.ws-runtime-command button:active {
+  transform: scale(0.96);
+}
+
+.ws-runtime-command button:focus-visible {
+  outline: 2px solid #a9aaf9;
+  outline-offset: 2px;
+}
+
+.ws-runtime-command button.is-copied {
+  border-color: #527a63;
+  background: #365845;
+}
+
+.ws-runtime-command button svg {
+  width: 14px;
+  height: 14px;
 }
 
 .ws-runtime-step a {
