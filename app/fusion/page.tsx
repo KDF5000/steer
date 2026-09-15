@@ -178,6 +178,14 @@ const Markdown = memo(function Markdown({ children }: { children: string }) {
 
 type ProcessActivity = NonNullable<ChatMessage['activityLog']>[number];
 
+function ProcessActionIcon({ label }: { label: string }) {
+  return actionFamily(label) === 'command' ? (
+    <SquareTerminal aria-hidden="true" />
+  ) : (
+    <Wrench aria-hidden="true" />
+  );
+}
+
 const ProcessTranscript = memo(function ProcessTranscript({
   items,
   live = false,
@@ -192,7 +200,29 @@ const ProcessTranscript = memo(function ProcessTranscript({
       aria-live={live ? 'polite' : undefined}
     >
       {items.map((item) =>
-        item.kind === 'update' && item.detail ? (
+        item.children?.length ? (
+          <details className="ws-chat-process-group" key={item.id}>
+            <summary>
+              <ProcessActionIcon label={item.children[0].label} />
+              <strong>{item.label}</strong>
+              <ChevronRight
+                className="ws-chat-process-group-chevron"
+                aria-hidden="true"
+              />
+            </summary>
+            <div className="ws-chat-process-group-content">
+              {item.children.map((child) => (
+                <div className="ws-chat-process-command" key={child.id}>
+                  <ProcessActionIcon label={child.label} />
+                  <strong>{child.label}</strong>
+                  {child.detail && (
+                    <small title={child.detail}>{child.detail}</small>
+                  )}
+                </div>
+              ))}
+            </div>
+          </details>
+        ) : item.kind === 'update' && item.detail ? (
           <Markdown key={item.id}>{item.detail}</Markdown>
         ) : (
           <div
@@ -3069,7 +3099,7 @@ function runActivityLog(
           eventType.endsWith('item.completed')
             ? 'Ran a command'
             : 'Running a command',
-          item.command || item.commandLine,
+          commandActivityDetail(item),
           eventType.endsWith('item.completed') ? 'action' : 'action-active',
         );
       else if (itemType.includes('filechange') || itemType.includes('edit'))
@@ -3114,6 +3144,30 @@ function runActivityLog(
   return compactProcessActivities(activities);
 }
 
+function commandActivityDetail(item: Record<string, unknown>) {
+  const command =
+    typeof item.command === 'string'
+      ? item.command
+      : typeof item.commandLine === 'string'
+        ? item.commandLine
+        : '';
+  if (!/^(read|write|edit)$/i.test(command)) return command;
+
+  const action = Array.isArray(item.commandActions)
+    ? item.commandActions.find(
+        (candidate): candidate is Record<string, unknown> =>
+          Boolean(candidate) && typeof candidate === 'object',
+      )
+    : undefined;
+  const target =
+    typeof action?.path === 'string'
+      ? action.path
+      : typeof action?.name === 'string'
+        ? action.name
+        : '';
+  return target ? `${command} ${target}` : command;
+}
+
 function compactProcessActivities(items: ProcessActivity[]) {
   const compacted: ProcessActivity[] = [];
   let actions: ProcessActivity[] = [];
@@ -3141,6 +3195,7 @@ function compactProcessActivities(items: ProcessActivity[]) {
         id: `actions-${completed[0].id}-${completed.at(-1)?.id}`,
         label: summarizeCompletedActions(completed),
         kind: 'action',
+        children: completed,
       });
     }
     if (active) compacted.push(active);

@@ -44,6 +44,14 @@ export type ActivitySummary = [
   message: string,
 ];
 
+export type ChatActivity = {
+  id: string;
+  label: string;
+  detail?: string;
+  kind?: 'stage' | 'update' | 'action' | 'action-active';
+  children?: ChatActivity[];
+};
+
 export type ChatMessage = {
   id?: string;
   role: 'user' | 'agent';
@@ -54,12 +62,7 @@ export type ChatMessage = {
   createdAt?: string;
   updatedAt?: string;
   activity?: string;
-  activityLog?: Array<{
-    id: string;
-    label: string;
-    detail?: string;
-    kind?: 'stage' | 'update' | 'action' | 'action-active';
-  }>;
+  activityLog?: ChatActivity[];
   attachments?: ChatAttachment[];
 };
 

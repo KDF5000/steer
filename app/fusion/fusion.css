@@ -923,6 +923,85 @@ button.ws-chat-response-meta:focus-visible {
   color: #98999f;
 }
 
+.ws-chat-process-group {
+  min-width: 0;
+  color: #777980;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ws-chat-process-group > summary {
+  display: flex;
+  width: fit-content;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  border-radius: 5px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.ws-chat-process-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ws-chat-process-group > summary:hover strong,
+.ws-chat-process-group > summary:hover > svg {
+  color: #55575e;
+}
+
+.ws-chat-process-group > summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ws-accent) 45%, transparent);
+  outline-offset: 4px;
+}
+
+.ws-chat-process-group > summary > svg,
+.ws-chat-process-command > svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  color: #8d8e95;
+}
+
+.ws-chat-process-group > summary strong,
+.ws-chat-process-command strong {
+  color: #666870;
+  font-weight: 530;
+}
+
+.ws-chat-process-group-chevron {
+  transition: transform 150ms ease;
+}
+
+.ws-chat-process-group[open] .ws-chat-process-group-chevron {
+  transform: rotate(90deg);
+}
+
+.ws-chat-process-group-content {
+  display: grid;
+  gap: 9px;
+  margin-top: 10px;
+  padding-left: 20px;
+}
+
+.ws-chat-process-command {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.ws-chat-process-command small {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+  color: #888a91;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ws-chat-current-status {
   margin-top: 11px;
   color: #a0a1a7;
@@ -944,8 +1023,10 @@ button.ws-chat-response-meta:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .ws-chat-response-meta.is-running > span,
-  .ws-chat-current-status {
+  .ws-chat-current-status,
+  .ws-chat-process-group-chevron {
     animation: none;
+    transition: none;
   }
 }
 
