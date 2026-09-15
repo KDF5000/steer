@@ -220,6 +220,10 @@ export const steer = {
       messages: ChatMessageRecord[];
       project?: ProjectRecord;
     }>(`/sessions/${encodeURIComponent(sessionId)}`),
+  deleteSession: (sessionId: string) =>
+    request<ChatSessionRecord>(`/sessions/${encodeURIComponent(sessionId)}`, {
+      method: 'DELETE',
+    }),
   chat: (input: {
     prompt: string;
     agentId: string;

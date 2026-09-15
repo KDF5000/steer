@@ -303,6 +303,40 @@ func (s *Store) Session(ctx context.Context, wid, id string) (Session, error) {
 	return x, err
 }
 
+func (s *Store) DeleteSession(ctx context.Context, wid, id string) (Session, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Session{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err = tx.Exec(ctx, `DELETE FROM artifacts WHERE workspace_id=$1 AND relay_run_id IN (SELECT relay_run_id FROM run_links WHERE workspace_id=$1 AND session_id=$2)`, wid, id); err != nil {
+		return Session{}, err
+	}
+	if _, err = tx.Exec(ctx, `DELETE FROM message_attachments WHERE workspace_id=$1 AND session_id=$2`, wid, id); err != nil {
+		return Session{}, err
+	}
+	if _, err = tx.Exec(ctx, `DELETE FROM messages WHERE workspace_id=$1 AND session_id=$2`, wid, id); err != nil {
+		return Session{}, err
+	}
+	if _, err = tx.Exec(ctx, `DELETE FROM run_links WHERE workspace_id=$1 AND session_id=$2`, wid, id); err != nil {
+		return Session{}, err
+	}
+
+	var deleted Session
+	err = scanSessionFields(tx.QueryRow(ctx, `DELETE FROM chat_sessions WHERE workspace_id=$1 AND id=$2 RETURNING `+sessionColumns, wid, id), &deleted)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Session{}, ErrNotFound
+	}
+	if err != nil {
+		return Session{}, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return Session{}, err
+	}
+	return deleted, nil
+}
+
 func (s *Store) Messages(ctx context.Context, wid, sessionID string) ([]Message, error) {
 	rows, err := s.pool.Query(ctx, `SELECT id,workspace_id,session_id,role,content,status,relay_run_id,error,created_at,updated_at FROM messages WHERE workspace_id=$1 AND session_id=$2 ORDER BY created_at, CASE role WHEN 'user' THEN 0 ELSE 1 END, id`, wid, sessionID)
 	if err != nil {

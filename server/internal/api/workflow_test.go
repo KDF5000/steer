@@ -137,4 +137,10 @@ func TestConversationWorkflowHTTP(t *testing.T) {
 	if preview.Content != content {
 		t.Fatalf("preview was not file content: %q", preview.Content)
 	}
+	call("DELETE", "/sessions/"+started.SessionID, "", 200)
+	call("GET", "/sessions/"+started.SessionID, "", 404)
+	json.Unmarshal(call("GET", "/bootstrap", "", 200).Body.Bytes(), &bootstrap)
+	if len(bootstrap.Sessions) != 0 || len(bootstrap.Artifacts) != 0 {
+		t.Fatalf("deleted conversation remains projected: %+v", bootstrap)
+	}
 }

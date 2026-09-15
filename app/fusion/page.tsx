@@ -276,7 +276,10 @@ export default function Fusion() {
   const [deletingProject, setDeletingProject] = useState<ProjectRecord | null>(
     null,
   );
+  const [deletingSession, setDeletingSession] =
+    useState<ChatSessionRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deletingConversation, setDeletingConversation] = useState(false);
   const [runtimeDialog, setRuntimeDialog] = useState(false);
   const [creatingAgent, setCreatingAgent] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
@@ -964,6 +967,35 @@ export default function Fusion() {
     }
   };
 
+  const deleteSelectedSession = async () => {
+    if (!deletingSession || deletingConversation) return;
+    if (deletingSession.id === chatSession && chatWorking) {
+      setDeletingSession(null);
+      setNotice('Stop the current run before deleting this conversation.');
+      return;
+    }
+    setDeletingConversation(true);
+    try {
+      const deleted = await steer.deleteSession(deletingSession.id);
+      setChatSessions((current) =>
+        current.filter((session) => session.id !== deleted.id),
+      );
+      if (chatSession === deleted.id) {
+        startNewChat(deleted.projectId || 'none');
+      }
+      setDeletingSession(null);
+      setNotice('Conversation deleted.');
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Could not delete conversation.',
+      );
+    } finally {
+      setDeletingConversation(false);
+    }
+  };
+
   const createAgent = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (createAgentLock.current) return;
@@ -1072,9 +1104,36 @@ export default function Fusion() {
                         isActive={view === 'chat' && chatSession === session.id}
                         onClick={() => void openChatSession(session.id)}
                       >
-                        <MessageSquareText aria-hidden="true" />
                         <span>{session.title}</span>
                       </SidebarMenuButton>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <SidebarMenuAction
+                              showOnHover
+                              aria-label={`Conversation actions for ${session.title}`}
+                            />
+                          }
+                        >
+                          <MoreHorizontal aria-hidden="true" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          side="right"
+                          align="start"
+                          sideOffset={-10}
+                          alignOffset={10}
+                          className="w-44 min-w-44 rounded-xl border border-[#e5e5e7] bg-white p-1.5 text-[#202124] shadow-[0_12px_32px_rgba(24,24,27,0.14),0_2px_8px_rgba(24,24,27,0.08)] ring-0"
+                        >
+                          <DropdownMenuItem
+                            variant="destructive"
+                            className="h-9 gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2 font-medium transition-colors hover:bg-[#fff0f1] hover:text-[#b3434d]"
+                            onClick={() => setDeletingSession(session)}
+                          >
+                            <Trash2 aria-hidden="true" />
+                            Delete conversation
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </SidebarMenuItem>
                   ))}
                 </SidebarMenu>
@@ -1403,6 +1462,41 @@ export default function Fusion() {
               }}
             >
               {deleting ? 'Deleting…' : 'Delete project'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={Boolean(deletingSession)}
+        onOpenChange={(open) =>
+          !open && !deletingConversation && setDeletingSession(null)
+        }
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this conversation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingSession?.id === chatSession && chatWorking
+                ? 'Stop the current run before deleting this conversation.'
+                : 'This permanently removes its messages, attachments, and generated artifacts from Steer.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingConversation}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={
+                deletingConversation ||
+                (deletingSession?.id === chatSession && chatWorking)
+              }
+              onClick={(event) => {
+                event.preventDefault();
+                void deleteSelectedSession();
+              }}
+            >
+              {deletingConversation ? 'Deleting…' : 'Delete conversation'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

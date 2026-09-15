@@ -57,6 +57,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/artifacts/{id}/content", s.artifactContent)
 	mux.HandleFunc("GET /api/v1/artifacts/{id}/download", s.artifactContent)
 	mux.HandleFunc("GET /api/v1/sessions/{id}", s.chatSession)
+	mux.HandleFunc("DELETE /api/v1/sessions/{id}", s.deleteChatSession)
 	mux.HandleFunc("GET /api/v1/messages/{messageId}/attachments/{attachmentId}", s.messageAttachment)
 	mux.HandleFunc("POST /api/v1/chat", s.chat)
 	mux.HandleFunc("GET /api/v1/runs/{id}", s.run)
@@ -84,6 +85,15 @@ func (s *Server) chatSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) deleteChatSession(w http.ResponseWriter, r *http.Request) {
+	deleted, err := s.store.DeleteSession(r.Context(), s.workspace(r), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, deleted)
 }
 
 func (s *Server) workspace(r *http.Request) string {
