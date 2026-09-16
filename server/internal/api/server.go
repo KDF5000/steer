@@ -61,6 +61,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/messages/{messageId}/attachments/{attachmentId}", s.messageAttachment)
 	mux.HandleFunc("POST /api/v1/chat", s.chat)
 	mux.HandleFunc("GET /api/v1/runs/{id}", s.run)
+	mux.HandleFunc("GET /api/v1/runs/{id}/workspace", s.inspectWorkspace)
 	mux.HandleFunc("GET /api/v1/runs/{id}/events/stream", s.streamRunEvents)
 	mux.HandleFunc("POST /api/v1/runs/{id}/cancel", s.cancelRun)
 	return s.recover(s.cors(s.logRequests(mux)))

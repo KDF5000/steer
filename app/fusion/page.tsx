@@ -12,6 +12,9 @@ import {
 } from 'react';
 import {
   AlertCircle,
+  FileCode,
+  FileJson,
+  FileImage,
   Bot,
   Check,
   ChevronRight,
@@ -23,7 +26,8 @@ import {
   GitBranch,
   MessageSquareText,
   MoreHorizontal,
-  PanelRightOpen,
+  PanelLeft,
+  ChevronDown,
   Pencil,
   Plus,
   RefreshCw,
@@ -37,6 +41,8 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
+import hljs from 'highlight.js/lib/common';
+import 'highlight.js/styles/github.css';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -95,11 +101,11 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from '@/components/ui/resizable';
+import { runFileChanges } from '@/lib/review';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type {
   AgentProfile as AgentItem,
@@ -432,6 +438,7 @@ export default function Fusion() {
                   activeRunContext.current.executionRuntimeID,
                 ),
                 activity: runActivity(result.events),
+                changes: runFileChanges(result.events),
                 activityLog: runActivityLog(
                   result.events,
                   result.run.status === 'succeeded' || Boolean(finalDraft),
@@ -492,6 +499,7 @@ export default function Fusion() {
                 text: finalDraft || message.text,
                 activity: runActivity(snapshot),
                 activityLog: runActivityLog(snapshot, Boolean(finalDraft)),
+                changes: runFileChanges(snapshot),
               }
             : message,
         ),
@@ -650,6 +658,7 @@ export default function Fusion() {
                 data.session.executionRuntimeId,
               ),
               activity: runActivity(result.events),
+              changes: runFileChanges(result.events),
               activityLog: runActivityLog(
                 result.events,
                 result.run.status === 'succeeded',
@@ -1308,6 +1317,7 @@ export default function Fusion() {
           </div>
         ) : view === 'chat' ? (
           <ChatView
+            key={chatSession || 'new-chat'}
             agents={agentList}
             agent={currentAgent}
             executionRuntimeId={composerExecutionRuntimeId}
@@ -1596,6 +1606,31 @@ function ChatView({
   const [previewID, setPreviewID] = useState('');
   const [preview, setPreview] = useState('');
   const [previewError, setPreviewError] = useState('');
+  const [reviewTab, setReviewTab] = useState<
+    'home' | 'changes' | 'documents' | 'files'
+  >('home');
+  const [reviewRunID, setReviewRunID] = useState('');
+  const [workspaceTabs, setWorkspaceTabs] = useState<
+    Array<{
+      id: string;
+      kind: 'changes' | 'documents' | 'files';
+      runId: string;
+      path: string;
+      title: string;
+    }>
+  >([]);
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('');
+  const [selectedChange, setSelectedChange] = useState('');
+  const [previewSource, setPreviewSource] = useState(false);
+  const reviewRounds = messages.filter(
+    (message) => message.role === 'agent' && message.runId,
+  );
+  const reviewMessage =
+    reviewRounds.find((message) => message.runId === reviewRunID) ||
+    reviewRounds.at(-1);
+  const changes = reviewMessage?.changes || [];
+  const currentChange =
+    changes.find((change) => change.path === selectedChange) || changes[0];
   const [now, setNow] = useState(() => Date.now());
   const [copiedMessage, setCopiedMessage] = useState('');
   const [draggingImages, setDraggingImages] = useState(false);
@@ -1621,7 +1656,55 @@ function ChatView({
   const composer = useRef<HTMLTextAreaElement>(null);
   const imageDragDepth = useRef(0);
   const followBottom = useRef(true);
+  const openWorkspaceTab = (
+    kind: 'changes' | 'documents' | 'files',
+    runId = '',
+    path = '',
+  ) => {
+    const id =
+      kind === 'changes'
+        ? `review:${runId || reviewRounds.at(-1)?.runId || 'latest'}`
+        : kind;
+    const resolvedRunId = runId || reviewRounds.at(-1)?.runId || '';
+    const title =
+      kind === 'changes'
+        ? `Review · Turn ${reviewRounds.findIndex((message) => message.runId === resolvedRunId) + 1}`
+        : kind === 'files'
+          ? 'Files'
+          : 'Documents';
+    setWorkspaceTabs((tabs) =>
+      tabs.some((tab) => tab.id === id)
+        ? tabs.map((tab) => (tab.id === id ? { ...tab, path } : tab))
+        : [...tabs, { id, kind, runId: resolvedRunId, path, title }],
+    );
+    setActiveWorkspaceTab(id);
+    setReviewTab(kind);
+    setReviewRunID(resolvedRunId);
+    setSelectedChange(path);
+    setReviewOpen(true);
+  };
+  const activateWorkspaceTab = (tab: (typeof workspaceTabs)[number]) => {
+    setActiveWorkspaceTab(tab.id);
+    setReviewTab(tab.kind);
+    setReviewRunID(tab.runId);
+    setSelectedChange(tab.path);
+  };
+  const closeWorkspaceTab = (id: string) => {
+    const remaining = workspaceTabs.filter((tab) => tab.id !== id);
+    setWorkspaceTabs(remaining);
+    if (activeWorkspaceTab === id) {
+      const next = remaining.at(-1);
+      if (next) activateWorkspaceTab(next);
+      else {
+        setActiveWorkspaceTab('');
+        setReviewTab('home');
+      }
+    }
+  };
   const selectPreview = (id: string) => {
+    openWorkspaceTab('documents');
+    setPreviewSource(false);
+    if (id === previewID) return;
     setPreviewID(id);
     setPreview('');
     setPreviewError('');
@@ -1674,524 +1757,1441 @@ function ChatView({
       </section>
     );
   return (
-    <section
-      className={`ws-chat-page ${hasMessages || sessionLoading ? 'has-messages' : 'is-empty'}`}
-    >
-      <header className="ws-chat-appbar">
-        <SidebarTrigger aria-label="Toggle sidebar" />
-        <div className="ws-chat-appbar-context">
-          <strong title={conversationTitle}>{conversationTitle}</strong>
-          <span title={projectLabel}>
-            <Folder aria-hidden="true" />
-            <small>{projectLabel}</small>
-          </span>
-        </div>
-        <div className="ws-grow" />
-        {!!artifacts.length && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="ws-chat-review-trigger"
-            aria-label={`Review ${artifacts.length} artifacts`}
-            onClick={() => {
-              selectPreview(artifacts[0].id);
-              setReviewOpen(true);
+    <ResizablePanelGroup orientation="horizontal" className="ws-chat-split">
+      <ResizablePanel id="conversation" minSize="30%" defaultSize="60%">
+        <section
+          className={`ws-chat-page ${hasMessages || sessionLoading ? 'has-messages' : 'is-empty'}`}
+        >
+          <header className="ws-chat-appbar">
+            <SidebarTrigger aria-label="Toggle sidebar" />
+            <div className="ws-chat-appbar-context">
+              <strong title={conversationTitle}>{conversationTitle}</strong>
+              <span title={projectLabel}>
+                <Folder aria-hidden="true" />
+                <small>{projectLabel}</small>
+              </span>
+            </div>
+            <div className="ws-grow" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ws-chat-review-trigger"
+              aria-label="Open review panel"
+              aria-expanded={reviewOpen}
+              onClick={() => {
+                setReviewOpen((open) => !open);
+              }}
+            >
+              <PanelLeft className="ws-panel-toggle-right" aria-hidden="true" />
+              {!!(changes.length + artifacts.length) && (
+                <span>{changes.length + artifacts.length}</span>
+              )}
+            </Button>
+          </header>
+          <Dialog
+            open={Boolean(composerPreview)}
+            onOpenChange={(open) => !open && setComposerPreviewID('')}
+          >
+            <DialogContent className="ws-image-preview-dialog">
+              <DialogTitle className="sr-only">Image preview</DialogTitle>
+              <DialogDescription className="sr-only">
+                Full-size preview of the image attached to this message.
+              </DialogDescription>
+              {composerPreview && (
+                // oxlint-disable-next-line next/no-img-element -- local object URL preview
+                <img
+                  src={composerPreview.url}
+                  alt={composerPreview.file.name || 'Attached image'}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
+          <div
+            className="ws-chat-center"
+            ref={scrollArea}
+            onScroll={() => {
+              const area = scrollArea.current;
+              if (area)
+                followBottom.current =
+                  area.scrollHeight - area.scrollTop - area.clientHeight < 100;
             }}
           >
-            <PanelRightOpen aria-hidden="true" />
-            <span>{artifacts.length}</span>
-          </Button>
-        )}
-      </header>
-      <Sheet open={reviewOpen} onOpenChange={setReviewOpen}>
-        <SheetContent className="ws-chat-review-sheet">
-          <SheetTitle>Artifacts</SheetTitle>
-          <SheetDescription>
-            Durable outputs from this conversation. Agent replies remain in the
-            thread.
-          </SheetDescription>
-          <div className="ws-chat-review-list">
-            {artifacts.map((artifact) => (
-              <button
-                type="button"
-                className={previewID === artifact.id ? 'selected' : ''}
-                key={artifact.id}
-                onClick={() => selectPreview(artifact.id)}
-              >
-                <FileText aria-hidden="true" />
-                <span>
-                  <strong>{artifact.title}</strong>
-                  <small>
-                    {artifact.type}
-                    {artifact.size ? ` · ${formatSize(artifact.size)}` : ''}
-                  </small>
+            {sessionLoading && (
+              <output className="ws-chat-session-loading" aria-live="polite">
+                <span />
+                <span />
+                <span />
+                Loading conversation…
+              </output>
+            )}
+            {!sessionLoading && !hasMessages && (
+              <div className="ws-chat-welcome">
+                <span className="ws-chat-mark">
+                  <MessageSquareText aria-hidden="true" />
                 </span>
-                <ChevronRight aria-hidden="true" />
-              </button>
-            ))}
-          </div>
-          {previewID && (
-            <div className="ws-chat-artifact-preview">
-              {previewError ? (
-                <p role="alert">{previewError}</p>
-              ) : preview ? (
-                <Markdown>{preview}</Markdown>
-              ) : (
-                <output>Loading preview…</output>
-              )}
-              <Button variant="outline" onClick={() => onArtifact(previewID)}>
-                Open full review
-              </Button>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
-      <Dialog
-        open={Boolean(composerPreview)}
-        onOpenChange={(open) => !open && setComposerPreviewID('')}
-      >
-        <DialogContent className="ws-image-preview-dialog">
-          <DialogTitle className="sr-only">Image preview</DialogTitle>
-          <DialogDescription className="sr-only">
-            Full-size preview of the image attached to this message.
-          </DialogDescription>
-          {composerPreview && (
-            // oxlint-disable-next-line next/no-img-element -- local object URL preview
-            <img
-              src={composerPreview.url}
-              alt={composerPreview.file.name || 'Attached image'}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-      <div
-        className="ws-chat-center"
-        ref={scrollArea}
-        onScroll={() => {
-          const area = scrollArea.current;
-          if (area)
-            followBottom.current =
-              area.scrollHeight - area.scrollTop - area.clientHeight < 100;
-        }}
-      >
-        {sessionLoading && (
-          <output className="ws-chat-session-loading" aria-live="polite">
-            <span />
-            <span />
-            <span />
-            Loading conversation…
-          </output>
-        )}
-        {!sessionLoading && !hasMessages && (
-          <div className="ws-chat-welcome">
-            <span className="ws-chat-mark">
-              <MessageSquareText aria-hidden="true" />
-            </span>
-            <h1>What would you like to work on?</h1>
-            <p>
-              {selectedProject
-                ? `Work with ${agent.name} directly in ${selectedProject.name}. Relay runs on the machine where this project path exists.`
-                : `Choose a project, then work with ${agent.name} on its local or remote Runtime.`}
-            </p>
-          </div>
-        )}
-        {!sessionLoading && hasMessages && (
-          <div className="ws-chat-thread">
-            {messages.map((message, index) => {
-              const messageKey = message.id || `${message.role}-${index}`;
-              const previousPrompt = messages
-                .slice(0, index)
-                .reverse()
-                .find((item) => item.role === 'user')?.text;
-              const terminal = isTerminalStatus(message.status);
-              const finalOutputStarted =
-                message.role === 'agent' && !terminal && Boolean(message.text);
-              const processCollapsible = terminal || finalOutputStarted;
-              const activityExpanded =
-                expandedActivity[messageKey] ?? !processCollapsible;
-              const activityItems = message.activityLog?.length
-                ? message.activityLog
-                : [
-                    {
-                      id: 'working',
-                      label: message.activity || 'Working',
-                    },
-                  ];
-              const processActivityItems = activityItems.filter(
-                (item) =>
-                  item.kind === 'update' ||
-                  item.kind === 'action' ||
-                  item.kind === 'action-active',
-              );
-              const visibleProcessItems = processActivityItems.length
-                ? processActivityItems
-                : activityItems.slice(-1);
-              const hasActiveTool =
-                visibleProcessItems.at(-1)?.kind === 'action-active';
-              return (
-                <div
-                  className={`ws-chat-message ${message.role}`}
-                  key={messageKey}
-                >
-                  <span className="ws-agent-avatar">
-                    {message.role === 'user' ? 'K' : agent.name[0]}
-                  </span>
-                  <div>
-                    <strong>
-                      {message.role === 'user' ? 'You' : agent.name}
-                    </strong>
-                    {message.role === 'agent' && (
-                      <div
-                        className={`ws-chat-response-process${processCollapsible ? '' : ' is-live'}`}
-                      >
-                        {processCollapsible ? (
-                          <button
-                            type="button"
-                            className={`ws-chat-response-meta ${terminal ? 'is-complete' : 'is-running'}`}
-                            aria-expanded={activityExpanded}
-                            onClick={() =>
-                              setExpandedActivity((current) => ({
-                                ...current,
-                                [messageKey]: !activityExpanded,
-                              }))
-                            }
-                          >
-                            <span aria-live={terminal ? undefined : 'polite'}>
-                              {responseStatusLabel(message, now)}
-                            </span>
-                            <ChevronRight aria-hidden="true" />
-                          </button>
-                        ) : (
-                          <div className="ws-chat-response-meta is-running">
-                            <span aria-live="polite">
-                              {responseStatusLabel(message, now)}
-                            </span>
-                          </div>
-                        )}
-                        <div
-                          className="ws-chat-response-divider"
-                          aria-hidden="true"
-                        />
-                        {(activityExpanded || !processCollapsible) && (
-                          <ProcessTranscript
-                            items={visibleProcessItems}
-                            live={!processCollapsible}
-                          />
-                        )}
-                        {!processCollapsible && !hasActiveTool && (
+                <h1>What would you like to work on?</h1>
+                <p>
+                  {selectedProject
+                    ? `Work with ${agent.name} directly in ${selectedProject.name}. Relay runs on the machine where this project path exists.`
+                    : `Choose a project, then work with ${agent.name} on its local or remote Runtime.`}
+                </p>
+              </div>
+            )}
+            {!sessionLoading && hasMessages && (
+              <div className="ws-chat-thread">
+                {messages.map((message, index) => {
+                  const messageKey = message.id || `${message.role}-${index}`;
+                  const previousPrompt = messages
+                    .slice(0, index)
+                    .reverse()
+                    .find((item) => item.role === 'user')?.text;
+                  const terminal = isTerminalStatus(message.status);
+                  const finalOutputStarted =
+                    message.role === 'agent' &&
+                    !terminal &&
+                    Boolean(message.text);
+                  const processCollapsible = terminal || finalOutputStarted;
+                  const activityExpanded =
+                    expandedActivity[messageKey] ?? !processCollapsible;
+                  const activityItems = message.activityLog?.length
+                    ? message.activityLog
+                    : [
+                        {
+                          id: 'working',
+                          label: message.activity || 'Working',
+                        },
+                      ];
+                  const processActivityItems = activityItems.filter(
+                    (item) =>
+                      item.kind === 'update' ||
+                      item.kind === 'action' ||
+                      item.kind === 'action-active',
+                  );
+                  const visibleProcessItems = processActivityItems.length
+                    ? processActivityItems
+                    : activityItems.slice(-1);
+                  const hasActiveTool =
+                    visibleProcessItems.at(-1)?.kind === 'action-active';
+                  return (
+                    <div
+                      className={`ws-chat-message ${message.role}`}
+                      key={messageKey}
+                    >
+                      <span className="ws-agent-avatar">
+                        {message.role === 'user' ? 'K' : agent.name[0]}
+                      </span>
+                      <div>
+                        <strong>
+                          {message.role === 'user' ? 'You' : agent.name}
+                        </strong>
+                        {message.role === 'agent' && (
                           <div
-                            className="ws-chat-current-status"
-                            aria-live="polite"
+                            className={`ws-chat-response-process${processCollapsible ? '' : ' is-live'}`}
                           >
-                            {message.activity || 'Thinking'}
+                            {processCollapsible ? (
+                              <button
+                                type="button"
+                                className={`ws-chat-response-meta ${terminal ? 'is-complete' : 'is-running'}`}
+                                aria-expanded={activityExpanded}
+                                onClick={() =>
+                                  setExpandedActivity((current) => ({
+                                    ...current,
+                                    [messageKey]: !activityExpanded,
+                                  }))
+                                }
+                              >
+                                <span
+                                  aria-live={terminal ? undefined : 'polite'}
+                                >
+                                  {responseStatusLabel(message, now)}
+                                </span>
+                                <ChevronRight aria-hidden="true" />
+                              </button>
+                            ) : (
+                              <div className="ws-chat-response-meta is-running">
+                                <span aria-live="polite">
+                                  {responseStatusLabel(message, now)}
+                                </span>
+                              </div>
+                            )}
+                            <div
+                              className="ws-chat-response-divider"
+                              aria-hidden="true"
+                            />
+                            {(activityExpanded || !processCollapsible) && (
+                              <ProcessTranscript
+                                items={visibleProcessItems}
+                                live={!processCollapsible}
+                              />
+                            )}
+                            {!processCollapsible && !hasActiveTool && (
+                              <div
+                                className="ws-chat-current-status"
+                                aria-live="polite"
+                              >
+                                {message.activity || 'Thinking'}
+                              </div>
+                            )}
                           </div>
                         )}
-                      </div>
-                    )}
-                    {message.role === 'agent' ? (
-                      message.text ? (
-                        <div aria-live={terminal ? undefined : 'polite'}>
-                          <Markdown>{message.text}</Markdown>
-                        </div>
-                      ) : null
-                    ) : (
-                      <>
-                        {!!message.attachments?.length && (
-                          <div className="ws-chat-image-grid">
-                            {message.attachments.map((image) => (
-                              <a
-                                href={image.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                key={image.id}
-                                aria-label={`Open ${image.name}`}
+                        {message.role === 'agent' ? (
+                          message.text ? (
+                            <div aria-live={terminal ? undefined : 'polite'}>
+                              <Markdown>{message.text}</Markdown>
+                            </div>
+                          ) : null
+                        ) : (
+                          <>
+                            {!!message.attachments?.length && (
+                              <div className="ws-chat-image-grid">
+                                {message.attachments.map((image) => (
+                                  <a
+                                    href={image.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    key={image.id}
+                                    aria-label={`Open ${image.name}`}
+                                  >
+                                    {/* oxlint-disable-next-line next/no-img-element -- authenticated and blob attachment URLs are not compatible with an image optimizer */}
+                                    <img src={image.url} alt={image.name} />
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                            {message.text && <p>{message.text}</p>}
+                          </>
+                        )}
+                        {message.error && (
+                          <p className="ws-form-error">{message.error}</p>
+                        )}
+                        {!!message.changes?.length && (
+                          <div className="ws-message-changes">
+                            <Button
+                              className="ws-review-message-link"
+                              variant="outline"
+                              onClick={() => {
+                                openWorkspaceTab(
+                                  'changes',
+                                  message.runId,
+                                  message.changes?.[0]?.path,
+                                );
+                              }}
+                            >
+                              <FileText aria-hidden="true" />
+                              Review {message.changes.length} changed{' '}
+                              {message.changes.length === 1 ? 'file' : 'files'}
+                            </Button>
+                            {message.changes.map((change) => (
+                              <Button
+                                key={change.path}
+                                variant="ghost"
+                                title={change.path}
+                                onClick={() =>
+                                  openWorkspaceTab(
+                                    'changes',
+                                    message.runId,
+                                    change.path,
+                                  )
+                                }
                               >
-                                {/* oxlint-disable-next-line next/no-img-element -- authenticated and blob attachment URLs are not compatible with an image optimizer */}
-                                <img src={image.url} alt={image.name} />
-                              </a>
+                                <span>{change.path}</span>
+                                <ChevronRight aria-hidden="true" />
+                              </Button>
                             ))}
                           </div>
                         )}
-                        {message.text && <p>{message.text}</p>}
-                      </>
-                    )}
-                    {message.error && (
-                      <p className="ws-form-error">{message.error}</p>
-                    )}
-                    {message.role === 'agent' && terminal && message.text && (
-                      <div className="ws-chat-message-actions">
-                        <button
-                          type="button"
-                          aria-label={
-                            copiedMessage === messageKey
-                              ? 'Response copied'
-                              : 'Copy response'
-                          }
-                          title={
-                            copiedMessage === messageKey
-                              ? 'Copied'
-                              : 'Copy response'
-                          }
-                          onClick={() => {
-                            void writeClipboard(message.text).then((copied) => {
-                              if (!copied) return;
-                              setCopiedMessage(messageKey);
-                              window.setTimeout(
-                                () =>
-                                  setCopiedMessage((current) =>
-                                    current === messageKey ? '' : current,
-                                  ),
-                                1800,
-                              );
-                            });
-                          }}
-                        >
-                          {copiedMessage === messageKey ? (
-                            <Check aria-hidden="true" />
-                          ) : (
-                            <Copy aria-hidden="true" />
+                        {message.role === 'agent' &&
+                          terminal &&
+                          message.text && (
+                            <div className="ws-chat-message-actions">
+                              <button
+                                type="button"
+                                aria-label={
+                                  copiedMessage === messageKey
+                                    ? 'Response copied'
+                                    : 'Copy response'
+                                }
+                                title={
+                                  copiedMessage === messageKey
+                                    ? 'Copied'
+                                    : 'Copy response'
+                                }
+                                onClick={() => {
+                                  void writeClipboard(message.text).then(
+                                    (copied) => {
+                                      if (!copied) return;
+                                      setCopiedMessage(messageKey);
+                                      window.setTimeout(
+                                        () =>
+                                          setCopiedMessage((current) =>
+                                            current === messageKey
+                                              ? ''
+                                              : current,
+                                          ),
+                                        1800,
+                                      );
+                                    },
+                                  );
+                                }}
+                              >
+                                {copiedMessage === messageKey ? (
+                                  <Check aria-hidden="true" />
+                                ) : (
+                                  <Copy aria-hidden="true" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                aria-label="Run again"
+                                title="Run again"
+                                disabled={working || !previousPrompt}
+                                onClick={() =>
+                                  previousPrompt && onRetry(previousPrompt)
+                                }
+                              >
+                                <RefreshCw aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                aria-label="Download response"
+                                title="Download response"
+                                onClick={() =>
+                                  downloadText(
+                                    message.text,
+                                    `agent-response-${index + 1}.md`,
+                                  )
+                                }
+                              >
+                                <Download aria-hidden="true" />
+                              </button>
+                            </div>
                           )}
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Run again"
-                          title="Run again"
-                          disabled={working || !previousPrompt}
-                          onClick={() =>
-                            previousPrompt && onRetry(previousPrompt)
-                          }
-                        >
-                          <RefreshCw aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Download response"
-                          title="Download response"
-                          onClick={() =>
-                            downloadText(
-                              message.text,
-                              `agent-response-${index + 1}.md`,
-                            )
-                          }
-                        >
-                          <Download aria-hidden="true" />
-                        </button>
                       </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {working && messages.at(-1)?.role !== 'agent' && (
-              <p className="ws-chat-working">
-                <span />
-                <span />
-                <span />
-                Starting Agent
-              </p>
+                    </div>
+                  );
+                })}
+                {working && messages.at(-1)?.role !== 'agent' && (
+                  <p className="ws-chat-working">
+                    <span />
+                    <span />
+                    <span />
+                    Starting Agent
+                  </p>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
-      <div className="ws-chatbox-wrap">
-        <form
-          className={`ws-chatbox${draggingImages ? ' is-dragging' : ''}`}
-          onSubmit={(event) => {
-            event.preventDefault();
-            followBottom.current = true;
-            onSend();
-          }}
-        >
-          {!!images.length && (
-            <div className="ws-chatbox-images">
-              {images.map((image) => (
-                <div key={image.id}>
-                  <button
-                    type="button"
-                    className="ws-chatbox-image-preview"
-                    aria-label={`Preview ${image.file.name}`}
-                    onClick={() => setComposerPreviewID(image.id)}
-                  >
-                    {/* oxlint-disable-next-line next/no-img-element -- local object URL preview */}
-                    <img src={image.url} alt="" />
-                  </button>
-                  <button
-                    type="button"
-                    className="ws-chatbox-image-remove"
-                    aria-label={`Remove ${image.file.name}`}
-                    onClick={() => onRemoveImage(image.id)}
-                  >
-                    <X aria-hidden="true" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          <textarea
-            ref={composer}
-            aria-label="Message Agent"
-            rows={2}
-            value={input}
-            onChange={(event) => onInput(event.target.value)}
-            onDragEnter={(event) => {
-              if (!event.dataTransfer.types.includes('Files')) return;
-              event.preventDefault();
-              imageDragDepth.current += 1;
-              setDraggingImages(true);
-            }}
-            onDragOver={(event) => {
-              if (!event.dataTransfer.types.includes('Files')) return;
-              event.preventDefault();
-              event.dataTransfer.dropEffect = 'copy';
-            }}
-            onDragLeave={(event) => {
-              if (!event.dataTransfer.types.includes('Files')) return;
-              event.preventDefault();
-              imageDragDepth.current = Math.max(0, imageDragDepth.current - 1);
-              if (imageDragDepth.current === 0) setDraggingImages(false);
-            }}
-            onDrop={(event) => {
-              if (!event.dataTransfer.types.includes('Files')) return;
-              event.preventDefault();
-              imageDragDepth.current = 0;
-              setDraggingImages(false);
-              onImages(Array.from(event.dataTransfer.files));
-            }}
-            onPaste={(event) => {
-              const pastedImages = Array.from(event.clipboardData.items)
-                .filter(
-                  (item) =>
-                    item.kind === 'file' && item.type.startsWith('image/'),
-                )
-                .map((item) => item.getAsFile())
-                .filter((file): file is File => file !== null);
-
-              if (pastedImages.length > 0) {
-                onImages(pastedImages);
-              }
-            }}
-            onKeyDown={(event) => {
-              if (
-                event.key === 'Enter' &&
-                !event.shiftKey &&
-                !event.nativeEvent.isComposing
-              ) {
+          <div className="ws-chatbox-wrap">
+            <form
+              className={`ws-chatbox${draggingImages ? ' is-dragging' : ''}`}
+              onSubmit={(event) => {
                 event.preventDefault();
                 followBottom.current = true;
                 onSend();
-              }
-            }}
-            placeholder="Ask a question or describe a task…"
-          />
-          <footer className="ws-chatbox-footer">
-            <div className="ws-chatbox-context">
-              <Select
-                value={agent.id}
-                disabled={working}
-                onValueChange={(value) => onAgent(value ?? agent.id)}
-              >
-                <SelectTrigger
-                  className="ws-composer-agent"
-                  aria-label="Select Agent"
-                  title={agent.name}
-                >
-                  <span className="ws-agent-avatar" aria-hidden="true">
-                    {agent.name[0]}
-                  </span>
-                  <span>{agent.name}</span>
-                </SelectTrigger>
-                <SelectContent
-                  className="ws-select-popup"
-                  alignItemWithTrigger={false}
-                >
-                  {agents.map((item) => {
-                    const runtimeMismatch = Boolean(
-                      (executionRuntimeId &&
-                        item.runtimeId &&
-                        item.runtimeId !== executionRuntimeId) ||
-                      (executionRuntimeProvider &&
-                        item.runtimeProvider !== executionRuntimeProvider),
-                    );
-                    return (
-                      <SelectItem
-                        value={item.id}
-                        key={item.id}
-                        disabled={runtimeMismatch}
-                        title={
-                          runtimeMismatch
-                            ? 'This conversation is pinned to another Runtime'
-                            : undefined
-                        }
-                      >
-                        {item.name}
-                        {runtimeMismatch ? ' · Different Runtime' : ''}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-              <Select
-                value={project}
-                disabled={working || hasMessages}
-                onValueChange={(value) => onProject(value ?? 'none')}
-              >
-                <SelectTrigger
-                  className="ws-composer-project"
-                  aria-label="Select Project"
-                  title={projectLabel}
-                >
-                  <Folder aria-hidden="true" />
-                  <span>
-                    {selectedProject
-                      ? `${selectedProject.name}${selectedProject.deletedAt ? ' (deleted)' : ''}`
-                      : 'Select project'}
-                  </span>
-                </SelectTrigger>
-                <SelectContent
-                  className="ws-select-popup"
-                  alignItemWithTrigger={false}
-                >
-                  <SelectItem value="none">No project</SelectItem>
-                  {projects
-                    .filter((item) => !item.deletedAt)
-                    .map((item) => (
-                      <SelectItem value={item.id} key={item.id}>
-                        {item.name} · {item.workspaceSource}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              {!hasMessages && (
-                <button
-                  type="button"
-                  className="ws-add-project"
-                  onClick={onAddProject}
-                >
-                  <Plus aria-hidden="true" />
-                  Add project
-                </button>
-              )}
-            </div>
-            <button
-              className="ws-chat-send"
-              type={working ? 'button' : 'submit'}
-              aria-label={working ? 'Stop generating' : 'Send message'}
-              disabled={!working && !input.trim() && images.length === 0}
-              onClick={() => working && onStop()}
+              }}
             >
-              {working ? (
-                <Square aria-hidden="true" />
-              ) : (
-                <Send aria-hidden="true" />
+              {!!images.length && (
+                <div className="ws-chatbox-images">
+                  {images.map((image) => (
+                    <div key={image.id}>
+                      <button
+                        type="button"
+                        className="ws-chatbox-image-preview"
+                        aria-label={`Preview ${image.file.name}`}
+                        onClick={() => setComposerPreviewID(image.id)}
+                      >
+                        {/* oxlint-disable-next-line next/no-img-element -- local object URL preview */}
+                        <img src={image.url} alt="" />
+                      </button>
+                      <button
+                        type="button"
+                        className="ws-chatbox-image-remove"
+                        aria-label={`Remove ${image.file.name}`}
+                        onClick={() => onRemoveImage(image.id)}
+                      >
+                        <X aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               )}
-            </button>
-          </footer>
-        </form>
-        <p className="ws-chat-mode-note">
-          {agent.name} · {agent.runtime} · {agent.model}
-        </p>
+              <textarea
+                ref={composer}
+                aria-label="Message Agent"
+                rows={2}
+                value={input}
+                onChange={(event) => onInput(event.target.value)}
+                onDragEnter={(event) => {
+                  if (!event.dataTransfer.types.includes('Files')) return;
+                  event.preventDefault();
+                  imageDragDepth.current += 1;
+                  setDraggingImages(true);
+                }}
+                onDragOver={(event) => {
+                  if (!event.dataTransfer.types.includes('Files')) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'copy';
+                }}
+                onDragLeave={(event) => {
+                  if (!event.dataTransfer.types.includes('Files')) return;
+                  event.preventDefault();
+                  imageDragDepth.current = Math.max(
+                    0,
+                    imageDragDepth.current - 1,
+                  );
+                  if (imageDragDepth.current === 0) setDraggingImages(false);
+                }}
+                onDrop={(event) => {
+                  if (!event.dataTransfer.types.includes('Files')) return;
+                  event.preventDefault();
+                  imageDragDepth.current = 0;
+                  setDraggingImages(false);
+                  onImages(Array.from(event.dataTransfer.files));
+                }}
+                onPaste={(event) => {
+                  const pastedImages = Array.from(event.clipboardData.items)
+                    .filter(
+                      (item) =>
+                        item.kind === 'file' && item.type.startsWith('image/'),
+                    )
+                    .map((item) => item.getAsFile())
+                    .filter((file): file is File => file !== null);
+
+                  if (pastedImages.length > 0) {
+                    onImages(pastedImages);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (
+                    event.key === 'Enter' &&
+                    !event.shiftKey &&
+                    !event.nativeEvent.isComposing
+                  ) {
+                    event.preventDefault();
+                    followBottom.current = true;
+                    onSend();
+                  }
+                }}
+                placeholder="Ask a question or describe a task…"
+              />
+              <footer className="ws-chatbox-footer">
+                <div className="ws-chatbox-context">
+                  <Select
+                    value={agent.id}
+                    disabled={working}
+                    onValueChange={(value) => onAgent(value ?? agent.id)}
+                  >
+                    <SelectTrigger
+                      className="ws-composer-agent"
+                      aria-label="Select Agent"
+                      title={agent.name}
+                    >
+                      <span className="ws-agent-avatar" aria-hidden="true">
+                        {agent.name[0]}
+                      </span>
+                      <span>{agent.name}</span>
+                    </SelectTrigger>
+                    <SelectContent
+                      className="ws-select-popup"
+                      alignItemWithTrigger={false}
+                    >
+                      {agents.map((item) => {
+                        const runtimeMismatch = Boolean(
+                          (executionRuntimeId &&
+                            item.runtimeId &&
+                            item.runtimeId !== executionRuntimeId) ||
+                          (executionRuntimeProvider &&
+                            item.runtimeProvider !== executionRuntimeProvider),
+                        );
+                        return (
+                          <SelectItem
+                            value={item.id}
+                            key={item.id}
+                            disabled={runtimeMismatch}
+                            title={
+                              runtimeMismatch
+                                ? 'This conversation is pinned to another Runtime'
+                                : undefined
+                            }
+                          >
+                            {item.name}
+                            {runtimeMismatch ? ' · Different Runtime' : ''}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={project}
+                    disabled={working || hasMessages}
+                    onValueChange={(value) => onProject(value ?? 'none')}
+                  >
+                    <SelectTrigger
+                      className="ws-composer-project"
+                      aria-label="Select Project"
+                      title={projectLabel}
+                    >
+                      <Folder aria-hidden="true" />
+                      <span>
+                        {selectedProject
+                          ? `${selectedProject.name}${selectedProject.deletedAt ? ' (deleted)' : ''}`
+                          : 'Select project'}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent
+                      className="ws-select-popup"
+                      alignItemWithTrigger={false}
+                    >
+                      <SelectItem value="none">No project</SelectItem>
+                      {projects
+                        .filter((item) => !item.deletedAt)
+                        .map((item) => (
+                          <SelectItem value={item.id} key={item.id}>
+                            {item.name} · {item.workspaceSource}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {!hasMessages && (
+                    <button
+                      type="button"
+                      className="ws-add-project"
+                      onClick={onAddProject}
+                    >
+                      <Plus aria-hidden="true" />
+                      Add project
+                    </button>
+                  )}
+                </div>
+                <button
+                  className="ws-chat-send"
+                  type={working ? 'button' : 'submit'}
+                  aria-label={working ? 'Stop generating' : 'Send message'}
+                  disabled={!working && !input.trim() && images.length === 0}
+                  onClick={() => working && onStop()}
+                >
+                  {working ? (
+                    <Square aria-hidden="true" />
+                  ) : (
+                    <Send aria-hidden="true" />
+                  )}
+                </button>
+              </footer>
+            </form>
+            <p className="ws-chat-mode-note">
+              {agent.name} · {agent.runtime} · {agent.model}
+            </p>
+          </div>
+        </section>
+      </ResizablePanel>
+      {reviewOpen && (
+        <>
+          <ResizableHandle className="ws-review-resize" />
+          <ResizablePanel
+            id="review"
+            minSize="25%"
+            maxSize="70%"
+            defaultSize="40%"
+          >
+            <aside className="ws-review-panel" aria-label="Conversation review">
+              <header className="ws-review-header">
+                <div className="ws-browser-tabs" aria-label="Workspace tabs">
+                  {workspaceTabs.map((tab) => (
+                    <div
+                      key={tab.id}
+                      className={
+                        activeWorkspaceTab === tab.id && reviewTab !== 'home'
+                          ? 'is-active'
+                          : ''
+                      }
+                    >
+                      <Button
+                        variant="ghost"
+                        aria-pressed={
+                          activeWorkspaceTab === tab.id && reviewTab !== 'home'
+                        }
+                        onClick={() => activateWorkspaceTab(tab)}
+                      >
+                        <FileText aria-hidden="true" />
+                        <span>{tab.title}</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Close ${tab.title}`}
+                        onClick={() => closeWorkspaceTab(tab.id)}
+                      >
+                        <X aria-hidden="true" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="New workspace tab"
+                    onClick={() => setReviewTab('home')}
+                  >
+                    <Plus aria-hidden="true" />
+                  </Button>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Close review panel"
+                  onClick={() => setReviewOpen(false)}
+                >
+                  <PanelLeft
+                    className="ws-panel-toggle-right"
+                    aria-hidden="true"
+                  />
+                </Button>
+              </header>
+              <div className="ws-review-body">
+                {reviewTab === 'home' ? (
+                  <div className="ws-review-launcher">
+                    <Button
+                      variant="ghost"
+                      onClick={() => openWorkspaceTab('files')}
+                    >
+                      <Folder aria-hidden="true" />
+                      <span>
+                        Files
+                        <small>Browse the actual session workspace</small>
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => openWorkspaceTab('changes')}
+                    >
+                      <FileText aria-hidden="true" />
+                      <span>
+                        Code review
+                        <small>Inspect files changed in each agent turn</small>
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => openWorkspaceTab('documents')}
+                    >
+                      <Folder aria-hidden="true" />
+                      <span>
+                        Documents
+                        <small>
+                          Preview outputs attached to this conversation
+                        </small>
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
+                  </div>
+                ) : reviewTab === 'files' ? (
+                  <WorkspaceFiles key={reviewRunID} runId={reviewRunID} />
+                ) : reviewTab === 'changes' ? (
+                  <CodeReview
+                    key={reviewMessage?.runId}
+                    runId={reviewMessage?.runId || ''}
+                    reportedChanges={changes}
+                    selectedPath={currentChange?.path || selectedChange}
+                    turn={reviewRounds.indexOf(reviewMessage!) + 1}
+                    rounds={reviewRounds}
+                    onTurn={(runId) => openWorkspaceTab('changes', runId)}
+                    onSelect={(path) => {
+                      setSelectedChange(path);
+                      setWorkspaceTabs((tabs) =>
+                        tabs.map((tab) =>
+                          tab.id === activeWorkspaceTab
+                            ? { ...tab, path }
+                            : tab,
+                        ),
+                      );
+                    }}
+                  />
+                ) : (
+                  <>
+                    <div className="ws-chat-review-list">
+                      {artifacts.map((artifact) => (
+                        <button
+                          key={artifact.id}
+                          className={
+                            previewID === artifact.id ? 'selected' : ''
+                          }
+                          onClick={() => selectPreview(artifact.id)}
+                        >
+                          <FileText aria-hidden="true" />
+                          <span>
+                            <strong>{artifact.title}</strong>
+                            <small>
+                              {artifact.type}
+                              {artifact.size
+                                ? ` · ${formatSize(artifact.size)}`
+                                : ''}
+                            </small>
+                          </span>
+                          <ChevronRight aria-hidden="true" />
+                        </button>
+                      ))}
+                    </div>
+                    {!artifacts.length && (
+                      <p className="ws-review-empty">
+                        Documents and durable outputs will appear here.
+                      </p>
+                    )}
+                    {previewID && (
+                      <div className="ws-chat-artifact-preview">
+                        <div className="ws-review-document-actions">
+                          <Button
+                            variant="ghost"
+                            aria-pressed={!previewSource}
+                            onClick={() => setPreviewSource(false)}
+                          >
+                            Preview
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            aria-pressed={previewSource}
+                            onClick={() => setPreviewSource(true)}
+                          >
+                            Source
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Open full document review"
+                            onClick={() => onArtifact(previewID)}
+                          >
+                            <ExternalLink aria-hidden="true" />
+                          </Button>
+                        </div>
+                        {previewError ? (
+                          <p role="alert">{previewError}</p>
+                        ) : preview ? (
+                          previewSource ? (
+                            <pre className="ws-review-source">{preview}</pre>
+                          ) : (
+                            <Markdown>{preview}</Markdown>
+                          )
+                        ) : (
+                          <output>Loading preview…</output>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </aside>
+          </ResizablePanel>
+        </>
+      )}
+    </ResizablePanelGroup>
+  );
+}
+
+function WorkspaceFiles({ runId }: { runId: string }) {
+  const [fileFilter, setFileFilter] = useState('');
+  const [data, setData] = useState<{
+    root: string;
+    path: string;
+    content: string;
+    entries: Array<{ name: string; directory: boolean; size: number }>;
+  } | null>(null);
+  const [directory, setDirectory] = useState('');
+  const [filePath, setFilePath] = useState('');
+  const [content, setContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const sequence = useRef(0);
+  const load = (operation: 'list' | 'read', path: string) => {
+    const current = ++sequence.current;
+    setLoading(true);
+    setError('');
+    if (operation === 'read') {
+      setFilePath(path);
+      setContent(null);
+    }
+    void steer
+      .inspectWorkspace(runId, operation, path)
+      .then((result) => {
+        if (current !== sequence.current) return;
+        if (operation === 'list') {
+          setData(result);
+          setDirectory(path);
+          setFilePath('');
+          setContent(null);
+        } else setContent(result.content);
+      })
+      .catch((err) => {
+        if (current === sequence.current)
+          setError(
+            err instanceof Error ? err.message : 'Workspace unavailable',
+          );
+      })
+      .finally(() => {
+        if (current === sequence.current) setLoading(false);
+      });
+  };
+  useEffect(() => {
+    let cancelled = false;
+    if (!runId) return;
+    void steer
+      .inspectWorkspace(runId, 'list')
+      .then((result) => {
+        if (!cancelled) setData(result);
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setError(
+            err instanceof Error ? err.message : 'Workspace unavailable',
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [runId]);
+  if (!runId)
+    return (
+      <p className="ws-review-empty">
+        Start a project conversation to browse its prepared workspace.
+      </p>
+    );
+  return (
+    <div className="ws-workspace-files">
+      <div className="ws-workspace-toolbar">
+        <nav
+          className="ws-workspace-breadcrumbs"
+          aria-label="Current file path"
+          title={[data?.root, filePath || directory].filter(Boolean).join('/')}
+        >
+          <span className="ws-workspace-root">
+            {data?.root?.split('/').filter(Boolean).pop() || 'Workspace'}
+          </span>
+          {(filePath || directory) && (
+            <>
+              <ChevronRight aria-hidden="true" />
+              <span className="ws-workspace-current-file">
+                {filePath || directory}
+              </span>
+            </>
+          )}
+        </nav>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="ws-workspace-refresh"
+          aria-label="Refresh files"
+          title="Refresh files"
+          disabled={loading}
+          onClick={() => load('list', directory)}
+        >
+          <RefreshCw aria-hidden="true" />
+        </Button>
       </div>
-    </section>
+      {error && (
+        <p className="ws-form-error" role="alert">
+          {error}
+        </p>
+      )}
+      {loading && <output>Loading…</output>}
+      <div className="ws-workspace-columns">
+        <section className="ws-workspace-preview" aria-label="File preview">
+          {content !== null ? (
+            filePath.toLowerCase().endsWith('.md') ? (
+              <Markdown>{content}</Markdown>
+            ) : (
+              <HighlightedFile path={filePath} content={content} />
+            )
+          ) : (
+            <p className="ws-review-empty">
+              {loading && filePath
+                ? 'Loading file…'
+                : 'Select a file from the directory to preview its contents.'}
+            </p>
+          )}
+        </section>
+        <nav
+          className="ws-workspace-directory"
+          aria-label="Directory navigation"
+        >
+          <input
+            className="ws-workspace-filter"
+            aria-label="Filter files"
+            placeholder="Filter files…"
+            value={fileFilter}
+            onChange={(event) => setFileFilter(event.target.value)}
+          />
+          <div className="ws-workspace-file-list">
+            {[...(data?.entries || [])]
+              .filter((entry) =>
+                entry.name.toLowerCase().includes(fileFilter.toLowerCase()),
+              )
+              .sort(
+                (a, b) =>
+                  Number(b.directory) - Number(a.directory) ||
+                  a.name.localeCompare(b.name),
+              )
+              .map((entry) => (
+                <WorkspaceTreeEntry
+                  key={`${entry.name}:${data?.root}`}
+                  runId={runId}
+                  entry={entry}
+                  path={entry.name}
+                  depth={0}
+                  selected={filePath}
+                  onSelect={(path) => load('read', path)}
+                />
+              ))}
+          </div>
+        </nav>
+      </div>
+    </div>
+  );
+}
+type WorkspaceEntry = { name: string; directory: boolean; size: number };
+function FileTypeIcon({ path }: { path: string }) {
+  const ext = path.split('.').at(-1)?.toLowerCase() || '';
+  if (['json', 'yaml', 'yml', 'toml'].includes(ext))
+    return <FileJson className="is-config" aria-hidden="true" />;
+  if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext))
+    return <FileImage className="is-image" aria-hidden="true" />;
+  if (
+    [
+      'ts',
+      'tsx',
+      'js',
+      'jsx',
+      'go',
+      'py',
+      'rs',
+      'java',
+      'c',
+      'cpp',
+      'h',
+      'css',
+      'html',
+      'sh',
+    ].includes(ext)
+  )
+    return <FileCode className="is-code" aria-hidden="true" />;
+  return <FileText aria-hidden="true" />;
+}
+function WorkspaceTreeEntry({
+  runId,
+  entry,
+  path,
+  depth,
+  selected,
+  onSelect,
+}: {
+  runId: string;
+  entry: WorkspaceEntry;
+  path: string;
+  depth: number;
+  selected: string;
+  onSelect: (path: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [children, setChildren] = useState<WorkspaceEntry[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  return (
+    <div className="ws-file-tree-entry">
+      <Button
+        variant="ghost"
+        style={{ paddingLeft: 8 + depth * 14 }}
+        aria-expanded={entry.directory ? expanded : undefined}
+        aria-current={
+          !entry.directory && selected === path ? 'true' : undefined
+        }
+        onClick={() => {
+          if (!entry.directory) {
+            onSelect(path);
+            return;
+          }
+          setExpanded(!expanded);
+          if (!expanded && children === null && !busy) {
+            setBusy(true);
+            setError('');
+            void steer
+              .inspectWorkspace(runId, 'list', path)
+              .then((result) => setChildren(result.entries))
+              .catch((err) => setError(err.message))
+              .finally(() => setBusy(false));
+          }
+        }}
+      >
+        {entry.directory ? (
+          <>
+            <ChevronRight
+              className={expanded ? 'is-expanded' : ''}
+              aria-hidden="true"
+            />
+            <Folder aria-hidden="true" />
+          </>
+        ) : (
+          <>
+            <span className="ws-tree-spacer" />
+            <FileTypeIcon path={path} />
+          </>
+        )}
+        <span title={path}>{entry.name}</span>
+      </Button>
+      {expanded && (
+        <div>
+          {busy && <small>Loading…</small>}
+          {error && <small role="alert">{error}</small>}
+          {children?.length === 0 && <small>Empty directory</small>}
+          {[...(children || [])]
+            .sort(
+              (a, b) =>
+                Number(b.directory) - Number(a.directory) ||
+                a.name.localeCompare(b.name),
+            )
+            .map((child) => (
+              <WorkspaceTreeEntry
+                key={child.name}
+                runId={runId}
+                entry={child}
+                path={`${path}/${child.name}`}
+                depth={depth + 1}
+                selected={selected}
+                onSelect={onSelect}
+              />
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+const HighlightedFile = memo(function HighlightedFile({
+  path,
+  content,
+}: {
+  path: string;
+  content: string;
+}) {
+  const ext = path.split('.').at(-1)?.toLowerCase() || '';
+  const languages: Record<string, string> = {
+    ts: 'typescript',
+    tsx: 'typescript',
+    js: 'javascript',
+    jsx: 'javascript',
+    json: 'json',
+    yml: 'yaml',
+    yaml: 'yaml',
+    html: 'xml',
+    svg: 'xml',
+    css: 'css',
+    go: 'go',
+    py: 'python',
+    rs: 'rust',
+    sh: 'bash',
+    sql: 'sql',
+    java: 'java',
+    c: 'c',
+    cpp: 'cpp',
+    h: 'c',
+    md: 'markdown',
+  };
+  const language = languages[ext];
+  if (!language || !hljs.getLanguage(language) || content.length > 200000)
+    return <pre className="ws-review-source">{content}</pre>;
+  // Only escaped HTML produced by the highlighter is inserted, never raw file content.
+  const html = hljs.highlight(content, {
+    language,
+    ignoreIllegals: true,
+  }).value;
+  return (
+    <pre className="ws-review-source">
+      <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />
+    </pre>
+  );
+});
+type ReviewChange = { id: string; path: string; diff: string };
+
+function splitWorkspaceDiff(diff: string): ReviewChange[] {
+  const changes: ReviewChange[] = [];
+  let path = '';
+  let lines: string[] = [];
+  const flush = () => {
+    if (path && lines.length)
+      changes.push({ id: path, path, diff: lines.join('\n') });
+  };
+  for (const line of diff.split('\n')) {
+    const match = line.match(/^diff --git a\/(.+) b\/(.+)$/);
+    if (match) {
+      flush();
+      path = match[2];
+      lines = [line];
+    } else if (path) {
+      lines.push(line);
+    }
+  }
+  flush();
+  return changes;
+}
+
+function changeStats(change: ReviewChange) {
+  return change.diff.split('\n').reduce(
+    (stats, line) => {
+      if (line.startsWith('+') && !line.startsWith('+++')) stats.additions += 1;
+      if (line.startsWith('-') && !line.startsWith('---')) stats.deletions += 1;
+      return stats;
+    },
+    { additions: 0, deletions: 0 },
+  );
+}
+
+function CodeReview({
+  runId,
+  reportedChanges,
+  selectedPath,
+  turn,
+  rounds,
+  onTurn,
+  onSelect,
+}: {
+  runId: string;
+  reportedChanges: ReviewChange[];
+  selectedPath: string;
+  turn: number;
+  rounds: ChatMessage[];
+  onTurn: (runId: string) => void;
+  onSelect: (path: string) => void;
+}) {
+  const [workspaceChanges, setWorkspaceChanges] = useState<
+    ReviewChange[] | null
+  >(null);
+  const [loading, setLoading] = useState(Boolean(runId));
+  const [error, setError] = useState('');
+  const [filter, setFilter] = useState('');
+  const load = useCallback(() => {
+    if (!runId) return;
+    setLoading(true);
+    setError('');
+    void steer
+      .inspectWorkspace(runId, 'diff')
+      .then((result) => setWorkspaceChanges(splitWorkspaceDiff(result.content)))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [runId]);
+  useEffect(() => {
+    if (!runId) return;
+    let cancelled = false;
+    void steer
+      .inspectWorkspace(runId, 'diff')
+      .then((result) => {
+        if (!cancelled) setWorkspaceChanges(splitWorkspaceDiff(result.content));
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [runId]);
+  const changes = workspaceChanges?.length ? workspaceChanges : reportedChanges;
+  const current =
+    changes.find((change) => change.path === selectedPath) || changes[0];
+  const totals = changes.reduce(
+    (value, change) => {
+      const stats = changeStats(change);
+      value.additions += stats.additions;
+      value.deletions += stats.deletions;
+      return value;
+    },
+    { additions: 0, deletions: 0 },
+  );
+  return (
+    <div className="ws-code-review">
+      <div className="ws-code-review-toolbar">
+        <details className="ws-review-turn-picker">
+          <summary>
+            Turn {turn} <ChevronDown aria-hidden="true" />
+          </summary>
+          <div>
+            {rounds.map((message, index) => (
+              <Button
+                key={message.runId}
+                variant="ghost"
+                onClick={(event) => {
+                  onTurn(message.runId || '');
+                  event.currentTarget
+                    .closest('details')
+                    ?.removeAttribute('open');
+                }}
+              >
+                Turn {index + 1}
+                <small>{message.status}</small>
+              </Button>
+            ))}
+          </div>
+        </details>
+        <div className="ws-code-review-summary">
+          <span>{changes.length} files</span>
+          <strong>+{totals.additions}</strong>
+          <em>−{totals.deletions}</em>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Refresh workspace diff"
+            title="Refresh workspace diff"
+            disabled={!runId || loading}
+            onClick={load}
+          >
+            <RefreshCw
+              className={loading ? 'is-spinning' : ''}
+              aria-hidden="true"
+            />
+          </Button>
+        </div>
+      </div>
+      {error && (
+        <output className="ws-code-review-notice">
+          Live workspace diff is unavailable. Showing the agent turn patch.
+        </output>
+      )}
+      {changes.length ? (
+        <div className="ws-code-review-columns">
+          <section className="ws-code-review-preview" aria-label="Code diff">
+            {current ? (
+              <>
+                <header>
+                  <FileTypeIcon path={current.path} />
+                  <span title={current.path}>{current.path}</span>
+                  <DiffStats change={current} />
+                </header>
+                {current.diff ? (
+                  <DiffPreview diff={current.diff} path={current.path} />
+                ) : (
+                  <p className="ws-review-empty">
+                    Diff content was not reported for this file.
+                  </p>
+                )}
+              </>
+            ) : null}
+          </section>
+          <nav className="ws-code-review-files" aria-label="Changed files">
+            <input
+              className="ws-workspace-filter"
+              aria-label="Filter changed files"
+              placeholder="Filter changed files…"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+            />
+            <ChangedFilesTree
+              changes={changes.filter((change) =>
+                change.path.toLowerCase().includes(filter.toLowerCase()),
+              )}
+              selected={current?.path || ''}
+              onSelect={onSelect}
+            />
+          </nav>
+        </div>
+      ) : (
+        <p className="ws-review-empty">
+          {loading
+            ? 'Loading workspace diff…'
+            : 'No file changes were reported.'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function DiffStats({ change }: { change: ReviewChange }) {
+  const stats = changeStats(change);
+  return (
+    <span className="ws-diff-stats">
+      <strong>+{stats.additions}</strong>
+      <em>−{stats.deletions}</em>
+    </span>
+  );
+}
+
+type ChangeTreeNode = {
+  name: string;
+  path: string;
+  children: Map<string, ChangeTreeNode>;
+  change?: ReviewChange;
+};
+
+function ChangedFilesTree({
+  changes,
+  selected,
+  onSelect,
+}: {
+  changes: ReviewChange[];
+  selected: string;
+  onSelect: (path: string) => void;
+}) {
+  const root: ChangeTreeNode = {
+    name: '',
+    path: '',
+    children: new Map(),
+  };
+  for (const change of changes) {
+    let node = root;
+    const parts = change.path.split('/').filter(Boolean);
+    parts.forEach((name, index) => {
+      const path = parts.slice(0, index + 1).join('/');
+      if (!node.children.has(name))
+        node.children.set(name, { name, path, children: new Map() });
+      node = node.children.get(name)!;
+      if (index === parts.length - 1) node.change = change;
+    });
+  }
+  const renderNode = (node: ChangeTreeNode, depth: number): ReactNode => {
+    if (node.change)
+      return (
+        <Button
+          key={node.path}
+          variant="ghost"
+          className={selected === node.path ? 'is-selected' : ''}
+          style={{ paddingLeft: 8 + depth * 14 }}
+          aria-current={selected === node.path ? 'true' : undefined}
+          onClick={() => onSelect(node.path)}
+        >
+          <FileTypeIcon path={node.path} />
+          <span title={node.path}>{node.name}</span>
+          <DiffStats change={node.change} />
+        </Button>
+      );
+    return (
+      <div className="ws-change-directory" key={node.path || 'root'}>
+        {node.path && (
+          <div
+            className="ws-change-directory-header"
+            style={{ paddingLeft: 8 + depth * 14 }}
+          >
+            <ChevronDown aria-hidden="true" />
+            <Folder aria-hidden="true" />
+            <span>{node.name}</span>
+          </div>
+        )}
+        {[...node.children.values()]
+          .sort(
+            (a, b) =>
+              Number(Boolean(a.change)) - Number(Boolean(b.change)) ||
+              a.name.localeCompare(b.name),
+          )
+          .map((child) => renderNode(child, node.path ? depth + 1 : depth))}
+      </div>
+    );
+  };
+  return <div className="ws-changed-files-tree">{renderNode(root, 0)}</div>;
+}
+
+function languageForPath(path: string) {
+  const languages: Record<string, string> = {
+    ts: 'typescript',
+    tsx: 'typescript',
+    js: 'javascript',
+    jsx: 'javascript',
+    json: 'json',
+    yml: 'yaml',
+    yaml: 'yaml',
+    html: 'xml',
+    svg: 'xml',
+    css: 'css',
+    go: 'go',
+    py: 'python',
+    rs: 'rust',
+    sh: 'bash',
+    sql: 'sql',
+    java: 'java',
+    c: 'c',
+    cpp: 'cpp',
+    h: 'c',
+    md: 'markdown',
+  };
+  return languages[path.split('.').at(-1)?.toLowerCase() || ''];
+}
+
+function parseDiffRows(diff: string) {
+  let oldLine = 0;
+  let newLine = 0;
+  return diff.split('\n').map((line) => {
+    const hunk = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunk) {
+      oldLine = Number(hunk[1]);
+      newLine = Number(hunk[2]);
+      return { line, old: '', next: '', type: 'hunk' };
+    }
+    if (line.startsWith('+') && !line.startsWith('+++'))
+      return { line, old: '', next: String(newLine++), type: 'addition' };
+    if (line.startsWith('-') && !line.startsWith('---'))
+      return { line, old: String(oldLine++), next: '', type: 'deletion' };
+    if (line.startsWith(' ') && oldLine && newLine)
+      return {
+        line,
+        old: String(oldLine++),
+        next: String(newLine++),
+        type: 'context',
+      };
+    return { line, old: '', next: '', type: 'meta' };
+  });
+}
+
+const DiffPreview = memo(function DiffPreview({
+  diff,
+  path,
+}: {
+  diff: string;
+  path: string;
+}) {
+  const language = languageForPath(path);
+  const rows = parseDiffRows(diff);
+  return (
+    <div className="ws-review-diff" aria-label="File diff">
+      {rows.map((row, index) => {
+        const source = ['addition', 'deletion', 'context'].includes(row.type)
+          ? row.line.slice(1)
+          : row.line;
+        const html =
+          language && hljs.getLanguage(language)
+            ? hljs.highlight(source || ' ', { language, ignoreIllegals: true })
+                .value
+            : escapeHTML(source || ' ');
+        return (
+          <div key={index} className={`is-${row.type}`}>
+            <span>{row.old}</span>
+            <span>{row.next}</span>
+            <code>
+              <i aria-hidden="true">
+                {row.type === 'addition'
+                  ? '+'
+                  : row.type === 'deletion'
+                    ? '−'
+                    : row.type === 'context'
+                      ? ' '
+                      : ''}
+              </i>
+              <span dangerouslySetInnerHTML={{ __html: html }} />
+            </code>
+          </div>
+        );
+      })}
+    </div>
+  );
+});
+
+function escapeHTML(value: string) {
+  return value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+      })[character]!,
   );
 }
 

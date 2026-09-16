@@ -1,0 +1,8 @@
+services:
+  relay-server:
+    build:
+      context: ../relay
+      dockerfile: Dockerfile
+      args:
+        VERSION: local-workspace
+    image: steer-relay-server:local-workspace

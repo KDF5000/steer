@@ -163,6 +163,19 @@ async function streamRunEvents(
 
 export const steer = {
   bootstrap: () => request<Bootstrap>('/bootstrap'),
+  inspectWorkspace: (
+    runId: string,
+    operation: 'list' | 'read' | 'diff',
+    path = '',
+  ) =>
+    request<{
+      root: string;
+      path: string;
+      content: string;
+      entries: Array<{ name: string; directory: boolean; size: number }>;
+    }>(
+      `/runs/${encodeURIComponent(runId)}/workspace?operation=${operation}&path=${encodeURIComponent(path)}`,
+    ),
   createAgent: (input: Partial<AgentRecord>) =>
     request<AgentRecord>('/agents', {
       method: 'POST',
