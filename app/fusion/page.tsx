@@ -60,6 +60,7 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
@@ -129,6 +130,7 @@ import {
 import './fusion.css';
 
 type View = 'chat' | 'artifacts' | 'agents';
+const noProjectSessionGroup = '__no-project__';
 
 type PendingImage = { id: string; file: File; url: string };
 type RuntimeChoice = {
@@ -253,6 +255,35 @@ const ProcessTranscript = memo(function ProcessTranscript({
   );
 });
 
+function SessionNavigationItem({
+  session,
+  active,
+  onOpen,
+  onDelete,
+}: {
+  session: ChatSessionRecord;
+  active: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <SidebarMenuItem className="ws-session-nav-item">
+      <SidebarMenuButton isActive={active} onClick={onOpen}>
+        <span>{session.title}</span>
+      </SidebarMenuButton>
+      <SidebarMenuAction
+        showOnHover
+        className="ws-session-delete"
+        aria-label={`Delete ${session.title}`}
+        title="Delete conversation"
+        onClick={onDelete}
+      >
+        <Trash2 aria-hidden="true" />
+      </SidebarMenuAction>
+    </SidebarMenuItem>
+  );
+}
+
 export default function Fusion() {
   const [authReady, setAuthReady] = useState(false);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -263,6 +294,9 @@ export default function Fusion() {
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [workspaceDialog, setWorkspaceDialog] = useState(false);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [expandedSessionGroups, setExpandedSessionGroups] = useState<
+    Set<string>
+  >(new Set());
   const [view, setView] = useState<View>('chat');
   const [agentTab, setAgentTab] = useState('agents');
   const [loaded, setLoaded] = useState(false);
@@ -380,6 +414,13 @@ export default function Fusion() {
     setProjectList(data.projects || []);
     setArtifactList(data.artifacts.map(artifactFromRecord));
     setChatSessions(data.sessions || []);
+    setExpandedSessionGroups(
+      new Set(
+        (data.sessions || []).map(
+          (session) => session.projectId || noProjectSessionGroup,
+        ),
+      ),
+    );
     setRuntimeNodes(data.relay.nodes || []);
     setRelayConnected(data.relay.connected);
     setRelayError(data.relay.error || '');
@@ -620,6 +661,13 @@ export default function Fusion() {
       if (sessionSummary) {
         setChatAgent(sessionSummary.agentId);
         setChatProject(sessionSummary.projectId || 'none');
+        const group = sessionSummary.projectId || noProjectSessionGroup;
+        setExpandedSessionGroups((current) => {
+          if (current.has(group)) return current;
+          const next = new Set(current);
+          next.add(group);
+          return next;
+        });
       }
       try {
         const data = await steer.session(sessionID);
@@ -629,6 +677,13 @@ export default function Fusion() {
         setChatImages([]);
         setChatAgent(data.session.agentId);
         setChatProject(data.session.projectId || 'none');
+        const group = data.session.projectId || noProjectSessionGroup;
+        setExpandedSessionGroups((current) => {
+          if (current.has(group)) return current;
+          const next = new Set(current);
+          next.add(group);
+          return next;
+        });
         if (data.project) {
           setProjectList((current) =>
             current.some((project) => project.id === data.project?.id)
@@ -853,6 +908,14 @@ export default function Fusion() {
         images.forEach((image) => URL.revokeObjectURL(image.url));
       setChatImages([]);
       setChatSession(result.sessionId);
+      setExpandedSessionGroups((current) => {
+        const group =
+          chatProject === 'none' ? noProjectSessionGroup : chatProject;
+        if (current.has(group)) return current;
+        const next = new Set(current);
+        next.add(group);
+        return next;
+      });
       setChatSessions((current) => {
         const now = new Date().toISOString();
         const session: ChatSessionRecord = {
@@ -1180,6 +1243,15 @@ export default function Fusion() {
     setLoadError('');
   };
 
+  const toggleSessionGroup = (group: string) => {
+    setExpandedSessionGroups((current) => {
+      const next = new Set(current);
+      if (next.has(group)) next.delete(group);
+      else next.add(group);
+      return next;
+    });
+  };
+
   const conversationRunIDs = new Set(
     messages.map((message) => message.runId).filter(Boolean),
   );
@@ -1285,114 +1357,162 @@ export default function Fusion() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-          {!!chatSessions.length && (
-            <SidebarGroup className="ws-recent-chats">
-              <SidebarGroupLabel>Recent</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {chatSessions.slice(0, 12).map((session) => (
-                    <SidebarMenuItem key={session.id}>
-                      <SidebarMenuButton
-                        isActive={view === 'chat' && chatSession === session.id}
-                        onClick={() => void openChatSession(session.id)}
-                      >
-                        <span>{session.title}</span>
-                      </SidebarMenuButton>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={
-                            <SidebarMenuAction
-                              showOnHover
-                              aria-label={`Conversation actions for ${session.title}`}
-                            />
-                          }
-                        >
-                          <MoreHorizontal aria-hidden="true" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          side="right"
-                          align="start"
-                          sideOffset={-10}
-                          alignOffset={10}
-                          className="w-44 min-w-44 rounded-xl border border-[#e5e5e7] bg-white p-1.5 text-[#202124] shadow-[0_12px_32px_rgba(24,24,27,0.14),0_2px_8px_rgba(24,24,27,0.08)] ring-0"
-                        >
-                          <DropdownMenuItem
-                            variant="destructive"
-                            className="h-9 gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2 font-medium transition-colors hover:bg-[#fff0f1] hover:text-[#b3434d]"
-                            onClick={() => setDeletingSession(session)}
-                          >
-                            <Trash2 aria-hidden="true" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
-          <SidebarGroup>
+          <SidebarGroup className="ws-project-navigation">
             <SidebarGroupLabel>Projects</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {projectList
                   .filter((project) => !project.deletedAt)
-                  .map((project) => (
-                    <SidebarMenuItem key={project.id}>
-                      <SidebarMenuButton
-                        isActive={
-                          view === 'chat' &&
-                          !chatSession &&
-                          chatProject === project.id
-                        }
-                        onClick={() => startNewChat(project.id)}
-                        title={project.workspaceSource}
+                  .map((project) => {
+                    const projectSessions = chatSessions.filter(
+                      (session) => session.projectId === project.id,
+                    );
+                    const sessionsExpanded = expandedSessionGroups.has(
+                      project.id,
+                    );
+                    return (
+                      <SidebarMenuItem
+                        key={project.id}
+                        className="ws-project-nav-item"
                       >
-                        <Folder aria-hidden="true" />
-                        <span>{project.name}</span>
-                      </SidebarMenuButton>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={
-                            <SidebarMenuAction
-                              showOnHover
-                              aria-label={`Project actions for ${project.name}`}
-                            />
+                        {!!projectSessions.length && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="ws-project-session-toggle"
+                            aria-label={`${sessionsExpanded ? 'Collapse' : 'Expand'} conversations for ${project.name}`}
+                            aria-expanded={sessionsExpanded}
+                            onClick={() => toggleSessionGroup(project.id)}
+                          >
+                            <ChevronRight aria-hidden="true" />
+                          </Button>
+                        )}
+                        <SidebarMenuButton
+                          className={
+                            projectSessions.length
+                              ? 'ws-project-nav-button has-sessions'
+                              : 'ws-project-nav-button'
                           }
+                          isActive={
+                            view === 'chat' &&
+                            !chatSession &&
+                            chatProject === project.id
+                          }
+                          onClick={() => startNewChat(project.id)}
+                          title={project.workspaceSource}
                         >
-                          <MoreHorizontal aria-hidden="true" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          side="right"
-                          align="start"
-                          sideOffset={-10}
-                          alignOffset={10}
-                          className="w-44 min-w-44 rounded-xl border border-[#e5e5e7] bg-white p-1.5 text-[#202124] shadow-[0_12px_32px_rgba(24,24,27,0.14),0_2px_8px_rgba(24,24,27,0.08)] ring-0"
-                        >
-                          <DropdownMenuItem
-                            className="h-9 gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2 font-medium transition-colors hover:bg-[#f1f1f3]"
-                            onClick={() => {
-                              setFormError('');
-                              setEditingProject(project);
-                              setProjectDialog(true);
-                            }}
+                          <Folder aria-hidden="true" />
+                          <span>{project.name}</span>
+                        </SidebarMenuButton>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <SidebarMenuAction
+                                showOnHover
+                                aria-label={`Project actions for ${project.name}`}
+                              />
+                            }
                           >
-                            <Pencil aria-hidden="true" />
-                            Edit project
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            variant="destructive"
-                            className="h-9 gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2 font-medium transition-colors hover:bg-[#fff0f1] hover:text-[#b3434d]"
-                            onClick={() => setDeletingProject(project)}
+                            <MoreHorizontal aria-hidden="true" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            side="right"
+                            align="start"
+                            sideOffset={-10}
+                            alignOffset={10}
+                            className="w-44 min-w-44 rounded-xl border border-[#e5e5e7] bg-white p-1.5 text-[#202124] shadow-[0_12px_32px_rgba(24,24,27,0.14),0_2px_8px_rgba(24,24,27,0.08)] ring-0"
                           >
-                            <Trash2 aria-hidden="true" />
-                            Delete project
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </SidebarMenuItem>
-                  ))}
+                            <DropdownMenuItem
+                              className="h-9 gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2 font-medium transition-colors hover:bg-[#f1f1f3]"
+                              onClick={() => {
+                                setFormError('');
+                                setEditingProject(project);
+                                setProjectDialog(true);
+                              }}
+                            >
+                              <Pencil aria-hidden="true" />
+                              Edit project
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              variant="destructive"
+                              className="h-9 gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2 font-medium transition-colors hover:bg-[#fff0f1] hover:text-[#b3434d]"
+                              onClick={() => setDeletingProject(project)}
+                            >
+                              <Trash2 aria-hidden="true" />
+                              Delete project
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        {!!projectSessions.length && sessionsExpanded && (
+                          <SidebarMenuSub className="ws-session-list">
+                            {projectSessions.map((session) => (
+                              <SessionNavigationItem
+                                key={session.id}
+                                session={session}
+                                active={
+                                  view === 'chat' && chatSession === session.id
+                                }
+                                onOpen={() => void openChatSession(session.id)}
+                                onDelete={() => setDeletingSession(session)}
+                              />
+                            ))}
+                          </SidebarMenuSub>
+                        )}
+                      </SidebarMenuItem>
+                    );
+                  })}
+                {!!chatSessions.filter(
+                  (session) =>
+                    !session.projectId ||
+                    !projectList.some(
+                      (project) =>
+                        !project.deletedAt && project.id === session.projectId,
+                    ),
+                ).length && (
+                  <SidebarMenuItem className="ws-unassigned-project">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="ws-project-session-toggle"
+                      aria-label={`${expandedSessionGroups.has(noProjectSessionGroup) ? 'Collapse' : 'Expand'} conversations without a project`}
+                      aria-expanded={expandedSessionGroups.has(
+                        noProjectSessionGroup,
+                      )}
+                      onClick={() => toggleSessionGroup(noProjectSessionGroup)}
+                    >
+                      <ChevronRight aria-hidden="true" />
+                    </Button>
+                    <div className="ws-unassigned-project-label">
+                      <Folder aria-hidden="true" />
+                      <span>No project</span>
+                    </div>
+                    {expandedSessionGroups.has(noProjectSessionGroup) && (
+                      <SidebarMenuSub className="ws-session-list">
+                        {chatSessions
+                          .filter(
+                            (session) =>
+                              !session.projectId ||
+                              !projectList.some(
+                                (project) =>
+                                  !project.deletedAt &&
+                                  project.id === session.projectId,
+                              ),
+                          )
+                          .map((session) => (
+                            <SessionNavigationItem
+                              key={session.id}
+                              session={session}
+                              active={
+                                view === 'chat' && chatSession === session.id
+                              }
+                              onOpen={() => void openChatSession(session.id)}
+                              onDelete={() => setDeletingSession(session)}
+                            />
+                          ))}
+                      </SidebarMenuSub>
+                    )}
+                  </SidebarMenuItem>
+                )}
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={() => {
