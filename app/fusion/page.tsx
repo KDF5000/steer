@@ -2953,7 +2953,9 @@ function CodeReview({
       </div>
       {error && (
         <output className="ws-code-review-notice">
-          Live workspace diff is unavailable. Showing the agent turn patch.
+          <strong>Live workspace diff is unavailable.</strong>
+          <span>{error}</span>
+          <small>Showing the agent turn patch.</small>
         </output>
       )}
       {changes.length ? (

@@ -2146,12 +2146,28 @@ button.ws-chat-response-meta:focus-visible {
   }
 }
 .ws-code-review-notice {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
   margin: 0;
   padding: 6px 10px;
   border-bottom: 1px solid #f1dfb7;
   background: #fff8c5;
   color: #633c01;
   font-size: 11px;
+}
+.ws-code-review-notice strong {
+  white-space: nowrap;
+}
+.ws-code-review-notice span {
+  overflow: hidden;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-code-review-notice small {
+  color: #7d4e00;
+  white-space: nowrap;
 }
 .ws-code-review-columns {
   display: grid;
