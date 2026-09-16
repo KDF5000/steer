@@ -34,6 +34,7 @@ import {
   Search,
   Send,
   Server,
+  LogOut,
   Square,
   SquarePen,
   SquareTerminal,
@@ -117,10 +118,13 @@ import type {
 } from '@/lib/domain';
 import {
   steer,
+  SteerHTTPError,
+  type AuthUser,
   type AgentRecord,
   type ArtifactRecord,
   type ChatSessionRecord,
   type ProjectRecord,
+  type WorkspaceRecord,
 } from '@/lib/steer-client';
 import './fusion.css';
 
@@ -250,6 +254,15 @@ const ProcessTranscript = memo(function ProcessTranscript({
 });
 
 export default function Fusion() {
+  const [authReady, setAuthReady] = useState(false);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [workspaceList, setWorkspaceList] = useState<WorkspaceRecord[]>([]);
+  const [workspaceID, setWorkspaceID] = useState('');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authError, setAuthError] = useState('');
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [workspaceDialog, setWorkspaceDialog] = useState(false);
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const [view, setView] = useState<View>('chat');
   const [agentTab, setAgentTab] = useState('agents');
   const [loaded, setLoaded] = useState(false);
@@ -359,6 +372,27 @@ export default function Fusion() {
     ),
   );
 
+  const hydrateWorkspace = useCallback(async (id: string) => {
+    steer.setWorkspace(id);
+    const data = await steer.bootstrap();
+    const agents = data.agents.map(agentFromRecord);
+    setAgentList(agents);
+    setProjectList(data.projects || []);
+    setArtifactList(data.artifacts.map(artifactFromRecord));
+    setChatSessions(data.sessions || []);
+    setRuntimeNodes(data.relay.nodes || []);
+    setRelayConnected(data.relay.connected);
+    setRelayError(data.relay.error || '');
+    setRelayPublicURL(data.relay.publicUrl || 'http://localhost:8787');
+    setChatAgent(agents[0]?.id || '');
+    setChatProject(data.projects?.[0]?.id || 'none');
+    const firstRuntime = data.relay.nodes?.flatMap(
+      (node) => node.runtimes || [],
+    )[0];
+    setAgentRuntime(firstRuntime ? `${firstRuntime.provider}::` : '');
+    setLoaded(true);
+  }, []);
+
   useEffect(() => {
     mounted.current = true;
     const shortcut = (event: KeyboardEvent) => {
@@ -375,34 +409,32 @@ export default function Fusion() {
   }, []);
 
   useEffect(() => {
+    const savedWorkspace = window.localStorage.getItem('steer.workspace') || '';
+    if (savedWorkspace) steer.setWorkspace(savedWorkspace);
     steer
-      .bootstrap()
-      .then((data) => {
-        const agents = data.agents.map(agentFromRecord);
-        setAgentList(agents);
-        setProjectList(data.projects || []);
-        setArtifactList(data.artifacts.map(artifactFromRecord));
-        setChatSessions(data.sessions || []);
-        setRuntimeNodes(data.relay.nodes || []);
-        setRelayConnected(data.relay.connected);
-        setRelayError(data.relay.error || '');
-        setRelayPublicURL(data.relay.publicUrl || 'http://localhost:8787');
-        if (agents[0]) setChatAgent(agents[0].id);
-        if (data.projects?.[0]) setChatProject(data.projects[0].id);
-        const firstRuntime = data.relay.nodes?.flatMap(
-          (node) => node.runtimes || [],
-        )[0];
-        if (firstRuntime) setAgentRuntime(`${firstRuntime.provider}::`);
-        setLoaded(true);
+      .me()
+      .then(async (data) => {
+        setAuthUser(data.user);
+        setWorkspaceList(data.workspaces);
+        const selected =
+          data.workspaces.find((item) => item.id === savedWorkspace) ||
+          data.workspaces[0];
+        if (selected) {
+          setWorkspaceID(selected.id);
+          window.localStorage.setItem('steer.workspace', selected.id);
+          await hydrateWorkspace(selected.id);
+        }
       })
-      .catch((error: unknown) =>
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : 'Steer Server is unavailable.',
-        ),
-      );
-  }, []);
+      .catch((error: unknown) => {
+        if (!(error instanceof SteerHTTPError) || error.status !== 401)
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : 'Steer Server is unavailable.',
+          );
+      })
+      .finally(() => setAuthReady(true));
+  }, [hydrateWorkspace]);
 
   useEffect(() => {
     if (!notice) return;
@@ -1044,6 +1076,7 @@ export default function Fusion() {
 
   const refreshRuntimes = async () => {
     try {
+      await steer.claimAvailableRuntimes();
       const data = await steer.bootstrap();
       setRuntimeNodes(data.relay.nodes || []);
       setRelayConnected(data.relay.connected);
@@ -1060,12 +1093,121 @@ export default function Fusion() {
     }
   };
 
+  const submitAuth = async (event: SyntheticEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (authSubmitting) return;
+    setAuthSubmitting(true);
+    setAuthError('');
+    const values = new FormData(event.currentTarget);
+    try {
+      const data =
+        authMode === 'register'
+          ? await steer.register({
+              email: formValue(values, 'email'),
+              password: formValue(values, 'password'),
+              displayName: formValue(values, 'displayName'),
+            })
+          : await steer.login({
+              email: formValue(values, 'email'),
+              password: formValue(values, 'password'),
+            });
+      const workspace = data.workspaces[0];
+      setAuthUser(data.user);
+      setWorkspaceList(data.workspaces);
+      if (workspace) {
+        setWorkspaceID(workspace.id);
+        window.localStorage.setItem('steer.workspace', workspace.id);
+        await hydrateWorkspace(workspace.id);
+      }
+    } catch (error) {
+      setAuthError(
+        error instanceof Error ? error.message : 'Authentication failed.',
+      );
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const activateWorkspace = async (workspace: WorkspaceRecord) => {
+    if (workspace.id === workspaceID) return;
+    setLoaded(false);
+    setLoadError('');
+    setWorkspaceID(workspace.id);
+    window.localStorage.setItem('steer.workspace', workspace.id);
+    setView('chat');
+    setChatSession('');
+    setMessages([]);
+    activeRun.current = '';
+    setActiveRunID('');
+    setChatWorking(false);
+    try {
+      await hydrateWorkspace(workspace.id);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : 'Could not load workspace.',
+      );
+    }
+  };
+
+  const createWorkspace = async (event: SyntheticEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (creatingWorkspace) return;
+    setCreatingWorkspace(true);
+    setFormError('');
+    const values = new FormData(event.currentTarget);
+    try {
+      const workspace = await steer.createWorkspace(formValue(values, 'name'));
+      setWorkspaceList((current) => [...current, workspace]);
+      setWorkspaceDialog(false);
+      await activateWorkspace(workspace);
+    } catch (error) {
+      setFormError(
+        error instanceof Error ? error.message : 'Could not create workspace.',
+      );
+    } finally {
+      setCreatingWorkspace(false);
+    }
+  };
+
+  const logout = async () => {
+    await steer.logout().catch(() => undefined);
+    steer.setWorkspace('');
+    window.localStorage.removeItem('steer.workspace');
+    setAuthUser(null);
+    setWorkspaceList([]);
+    setWorkspaceID('');
+    setLoaded(false);
+    setLoadError('');
+  };
+
   const conversationRunIDs = new Set(
     messages.map((message) => message.runId).filter(Boolean),
   );
   const conversationArtifacts = artifactList.filter((artifact) =>
     conversationRunIDs.has(artifact.relayRunId),
   );
+
+  if (!authReady) {
+    return <div className="ws-auth-loading">Loading Steer…</div>;
+  }
+
+  if (!authUser) {
+    return (
+      <AuthScreen
+        mode={authMode}
+        error={authError || loadError}
+        submitting={authSubmitting}
+        onMode={(mode) => {
+          setAuthMode(mode);
+          setAuthError('');
+        }}
+        onSubmit={submitAuth}
+      />
+    );
+  }
+
+  const currentWorkspace =
+    workspaceList.find((item) => item.id === workspaceID) || workspaceList[0];
 
   return (
     <SidebarProvider
@@ -1074,13 +1216,54 @@ export default function Fusion() {
     >
       <Sidebar collapsible="offcanvas" className="ws-sidebar">
         <SidebarHeader className="ws-sidebar-header">
-          <div className="ws-workspace-switcher">
-            <span className="ws-logo">S</span>
-            <span>
-              <strong>Steer</strong>
-              <small>Personal workspace</small>
-            </span>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  className="ws-workspace-switcher"
+                  type="button"
+                  aria-label="Switch workspace"
+                />
+              }
+            >
+              <span className="ws-logo">S</span>
+              <span>
+                <strong>Steer</strong>
+                <small>{currentWorkspace?.name || 'Workspace'}</small>
+              </span>
+              <ChevronDown
+                className="ws-workspace-chevron"
+                aria-hidden="true"
+              />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="bottom"
+              align="start"
+              className="ws-workspace-menu"
+            >
+              {workspaceList.map((workspace) => (
+                <DropdownMenuItem
+                  key={workspace.id}
+                  onClick={() => void activateWorkspace(workspace)}
+                >
+                  <span className="ws-workspace-menu-avatar">
+                    {workspace.name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span>{workspace.name}</span>
+                  {workspace.id === workspaceID && <Check aria-hidden="true" />}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuItem
+                onClick={() => {
+                  setFormError('');
+                  setWorkspaceDialog(true);
+                }}
+              >
+                <Plus aria-hidden="true" />
+                Create workspace
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button className="ws-search" onClick={() => setSearchOpen(true)}>
             <Search aria-hidden="true" /> Search <kbd>⌘ K</kbd>
           </button>
@@ -1277,13 +1460,36 @@ export default function Fusion() {
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter className="ws-sidebar-footer">
-          <div>
-            <span className="ws-avatar">K</span>
-            <span>
-              <strong>Kongdefei</strong>
-              <small>Personal workspace</small>
-            </span>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  className="ws-account-menu"
+                  type="button"
+                  aria-label="Account menu"
+                />
+              }
+            >
+              <span className="ws-avatar">
+                {authUser.displayName.slice(0, 1).toUpperCase()}
+              </span>
+              <span>
+                <strong>{authUser.displayName}</strong>
+                <small>{authUser.email}</small>
+              </span>
+              <ChevronDown aria-hidden="true" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="top"
+              align="start"
+              className="ws-account-dropdown w-56"
+            >
+              <DropdownMenuItem onClick={() => void logout()}>
+                <LogOut aria-hidden="true" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
@@ -1418,6 +1624,40 @@ export default function Fusion() {
         )}
       </SidebarInset>
 
+      <Dialog open={workspaceDialog} onOpenChange={setWorkspaceDialog}>
+        <DialogContent className="ws-workspace-dialog">
+          <DialogTitle>Create workspace</DialogTitle>
+          <DialogDescription>
+            Projects, conversations, Agents, and Runtimes stay isolated inside
+            this workspace.
+          </DialogDescription>
+          <form onSubmit={createWorkspace}>
+            <label>
+              Name
+              <input
+                name="name"
+                autoComplete="off"
+                placeholder="e.g. Acme engineering"
+                maxLength={80}
+                required
+              />
+            </label>
+            {formError && (
+              <p className="ws-form-error" role="alert">
+                {formError}
+              </p>
+            )}
+            <div className="ws-form-actions">
+              <button type="button" onClick={() => setWorkspaceDialog(false)}>
+                Cancel
+              </button>
+              <button type="submit" disabled={creatingWorkspace}>
+                {creatingWorkspace ? 'Creating…' : 'Create workspace'}
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
       <SearchDialog
         open={searchOpen}
         onOpen={setSearchOpen}
@@ -1549,6 +1789,103 @@ export default function Fusion() {
         </output>
       )}
     </SidebarProvider>
+  );
+}
+
+function AuthScreen({
+  mode,
+  error,
+  submitting,
+  onMode,
+  onSubmit,
+}: {
+  mode: 'login' | 'register';
+  error: string;
+  submitting: boolean;
+  onMode: (mode: 'login' | 'register') => void;
+  onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <main className="ws-auth-shell">
+      <section className="ws-auth-card">
+        <div className="ws-auth-brand">
+          <span className="ws-logo">S</span>
+          <div>
+            <strong>Steer</strong>
+            <small>Agent workspace</small>
+          </div>
+        </div>
+        <div className="ws-auth-heading">
+          <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
+          <p>
+            {mode === 'login'
+              ? 'Sign in to open your workspaces.'
+              : 'Your first private workspace will be ready immediately.'}
+          </p>
+        </div>
+        <form onSubmit={onSubmit}>
+          {mode === 'register' && (
+            <label>
+              Name
+              <input
+                name="displayName"
+                autoComplete="name"
+                placeholder="Your name"
+                required
+              />
+            </label>
+          )}
+          <label>
+            Email
+            <input
+              name="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              required
+            />
+          </label>
+          <label>
+            Password
+            <input
+              name="password"
+              type="password"
+              autoComplete={
+                mode === 'login' ? 'current-password' : 'new-password'
+              }
+              minLength={8}
+              placeholder="At least 8 characters"
+              required
+            />
+          </label>
+          {error && (
+            <p className="ws-auth-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button
+            className="ws-auth-submit"
+            type="submit"
+            disabled={submitting}
+          >
+            {submitting
+              ? 'Please wait…'
+              : mode === 'login'
+                ? 'Sign in'
+                : 'Create account'}
+          </button>
+        </form>
+        <p className="ws-auth-switch">
+          {mode === 'login' ? 'New to Steer?' : 'Already have an account?'}
+          <button
+            type="button"
+            onClick={() => onMode(mode === 'login' ? 'register' : 'login')}
+          >
+            {mode === 'login' ? 'Create an account' : 'Sign in'}
+          </button>
+        </p>
+      </section>
+    </main>
   );
 }
 

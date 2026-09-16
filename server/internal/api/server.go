@@ -31,9 +31,11 @@ type Server struct {
 	relayPublicURL   string
 	defaultWorkspace string
 	allowedOrigins   map[string]bool
+	authEnabled      bool
+	sessionTTL       time.Duration
 }
 
-func New(st *store.Store, relayURL, relayToken, relayPublicURL, defaultWorkspace string, origins []string) *Server {
+func New(st *store.Store, relayURL, relayToken, relayPublicURL, defaultWorkspace string, origins []string, options ...Option) *Server {
 	transport := httpapi.NewAuthenticatedClient(relayURL, relayToken)
 	allowed := map[string]bool{}
 	for _, origin := range origins {
@@ -41,12 +43,23 @@ func New(st *store.Store, relayURL, relayToken, relayPublicURL, defaultWorkspace
 			allowed[value] = true
 		}
 	}
-	return &Server{store: st, relay: sdk.New(transport), relayHTTP: transport, relayPublicURL: strings.TrimRight(relayPublicURL, "/"), defaultWorkspace: defaultWorkspace, allowedOrigins: allowed}
+	server := &Server{store: st, relay: sdk.New(transport), relayHTTP: transport, relayPublicURL: strings.TrimRight(relayPublicURL, "/"), defaultWorkspace: defaultWorkspace, allowedOrigins: allowed, sessionTTL: 30 * 24 * time.Hour}
+	for _, option := range options {
+		option(server)
+	}
+	return server
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
+	mux.HandleFunc("POST /api/v1/auth/register", s.register)
+	mux.HandleFunc("POST /api/v1/auth/login", s.login)
+	mux.HandleFunc("POST /api/v1/auth/logout", s.logout)
+	mux.HandleFunc("GET /api/v1/auth/me", s.me)
+	mux.HandleFunc("GET /api/v1/workspaces", s.listWorkspaces)
+	mux.HandleFunc("POST /api/v1/workspaces", s.createWorkspace)
+	mux.HandleFunc("POST /api/v1/runtimes/claim-available", s.claimAvailableRuntimes)
 	mux.HandleFunc("GET /api/v1/bootstrap", s.bootstrap)
 	mux.HandleFunc("GET /api/v1/agents", s.listAgents)
 	mux.HandleFunc("POST /api/v1/agents", s.createAgent)
@@ -64,7 +77,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/runs/{id}/workspace", s.inspectWorkspace)
 	mux.HandleFunc("GET /api/v1/runs/{id}/events/stream", s.streamRunEvents)
 	mux.HandleFunc("POST /api/v1/runs/{id}/cancel", s.cancelRun)
-	return s.recover(s.cors(s.logRequests(mux)))
+	return s.recover(s.cors(s.logRequests(s.authenticate(mux))))
 }
 
 func (s *Server) chatSession(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +111,9 @@ func (s *Server) deleteChatSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) workspace(r *http.Request) string {
+	if value, ok := r.Context().Value(workspaceContextKey).(string); ok && value != "" {
+		return value
+	}
 	if value := strings.TrimSpace(r.Header.Get("X-Steer-Workspace")); value != "" {
 		return value
 	}
@@ -117,6 +133,15 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 func (s *Server) bootstrap(w http.ResponseWriter, r *http.Request) {
 	wid := s.workspace(r)
 	ctx := r.Context()
+	workspaceName := "Personal workspace"
+	if s.authEnabled {
+		workspace, err := s.store.WorkspaceForUser(ctx, userFromContext(ctx).ID, wid)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		workspaceName = workspace.Name
+	}
 	agents, err := s.store.Agents(ctx, wid)
 	if err != nil {
 		writeError(w, err)
@@ -138,13 +163,13 @@ func (s *Server) bootstrap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	relayState := map[string]any{"connected": false, "publicUrl": s.relayPublicURL, "nodes": []any{}}
-	if nodes, relayErr := s.relay.Nodes(ctx); relayErr == nil {
+	if nodes, relayErr := s.workspaceNodes(ctx, wid); relayErr == nil {
 		relayState["connected"] = true
 		relayState["nodes"] = nodes
 	} else {
 		relayState["error"] = relayErr.Error()
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"workspace": map[string]string{"id": wid, "name": "Personal workspace"}, "agents": agents, "projects": projects, "artifacts": artifacts, "sessions": sessions, "relay": relayState})
+	writeJSON(w, http.StatusOK, map[string]any{"workspace": map[string]string{"id": wid, "name": workspaceName}, "agents": agents, "projects": projects, "artifacts": artifacts, "sessions": sessions, "relay": relayState})
 }
 
 func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
@@ -231,7 +256,7 @@ func (s *Server) validateProject(w http.ResponseWriter, r *http.Request, project
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "directory projects require a runtimeId"})
 			return false
 		}
-		nodes, err := s.relay.Nodes(r.Context())
+		nodes, err := s.workspaceNodes(r.Context(), s.workspace(r))
 		if err != nil {
 			writeError(w, fmt.Errorf("verify project Runtime: %w", err))
 			return false
@@ -282,6 +307,17 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Role == "" {
 		in.Role = "General execution"
+	}
+	if in.RuntimeID != nil && strings.TrimSpace(*in.RuntimeID) != "" {
+		assigned, err := s.store.RuntimeAssigned(r.Context(), s.workspace(r), *in.RuntimeID)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		if !assigned {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "The selected Runtime is not assigned to this workspace."})
+			return
+		}
 	}
 	item, err := s.store.CreateAgent(r.Context(), s.workspace(r), in)
 	if err != nil {
@@ -458,13 +494,17 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		} else if project.WorkspaceKind == "git" {
-			if executionRuntimeID == nil || strings.TrimSpace(*executionRuntimeID) == "" {
-				writeJSON(w, http.StatusConflict, map[string]string{"error": "Git worktree conversations currently require an Agent fixed to a Runtime"})
-				return
-			}
 			key := "steer/" + wid + "/" + sessionID
 			workspaceKey = &key
 		}
+	}
+	if executionRuntimeID == nil || strings.TrimSpace(*executionRuntimeID) == "" {
+		resolvedRuntimeID, resolveErr := s.firstWorkspaceRuntime(r.Context(), wid, agent.RuntimeProvider)
+		if resolveErr != nil {
+			writeError(w, resolveErr)
+			return
+		}
+		executionRuntimeID = &resolvedRuntimeID
 	}
 	session, err := s.store.EnsureSession(r.Context(), wid, sessionID, truncate(title, 72), agent.ID, in.ProjectID, executionRuntimeID, workspaceKey, project)
 	if err != nil {
@@ -491,7 +531,7 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if executionRuntimeID != nil {
-		provider, providerErr := s.runtimeProvider(r.Context(), *executionRuntimeID)
+		provider, providerErr := s.runtimeProvider(r.Context(), wid, *executionRuntimeID)
 		if providerErr != nil {
 			writeError(w, providerErr)
 			return
@@ -580,8 +620,8 @@ func gitProjectWorkspaceInstruction() relay.InstructionFragment {
 	}
 }
 
-func (s *Server) runtimeProvider(ctx context.Context, runtimeID string) (string, error) {
-	nodes, err := s.relay.Nodes(ctx)
+func (s *Server) runtimeProvider(ctx context.Context, workspaceID, runtimeID string) (string, error) {
+	nodes, err := s.workspaceNodes(ctx, workspaceID)
 	if err != nil {
 		return "", fmt.Errorf("resolve execution Runtime: %w", err)
 	}
@@ -593,6 +633,46 @@ func (s *Server) runtimeProvider(ctx context.Context, runtimeID string) (string,
 		}
 	}
 	return "", fmt.Errorf("execution Runtime %q is unavailable", runtimeID)
+}
+
+func (s *Server) firstWorkspaceRuntime(ctx context.Context, workspaceID, provider string) (string, error) {
+	nodes, err := s.workspaceNodes(ctx, workspaceID)
+	if err != nil {
+		return "", fmt.Errorf("resolve execution Runtime: %w", err)
+	}
+	for _, node := range nodes {
+		for _, runtime := range node.Runtimes {
+			if runtime.Provider == provider {
+				return runtime.ID, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no %s Runtime is assigned to this workspace", provider)
+}
+
+func (s *Server) workspaceNodes(ctx context.Context, workspaceID string) ([]controlplane.Node, error) {
+	nodes, err := s.relay.Nodes(ctx)
+	if err != nil || !s.authEnabled {
+		return nodes, err
+	}
+	assigned, err := s.store.WorkspaceRuntimeIDs(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	visible := make([]controlplane.Node, 0, len(nodes))
+	for _, node := range nodes {
+		filtered := node.Runtimes[:0:0]
+		for _, runtime := range node.Runtimes {
+			if assigned[runtime.ID] {
+				filtered = append(filtered, runtime)
+			}
+		}
+		if len(filtered) > 0 {
+			node.Runtimes = filtered
+			visible = append(visible, node)
+		}
+	}
+	return visible, nil
 }
 
 // submitRelayRun retries an ambiguous successful response once. Relay submissions
@@ -901,6 +981,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 		origin := r.Header.Get("Origin")
 		if origin != "" && s.allowedOrigins[origin] {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Steer-Workspace")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")

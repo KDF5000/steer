@@ -123,10 +123,80 @@
 
 .ws-workspace-switcher {
   display: flex;
+  width: 100%;
   align-items: center;
   gap: 10px;
   min-width: 0;
   padding: 3px 5px;
+  border-radius: 9px;
+  text-align: left;
+}
+
+.ws-workspace-switcher:hover {
+  background: #ededf0;
+}
+
+.ws-workspace-switcher > span:nth-child(2) {
+  flex: 1;
+}
+
+.ws-workspace-chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--ws-text-tertiary);
+}
+
+.ws-workspace-menu {
+  width: 218px;
+  border: 1px solid var(--ws-border);
+  border-radius: 12px;
+  background: #fff !important;
+  color: var(--ws-text);
+  padding: 5px;
+  box-shadow: 0 14px 36px rgb(24 24 27 / 14%);
+}
+
+.ws-account-dropdown {
+  border: 1px solid var(--ws-border);
+  border-radius: 11px;
+  background: #fff !important;
+  color: var(--ws-text);
+  padding: 5px;
+  box-shadow: 0 14px 36px rgb(24 24 27 / 14%);
+}
+
+.ws-account-dropdown [role='menuitem'] {
+  min-height: 36px;
+  gap: 9px;
+  border-radius: 7px;
+  padding: 0 10px;
+}
+
+.ws-account-dropdown [role='menuitem']:hover,
+.ws-account-dropdown [role='menuitem']:focus {
+  background: var(--ws-surface-hover);
+}
+
+.ws-workspace-menu [role='menuitem'] {
+  gap: 9px;
+  border-radius: 8px;
+}
+
+.ws-workspace-menu [role='menuitem'] > span:nth-child(2) {
+  overflow: hidden;
+  flex: 1;
+  text-overflow: ellipsis;
+}
+
+.ws-workspace-menu-avatar {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border-radius: 6px;
+  background: #ececf0;
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .ws-workspace-switcher > span:last-child,
@@ -389,6 +459,31 @@
   padding: 4px 5px;
 }
 
+.ws-sidebar-footer .ws-account-menu {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 5px;
+  border-radius: 9px;
+  text-align: left;
+}
+
+.ws-sidebar-footer .ws-account-menu:hover {
+  background: #ededf0;
+}
+
+.ws-account-menu > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+
+.ws-account-menu > svg {
+  width: 14px;
+  height: 14px;
+  color: var(--ws-text-tertiary);
+}
+
 .ws-sidebar-footer strong {
   overflow: hidden;
   color: #52535a;
@@ -412,6 +507,144 @@
 }
 
 /* Shell and shared pages */
+
+.ws-auth-loading,
+.ws-auth-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  background:
+    radial-gradient(circle at 25% 10%, #f0efff 0, transparent 32%), #f7f7f8;
+  color: #24252a;
+}
+
+.ws-auth-loading {
+  color: var(--ws-text-secondary);
+  font-size: 14px;
+}
+
+.ws-auth-card {
+  width: min(420px, calc(100vw - 32px));
+  padding: 30px;
+  border: 1px solid #e2e2e6;
+  border-radius: 20px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 24px 70px rgb(30 30 40 / 10%);
+}
+
+.ws-auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ws-auth-brand strong,
+.ws-auth-brand small {
+  display: block;
+}
+
+.ws-auth-brand strong {
+  font-size: 15px;
+}
+
+.ws-auth-brand small {
+  margin-top: 1px;
+  color: #898b94;
+  font-size: 11px;
+}
+
+.ws-auth-heading {
+  margin: 30px 0 22px;
+}
+
+.ws-auth-heading h1 {
+  margin: 0;
+  font-size: 25px;
+  letter-spacing: -0.035em;
+}
+
+.ws-auth-heading p {
+  margin: 8px 0 0;
+  color: #73757e;
+  font-size: 13px;
+}
+
+.ws-auth-card form,
+.ws-workspace-dialog form {
+  display: grid;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.ws-workspace-dialog {
+  border: 1px solid var(--ws-border-strong);
+  background: #fff !important;
+  color: var(--ws-text);
+  box-shadow: 0 24px 70px rgb(30 30 40 / 18%);
+}
+
+.ws-auth-card label,
+.ws-workspace-dialog label {
+  display: grid;
+  gap: 7px;
+  color: #52545c;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ws-auth-card input,
+.ws-workspace-dialog input {
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #d9d9df;
+  border-radius: 10px;
+  outline: none;
+  background: #fff;
+  color: #24252a;
+  font-size: 14px;
+}
+
+.ws-auth-card input:focus,
+.ws-workspace-dialog input:focus {
+  border-color: #6b66dd;
+  box-shadow: 0 0 0 3px #6b66dd1a;
+}
+
+.ws-auth-error {
+  margin: 0;
+  color: #b3434d;
+  font-size: 12px;
+}
+
+.ws-auth-submit {
+  height: 42px;
+  border-radius: 10px;
+  background: #5753d8;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.ws-auth-submit:hover {
+  background: #4945c7;
+}
+
+.ws-auth-submit:disabled {
+  opacity: 0.55;
+}
+
+.ws-auth-switch {
+  margin: 20px 0 0;
+  color: #777982;
+  font-size: 12px;
+  text-align: center;
+}
+
+.ws-auth-switch button {
+  margin-left: 5px;
+  color: #514dd0;
+  font-weight: 650;
+}
 
 .ws-main {
   min-width: 0;

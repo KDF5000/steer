@@ -3,6 +3,30 @@ import type { RelayEvent, RelayNode, RelayRun } from '@/lib/domain';
 const baseURL =
   process.env.NEXT_PUBLIC_STEER_API_URL ?? 'http://localhost:8080/api/v1';
 
+let selectedWorkspaceId = '';
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  displayName: string;
+};
+
+export type WorkspaceRecord = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export class SteerHTTPError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 export type AgentRecord = {
   id: string;
   workspaceId: string;
@@ -95,15 +119,25 @@ export type Bootstrap = {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set('Accept', 'application/json');
+  if (selectedWorkspaceId)
+    headers.set('X-Steer-Workspace', selectedWorkspaceId);
   if (init?.body && !(init.body instanceof FormData))
     headers.set('Content-Type', 'application/json');
-  const response = await fetch(`${baseURL}${path}`, { ...init, headers });
+  const response = await fetch(`${baseURL}${path}`, {
+    ...init,
+    headers,
+    credentials: 'include',
+  });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as {
       error?: string;
     } | null;
-    throw new Error(body?.error || `Steer HTTP ${response.status}`);
+    throw new SteerHTTPError(
+      body?.error || `Steer HTTP ${response.status}`,
+      response.status,
+    );
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -115,7 +149,16 @@ async function streamRunEvents(
 ) {
   const response = await fetch(
     `${baseURL}/runs/${encodeURIComponent(id)}/events/stream?after=${after}`,
-    { headers: { Accept: 'text/event-stream' }, signal },
+    {
+      headers: {
+        Accept: 'text/event-stream',
+        ...(selectedWorkspaceId
+          ? { 'X-Steer-Workspace': selectedWorkspaceId }
+          : {}),
+      },
+      credentials: 'include',
+      signal,
+    },
   );
   if (!response.ok || !response.body) {
     const body = (await response.json().catch(() => null)) as {
@@ -162,6 +205,29 @@ async function streamRunEvents(
 }
 
 export const steer = {
+  setWorkspace: (workspaceId: string) => {
+    selectedWorkspaceId = workspaceId;
+  },
+  me: () =>
+    request<{ user: AuthUser; workspaces: WorkspaceRecord[] }>('/auth/me'),
+  login: (input: { email: string; password: string }) =>
+    request<{ user: AuthUser; workspaces: WorkspaceRecord[] }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  register: (input: { email: string; password: string; displayName: string }) =>
+    request<{ user: AuthUser; workspaces: WorkspaceRecord[] }>(
+      '/auth/register',
+      { method: 'POST', body: JSON.stringify(input) },
+    ),
+  logout: () => request<void>('/auth/logout', { method: 'POST' }),
+  createWorkspace: (name: string) =>
+    request<WorkspaceRecord>('/workspaces', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+  claimAvailableRuntimes: () =>
+    request<RelayNode[]>('/runtimes/claim-available', { method: 'POST' }),
   bootstrap: () => request<Bootstrap>('/bootstrap'),
   inspectWorkspace: (
     runId: string,
@@ -226,7 +292,7 @@ export const steer = {
       content: string;
     }>(`/artifacts/${artifactId}/content`),
   artifactDownloadURL: (artifactId: string) =>
-    `${baseURL}/artifacts/${encodeURIComponent(artifactId)}/download`,
+    `${baseURL}/artifacts/${encodeURIComponent(artifactId)}/download?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`,
   session: (sessionId: string) =>
     request<{
       session: ChatSessionRecord;
@@ -262,7 +328,7 @@ export const steer = {
     }>('/chat', { method: 'POST', body });
   },
   messageAttachmentURL: (messageId: string, attachmentId: string) =>
-    `${baseURL}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`,
+    `${baseURL}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`,
   run: (id: string) =>
     request<{
       run: RelayRun;

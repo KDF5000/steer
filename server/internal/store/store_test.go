@@ -2,11 +2,53 @@ package store
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+func TestUsersWorkspacesAndRuntimeIsolation(t *testing.T) {
+	s, legacyWorkspaceID := testStore(t)
+	ctx := context.Background()
+	suffix := uuid.NewString()
+	first, firstWorkspace, _, err := s.CreateUser(ctx, "first-"+suffix+"@example.test", "First", "hash", legacyWorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, secondWorkspace, _, err := s.CreateUser(ctx, "second-"+suffix+"@example.test", "Second", "hash", legacyWorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstWorkspace.ID == secondWorkspace.ID {
+		t.Fatal("users received the same workspace")
+	}
+	if _, err := s.WorkspaceForUser(ctx, second.ID, firstWorkspace.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second user accessed first workspace: %v", err)
+	}
+	agent, err := s.CreateAgent(ctx, firstWorkspace.ID, Agent{Name: "Private", RuntimeProvider: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Agent(ctx, secondWorkspace.ID, agent.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("agent crossed workspace boundary: %v", err)
+	}
+	if err := s.AssignRuntime(ctx, firstWorkspace.ID, "node/runtime"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AssignRuntime(ctx, secondWorkspace.ID, "node/runtime"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("runtime was assigned to two workspaces: %v", err)
+	}
+	if err := s.CreateAuthSession(ctx, first.ID, "token-"+suffix, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := s.UserBySession(ctx, "token-"+suffix)
+	if err != nil || resolved.ID != first.ID {
+		t.Fatalf("session resolved %+v: %v", resolved, err)
+	}
+}
 
 func testStore(t *testing.T) (*Store, string) {
 	t.Helper()

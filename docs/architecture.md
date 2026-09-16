@@ -44,7 +44,18 @@ The local Compose stack includes Relay Server for one-command verification. Rela
 
 ## Data boundary
 
-Every Steer business table contains `workspace_id`. The current MVP resolves a configured default Workspace while authentication is not implemented. This keeps the first deployment simple without baking single-tenancy into the schema.
+Every Steer business table contains `workspace_id`. Requests authenticate with
+an opaque, hashed server-side session token stored in an HttpOnly cookie. The
+server resolves the selected Workspace only after verifying that it belongs to
+the authenticated user; client-supplied Workspace IDs are never trusted as an
+authorization decision.
+
+Users may own multiple Workspaces. Projects, conversations, messages, Agents,
+Run projections, artifacts, attachments, and Runtime assignments are scoped to
+one Workspace. A Relay Runtime can be claimed by only one Workspace, and
+automatic Agent scheduling is restricted to that Workspace's assigned
+Runtimes. On an upgraded installation, the first registered user adopts the
+legacy default Workspace so existing data is preserved.
 
 Steer stores only the Run fields needed for its product experience. Relay remains the source of truth for execution state; Steer refreshes its projection when users observe a Run.
 

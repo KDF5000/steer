@@ -95,7 +95,7 @@ These tests cover Projects, persistent conversations, Run projection, artifact d
 | `RELAY_NODE_TOKEN`           | local development token                  | Token used by Nodes registering with bundled Relay |
 | `RELAY_VERSION`              | pinned Relay commit                      | Relay revision built by the bundled Compose stack  |
 | `STEER_ADDR`                 | `:8080`                                  | Steer Server listen address                        |
-| `STEER_DEFAULT_WORKSPACE_ID` | `default`                                | Workspace used before authentication is introduced |
+| `STEER_DEFAULT_WORKSPACE_ID` | `default`                                | Legacy Workspace adopted by the first registered user |
 | `STEER_ALLOWED_ORIGINS`      | local Web origin                         | Browser CORS allowlist                             |
 | `NEXT_PUBLIC_STEER_API_URL`  | `http://localhost:8080/api/v1`           | Web client API base URL                            |
 | `STEER_SERVER_PORT`          | `8080`                                   | Published Steer Server port                        |

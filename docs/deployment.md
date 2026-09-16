@@ -1,5 +1,18 @@
 # Deployment topology
 
+## Accounts and workspaces
+
+Steer requires sign-in for every business API. The first account registered on
+an upgraded installation adopts `STEER_DEFAULT_WORKSPACE_ID`, preserving its
+existing Projects, conversations, Agents, and artifacts. Later accounts receive
+new private Workspaces, and every user can create additional Workspaces from the
+sidebar switcher.
+
+Authentication sessions are opaque random tokens stored server-side; browsers
+receive only an HttpOnly, SameSite cookie. When Steer Web and Steer Server use
+different origins, `STEER_ALLOWED_ORIGINS` must exactly contain the Web origin
+so credentialed requests are accepted.
+
 Steer and Relay are independent products and should be deployed as separate services.
 
 ```text
