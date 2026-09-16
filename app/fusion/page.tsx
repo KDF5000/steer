@@ -1130,7 +1130,7 @@ export default function Fusion() {
                             onClick={() => setDeletingSession(session)}
                           >
                             <Trash2 aria-hidden="true" />
-                            Delete conversation
+                            Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -1472,7 +1472,7 @@ export default function Fusion() {
           !open && !deletingConversation && setDeletingSession(null)
         }
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="ws-delete-conversation-dialog">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this conversation?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1496,7 +1496,7 @@ export default function Fusion() {
                 void deleteSelectedSession();
               }}
             >
-              {deletingConversation ? 'Deleting…' : 'Delete conversation'}
+              {deletingConversation ? 'Deleting…' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

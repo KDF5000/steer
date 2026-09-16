@@ -271,6 +271,79 @@
   white-space: nowrap;
 }
 
+.ws-delete-conversation-dialog {
+  width: min(420px, calc(100vw - 32px));
+  max-width: 420px !important;
+  padding: 24px;
+  border: 1px solid #e5e5e7;
+  border-radius: 16px;
+  background: #fff;
+  color: #202124;
+  box-shadow: 0 20px 64px rgba(24, 24, 27, 0.18);
+}
+
+.ws-delete-conversation-dialog [data-slot='alert-dialog-header'] {
+  gap: 10px;
+  place-items: start;
+  text-align: left;
+}
+
+.ws-delete-conversation-dialog [data-slot='alert-dialog-title'] {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.ws-delete-conversation-dialog [data-slot='alert-dialog-description'] {
+  color: #74757d;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ws-delete-conversation-dialog [data-slot='alert-dialog-footer'] {
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 6px 0 0;
+  padding: 0;
+  border: 0;
+  background: #fff;
+}
+
+.ws-delete-conversation-dialog [data-slot='alert-dialog-cancel'],
+.ws-delete-conversation-dialog [data-slot='alert-dialog-action'] {
+  min-width: 76px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.ws-delete-conversation-dialog [data-slot='alert-dialog-cancel'] {
+  border: 1px solid #dedee2;
+  background: #fff;
+  color: #52535b;
+}
+
+.ws-delete-conversation-dialog [data-slot='alert-dialog-cancel']:hover {
+  background: #f3f3f5;
+}
+
+.ws-delete-conversation-dialog [data-slot='alert-dialog-action'] {
+  border: 1px solid #bc3f49;
+  background: #bc3f49;
+  color: #fff;
+}
+
+.ws-delete-conversation-dialog [data-slot='alert-dialog-action']:hover {
+  background: #a9343e;
+}
+
+.ws-delete-conversation-dialog button:disabled {
+  opacity: 0.5;
+}
+
 .ws-sidebar-footer {
   padding: 9px 10px 12px !important;
   border-top: 1px solid var(--ws-border);
