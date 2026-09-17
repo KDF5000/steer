@@ -284,8 +284,6 @@
 
 .ws-sidebar [data-slot='sidebar-content'] {
   padding: 1px 0 8px;
-  scrollbar-width: thin;
-  scrollbar-color: #d7d7da transparent;
 }
 
 .ws-sidebar [data-slot='sidebar-group'] {
