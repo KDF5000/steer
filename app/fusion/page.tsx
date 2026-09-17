@@ -36,6 +36,7 @@ import {
   Search,
   Send,
   Server,
+  Share2,
   LogOut,
   Square,
   SquarePen,
@@ -1759,6 +1760,7 @@ export default function Fusion() {
         ) : view === 'chat' ? (
           <ChatView
             key={chatSession || 'new-chat'}
+            sessionId={chatSession}
             agents={agentList}
             agent={currentAgent}
             executionRuntimeId={composerExecutionRuntimeId}
@@ -1829,6 +1831,7 @@ export default function Fusion() {
             onSend={() => void send()}
             onRetry={(prompt) => void send(prompt)}
             onStop={() => void stop()}
+            onNotice={setNotice}
             onArtifact={(id) => {
               const index = artifactList.findIndex((item) => item.id === id);
               setSelectedArtifact(index < 0 ? 0 : index);
@@ -2125,6 +2128,7 @@ function AuthScreen({
 }
 
 function ChatView({
+  sessionId,
   agents,
   agent,
   executionRuntimeId,
@@ -2147,8 +2151,10 @@ function ChatView({
   onSend,
   onRetry,
   onStop,
+  onNotice,
   onArtifact,
 }: {
+  sessionId: string;
   agents: AgentItem[];
   agent?: AgentItem;
   executionRuntimeId: string | null;
@@ -2171,6 +2177,7 @@ function ChatView({
   onSend: () => void;
   onRetry: (prompt: string) => void;
   onStop: () => void;
+  onNotice: (message: string) => void;
   onArtifact: (id: string) => void;
 }) {
   const hasMessages = messages.length > 0;
@@ -2204,6 +2211,8 @@ function ChatView({
   const currentChange =
     changes.find((change) => change.path === selectedChange) || changes[0];
   const [copiedMessage, setCopiedMessage] = useState('');
+  const [sharing, setSharing] = useState('');
+  const [shared, setShared] = useState('');
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [draggingImages, setDraggingImages] = useState(false);
   const [composerPreviewID, setComposerPreviewID] = useState('');
@@ -2293,6 +2302,41 @@ function ChatView({
     setPreview('');
     setPreviewError('');
   };
+  const copyShareLink = async (
+    kind: 'conversation' | 'message',
+    id: string,
+    key: string,
+  ) => {
+    if (!id || sharing) return;
+    setSharing(key);
+    try {
+      const result =
+        kind === 'conversation'
+          ? await steer.shareSession(id)
+          : await steer.shareMessage(id);
+      const url = new URL('/share', window.location.origin);
+      url.searchParams.set('token', result.token);
+      const copied = await writeClipboard(url.toString());
+      setShared(key);
+      onNotice(
+        copied
+          ? kind === 'conversation'
+            ? 'Conversation share link copied.'
+            : 'Message share link copied.'
+          : `Share link: ${url.toString()}`,
+      );
+      window.setTimeout(
+        () => setShared((current) => (current === key ? '' : current)),
+        1800,
+      );
+    } catch (error) {
+      onNotice(
+        error instanceof Error ? error.message : 'Could not create share link.',
+      );
+    } finally {
+      setSharing('');
+    }
+  };
   useEffect(() => {
     const area = scrollArea.current;
     if (!area || !followBottom.current) return;
@@ -2370,6 +2414,31 @@ function ChatView({
               </span>
             </div>
             <div className="ws-grow" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ws-chat-share-trigger"
+              aria-label={
+                shared === 'conversation'
+                  ? 'Conversation share link copied'
+                  : 'Share conversation'
+              }
+              title={
+                shared === 'conversation'
+                  ? 'Share link copied'
+                  : 'Share conversation'
+              }
+              disabled={!sessionId || working || sharing === 'conversation'}
+              onClick={() =>
+                void copyShareLink('conversation', sessionId, 'conversation')
+              }
+            >
+              {shared === 'conversation' ? (
+                <Check aria-hidden="true" />
+              ) : (
+                <Share2 aria-hidden="true" />
+              )}
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -2562,6 +2631,39 @@ function ChatView({
                         {message.error && (
                           <p className="ws-form-error">{message.error}</p>
                         )}
+                        {message.role === 'user' &&
+                          message.id &&
+                          message.text && (
+                            <div className="ws-chat-message-actions ws-user-message-actions">
+                              <button
+                                type="button"
+                                aria-label={
+                                  shared === `message:${message.id}`
+                                    ? 'Message share link copied'
+                                    : 'Share message'
+                                }
+                                title={
+                                  shared === `message:${message.id}`
+                                    ? 'Share link copied'
+                                    : 'Share message'
+                                }
+                                disabled={Boolean(sharing)}
+                                onClick={() =>
+                                  void copyShareLink(
+                                    'message',
+                                    message.id!,
+                                    `message:${message.id}`,
+                                  )
+                                }
+                              >
+                                {shared === `message:${message.id}` ? (
+                                  <Check aria-hidden="true" />
+                                ) : (
+                                  <Share2 aria-hidden="true" />
+                                )}
+                              </button>
+                            </div>
+                          )}
                         {!!message.changes?.length && (
                           <div className="ws-message-changes">
                             <div className="ws-message-changes-header">
@@ -2693,6 +2795,34 @@ function ChatView({
                                 }
                               >
                                 <Download aria-hidden="true" />
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={
+                                  shared === `message:${message.id}`
+                                    ? 'Message share link copied'
+                                    : 'Share message'
+                                }
+                                title={
+                                  shared === `message:${message.id}`
+                                    ? 'Share link copied'
+                                    : 'Share message'
+                                }
+                                disabled={!message.id || Boolean(sharing)}
+                                onClick={() =>
+                                  message.id &&
+                                  void copyShareLink(
+                                    'message',
+                                    message.id,
+                                    `message:${message.id}`,
+                                  )
+                                }
+                              >
+                                {shared === `message:${message.id}` ? (
+                                  <Check aria-hidden="true" />
+                                ) : (
+                                  <Share2 aria-hidden="true" />
+                                )}
                               </button>
                               {(message.updatedAt || message.createdAt) && (
                                 <time

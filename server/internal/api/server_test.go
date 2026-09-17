@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/KDF5000/relay"
 	"github.com/KDF5000/steer/server/internal/store"
@@ -51,6 +52,32 @@ func TestSubmitRelayRunRetriesEmptySuccessResponse(t *testing.T) {
 	}
 	if workspaceValue["lifecycle"] != "reusable" || workspaceValue["reuse_key"] != "opaque-key" || workspaceValue["branch"] != "steer/session-1" {
 		t.Fatalf("workspace=%#v", workspaceValue)
+	}
+}
+
+func TestSharedConversationReadBypassesAuthentication(t *testing.T) {
+	server := New(nil, "http://relay.invalid", "token", "http://relay.invalid", "workspace", nil, WithAuthentication(time.Hour))
+	called := false
+	handler := server.authenticate(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/shares/public-token", nil))
+	if !called || response.Code != http.StatusNoContent {
+		t.Fatalf("public share was blocked: called=%v status=%d", called, response.Code)
+	}
+}
+
+func TestShareableMessagesOmitsEmptyAndInternalRoles(t *testing.T) {
+	messages := shareableMessages([]store.Message{
+		{Role: "user", Content: "Question", UpdatedAt: time.Now()},
+		{Role: "agent", Content: "  "},
+		{Role: "system", Content: "private"},
+		{Role: "agent", Content: "Answer", UpdatedAt: time.Now()},
+	})
+	if len(messages) != 2 || messages[0].Content != "Question" || messages[1].Content != "Answer" {
+		t.Fatalf("unexpected share messages: %+v", messages)
 	}
 }
 

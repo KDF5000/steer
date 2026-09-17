@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -178,6 +179,17 @@ type RunLink struct {
 	Error       *string   `json:"error"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+type SharedConversation struct {
+	ID              string          `json:"id"`
+	WorkspaceID     string          `json:"-"`
+	SessionID       string          `json:"-"`
+	MessageID       *string         `json:"-"`
+	TokenHash       string          `json:"-"`
+	Snapshot        json.RawMessage `json:"snapshot"`
+	CreatedByUserID *string         `json:"-"`
+	CreatedAt       time.Time       `json:"createdAt"`
 }
 
 func Open(ctx context.Context, databaseURL string) (*Store, error) {
@@ -374,6 +386,35 @@ func (s *Store) Messages(ctx context.Context, wid, sessionID string) ([]Message,
 		out[index].Attachments = byMessage[out[index].ID]
 	}
 	return out, nil
+}
+
+func (s *Store) Message(ctx context.Context, wid, id string) (Message, error) {
+	var item Message
+	err := s.pool.QueryRow(ctx, `SELECT id,workspace_id,session_id,role,content,status,relay_run_id,error,created_at,updated_at FROM messages WHERE workspace_id=$1 AND id=$2`, wid, id).Scan(
+		&item.ID, &item.WorkspaceID, &item.SessionID, &item.Role, &item.Content, &item.Status, &item.RelayRunID, &item.Error, &item.CreatedAt, &item.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Message{}, ErrNotFound
+	}
+	return item, err
+}
+
+func (s *Store) CreateSharedConversation(ctx context.Context, share SharedConversation) error {
+	share.ID = uuid.NewString()
+	_, err := s.pool.Exec(ctx, `INSERT INTO shared_conversations(id,workspace_id,session_id,message_id,token_hash,snapshot,created_by_user_id) VALUES($1,$2,$3,$4,$5,$6,$7)`,
+		share.ID, share.WorkspaceID, share.SessionID, share.MessageID, share.TokenHash, share.Snapshot, share.CreatedByUserID)
+	return err
+}
+
+func (s *Store) SharedConversationByToken(ctx context.Context, hash string) (SharedConversation, error) {
+	var share SharedConversation
+	err := s.pool.QueryRow(ctx, `SELECT id,workspace_id,session_id,message_id,token_hash,snapshot,created_by_user_id,created_at FROM shared_conversations WHERE token_hash=$1`, hash).Scan(
+		&share.ID, &share.WorkspaceID, &share.SessionID, &share.MessageID, &share.TokenHash, &share.Snapshot, &share.CreatedByUserID, &share.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return SharedConversation{}, ErrNotFound
+	}
+	return share, err
 }
 
 const sessionColumns = `id,workspace_id,title,agent_id,project_id,execution_runtime_id,workspace_key,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,created_at,updated_at`

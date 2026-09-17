@@ -102,6 +102,18 @@ export type ChatMessageRecord = {
   }>;
 };
 
+export type SharedConversation = {
+  version: number;
+  scope: 'conversation' | 'message';
+  title: string;
+  messages: Array<{
+    role: 'user' | 'agent';
+    content: string;
+    createdAt: string;
+  }>;
+  createdAt: string;
+};
+
 export type Bootstrap = {
   workspace: { id: string; name: string };
   agents: AgentRecord[];
@@ -303,6 +315,18 @@ export const steer = {
     request<ChatSessionRecord>(`/sessions/${encodeURIComponent(sessionId)}`, {
       method: 'DELETE',
     }),
+  shareSession: (sessionId: string) =>
+    request<{ token: string }>(
+      `/sessions/${encodeURIComponent(sessionId)}/share`,
+      { method: 'POST' },
+    ),
+  shareMessage: (messageId: string) =>
+    request<{ token: string }>(
+      `/messages/${encodeURIComponent(messageId)}/share`,
+      { method: 'POST' },
+    ),
+  sharedConversation: (token: string) =>
+    request<SharedConversation>(`/shares/${encodeURIComponent(token)}`),
   chat: (input: {
     prompt: string;
     agentId: string;

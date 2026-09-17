@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"testing"
@@ -109,5 +110,14 @@ func TestConversationRunAndArtifact(t *testing.T) {
 	session, err := s.Session(ctx, wid, sessionID)
 	if err != nil || session.ProjectID == nil || *session.ProjectID != project.ID {
 		t.Fatalf("project was not retained: %+v, %v", session, err)
+	}
+	snapshot := json.RawMessage(`{"version":1,"scope":"conversation","title":"Inspect repository","messages":[]}`)
+	shareHash := "lookup-" + uuid.NewString()
+	if err := s.CreateSharedConversation(ctx, SharedConversation{WorkspaceID: wid, SessionID: sessionID, TokenHash: shareHash, Snapshot: snapshot}); err != nil {
+		t.Fatal(err)
+	}
+	shared, err := s.SharedConversationByToken(ctx, shareHash)
+	if err != nil || string(shared.Snapshot) != string(snapshot) || shared.SessionID != sessionID {
+		t.Fatalf("invalid share: %+v, %v", shared, err)
 	}
 }
