@@ -996,20 +996,6 @@
   color: #3f4046 !important;
 }
 
-.ws-chat-review-trigger > span {
-  position: absolute;
-  top: 1px;
-  right: 1px;
-  min-width: 14px;
-  padding-inline: 3px;
-  border-radius: 999px;
-  background: var(--ws-accent);
-  color: #fff;
-  font-size: 9px;
-  line-height: 14px;
-  text-align: center;
-}
-
 .ws-chat-center {
   display: flex;
   min-height: 0;
@@ -1502,6 +1488,21 @@ button.ws-chat-response-meta:focus-visible {
   margin-top: 11px;
 }
 
+.ws-chat-message-time {
+  margin-left: 5px;
+  color: #92939a;
+  font-size: var(--ws-font-caption);
+  font-variant-numeric: tabular-nums;
+  line-height: 29px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.ws-chat-message.agent:hover .ws-chat-message-time,
+.ws-chat-message.agent:focus-within .ws-chat-message-time {
+  opacity: 1;
+}
+
 .ws-chat-message-actions > button {
   display: grid;
   width: 29px;
@@ -1914,9 +1915,26 @@ button.ws-chat-response-meta:focus-visible {
 }
 
 .ws-markdown a {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  max-width: 100%;
   color: #4e51bd;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.ws-markdown a > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-markdown a > svg {
+  width: 0.82em;
+  height: 0.82em;
+  flex: 0 0 auto;
+  transform: translateY(0.08em);
 }
 
 .ws-markdown code {
@@ -2135,36 +2153,124 @@ button.ws-chat-response-meta:focus-visible {
   height: 12px;
 }
 .ws-message-changes {
-  margin-top: 14px;
+  margin-top: 16px;
   border: 1px solid var(--ws-border);
-  border-radius: 12px;
+  border-radius: 13px;
   overflow: hidden;
-}
-.ws-message-changes > button {
-  width: 100%;
-  justify-content: space-between;
-  border: 0;
-  border-radius: 0;
-  font-size: 12px;
   background: #fff;
 }
-.ws-message-changes > button:first-child {
+
+.ws-message-changes-header {
+  display: flex;
+  min-height: 66px;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--ws-border);
-  margin: 0;
 }
-.ws-message-changes > button:hover {
+
+.ws-message-changes-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
   background: #f5f5f7;
+  color: #676970;
 }
-.ws-message-changes > button span {
+
+.ws-message-changes-icon > svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.8;
+}
+
+.ws-message-changes-summary {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ws-text);
+  text-align: left;
+}
+
+.ws-message-changes-summary > strong {
   overflow: hidden;
+  max-width: 100%;
+  font-size: var(--ws-font-body);
+  font-weight: 600;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 0;
 }
-.ws-message-changes svg {
-  width: 15px;
-  height: 15px;
+
+.ws-message-changes-summary:hover > strong {
+  color: var(--ws-accent);
+}
+
+.ws-message-changes-summary:focus-visible {
+  border-radius: 5px;
+  outline: 2px solid color-mix(in srgb, var(--ws-accent) 55%, transparent);
+  outline-offset: 3px;
+}
+
+.ws-message-changes-header .ws-review-message-link {
+  min-width: 64px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-color: var(--ws-border);
+  border-radius: 9px;
+  background: #fff;
+  font-size: var(--ws-font-control);
+  font-weight: 570;
+}
+
+.ws-message-changes-header .ws-review-message-link:hover {
+  border-color: var(--ws-border-strong);
+  background: var(--ws-surface-hover);
+}
+
+.ws-message-changes-files {
+  padding: 4px 0;
+}
+
+.ws-message-changes-files > button {
+  width: 100%;
+  height: 36px;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  color: #66676e;
+  font-size: var(--ws-font-control);
+  font-weight: 450;
+  background: #fff;
+}
+
+.ws-message-changes-files > button:hover {
+  background: #f5f5f7;
+  color: #2f3035;
+}
+
+.ws-message-changes-files > button > span:first-child {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-message-changes-files .ws-diff-stats {
   flex-shrink: 0;
+  gap: 5px;
 }
 .ws-review-turn-picker {
   position: relative;

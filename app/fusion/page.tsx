@@ -183,10 +183,102 @@ function artifactFromRecord(artifact: ArtifactRecord): Artifact {
   };
 }
 
-const Markdown = memo(function Markdown({ children }: { children: string }) {
+function markdownLinkText(children: ReactNode): string {
+  if (typeof children === 'string' || typeof children === 'number')
+    return String(children);
+  if (Array.isArray(children)) return children.map(markdownLinkText).join('');
+  return '';
+}
+
+function readableLinkLabel(href: string, title: string | undefined) {
+  if (title?.trim()) return title.trim();
+  try {
+    const url = new URL(href);
+    const hostname = url.hostname.replace(/^www\./, '');
+    const site =
+      {
+        'github.com': 'GitHub',
+        'gitlab.com': 'GitLab',
+        'youtube.com': 'YouTube',
+        'youtu.be': 'YouTube',
+      }[hostname] || hostname;
+    const lastSegment = url.pathname.split('/').filter(Boolean).at(-1);
+    if (!lastSegment) return site;
+    const page = decodeURIComponent(lastSegment)
+      .replace(/\.[a-z0-9]{1,8}$/i, '')
+      .replace(/[-_]+/g, ' ')
+      .trim();
+    return page && page.toLowerCase() !== site.toLowerCase()
+      ? `${page} · ${site}`
+      : site;
+  } catch {
+    return href.split('/').filter(Boolean).at(-1) || href;
+  }
+}
+
+function workspaceLinkPath(href: string) {
+  if (/^https?:\/\//i.test(href) || href.startsWith('#')) return '';
+  if (href.startsWith('file://')) {
+    try {
+      return decodeURIComponent(new URL(href).pathname);
+    } catch {
+      return '';
+    }
+  }
+  try {
+    return decodeURIComponent(href.split(/[?#]/, 1)[0]);
+  } catch {
+    return href.split(/[?#]/, 1)[0];
+  }
+}
+
+const Markdown = memo(function Markdown({
+  children,
+  onOpenWorkspaceFile,
+}: {
+  children: string;
+  onOpenWorkspaceFile?: (path: string) => void;
+}) {
   return (
     <div className="ws-markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ children: linkChildren, href = '', title }) => {
+            const text = markdownLinkText(linkChildren).trim();
+            const rawLink =
+              !text ||
+              text === href ||
+              /^https?:\/\//i.test(text) ||
+              text.startsWith('file://');
+            const filePath = workspaceLinkPath(href);
+            const external = /^https?:\/\//i.test(href);
+            return (
+              <a
+                href={href}
+                title={href}
+                target={external ? '_blank' : undefined}
+                rel={external ? 'noreferrer noopener' : undefined}
+                onClick={
+                  filePath && onOpenWorkspaceFile
+                    ? (event) => {
+                        event.preventDefault();
+                        onOpenWorkspaceFile(filePath);
+                      }
+                    : undefined
+                }
+              >
+                <span>
+                  {rawLink ? readableLinkLabel(href, title) : linkChildren}
+                </span>
+                {external && <ExternalLink aria-hidden="true" />}
+              </a>
+            );
+          },
+        }}
+      >
+        {children}
+      </ReactMarkdown>
     </div>
   );
 });
@@ -2164,7 +2256,9 @@ function ChatView({
           : 'Documents';
     setWorkspaceTabs((tabs) =>
       tabs.some((tab) => tab.id === id)
-        ? tabs.map((tab) => (tab.id === id ? { ...tab, path } : tab))
+        ? tabs.map((tab) =>
+            tab.id === id ? { ...tab, path, runId: resolvedRunId, title } : tab,
+          )
         : [...tabs, { id, kind, runId: resolvedRunId, path, title }],
     );
     setActiveWorkspaceTab(id);
@@ -2287,9 +2381,6 @@ function ChatView({
               }}
             >
               <PanelLeft className="ws-panel-toggle-right" aria-hidden="true" />
-              {!!(changes.length + artifacts.length) && (
-                <span>{changes.length + artifacts.length}</span>
-              )}
             </Button>
           </header>
           <Dialog
@@ -2434,7 +2525,17 @@ function ChatView({
                         {message.role === 'agent' ? (
                           message.text ? (
                             <div aria-live={terminal ? undefined : 'polite'}>
-                              <Markdown>{message.text}</Markdown>
+                              <Markdown
+                                onOpenWorkspaceFile={(path) =>
+                                  openWorkspaceTab(
+                                    'files',
+                                    message.runId || '',
+                                    path,
+                                  )
+                                }
+                              >
+                                {message.text}
+                              </Markdown>
                             </div>
                           ) : null
                         ) : (
@@ -2463,38 +2564,70 @@ function ChatView({
                         )}
                         {!!message.changes?.length && (
                           <div className="ws-message-changes">
-                            <Button
-                              className="ws-review-message-link"
-                              variant="outline"
-                              onClick={() => {
-                                openWorkspaceTab(
-                                  'changes',
-                                  message.runId,
-                                  message.changes?.[0]?.path,
-                                );
-                              }}
-                            >
-                              <FileText aria-hidden="true" />
-                              Review {message.changes.length} changed{' '}
-                              {message.changes.length === 1 ? 'file' : 'files'}
-                            </Button>
-                            {message.changes.map((change) => (
-                              <Button
-                                key={change.path}
-                                variant="ghost"
-                                title={change.path}
+                            <div className="ws-message-changes-header">
+                              <span className="ws-message-changes-icon">
+                                <FileText aria-hidden="true" />
+                              </span>
+                              <button
+                                type="button"
+                                className="ws-message-changes-summary"
                                 onClick={() =>
                                   openWorkspaceTab(
                                     'changes',
                                     message.runId,
-                                    change.path,
+                                    message.changes?.[0]?.path,
                                   )
                                 }
                               >
-                                <span>{change.path}</span>
-                                <ChevronRight aria-hidden="true" />
+                                <strong>
+                                  Edited {message.changes.length}{' '}
+                                  {message.changes.length === 1
+                                    ? 'file'
+                                    : 'files'}
+                                </strong>
+                                <DiffStats
+                                  change={{
+                                    id: 'total',
+                                    path: '',
+                                    diff: message.changes
+                                      .map((change) => change.diff)
+                                      .join('\n'),
+                                  }}
+                                />
+                              </button>
+                              <Button
+                                className="ws-review-message-link"
+                                variant="outline"
+                                onClick={() =>
+                                  openWorkspaceTab(
+                                    'changes',
+                                    message.runId,
+                                    message.changes?.[0]?.path,
+                                  )
+                                }
+                              >
+                                Review
                               </Button>
-                            ))}
+                            </div>
+                            <div className="ws-message-changes-files">
+                              {message.changes.map((change) => (
+                                <Button
+                                  key={change.path}
+                                  variant="ghost"
+                                  title={change.path}
+                                  onClick={() =>
+                                    openWorkspaceTab(
+                                      'changes',
+                                      message.runId,
+                                      change.path,
+                                    )
+                                  }
+                                >
+                                  <span>{change.path}</span>
+                                  <DiffStats change={change} />
+                                </Button>
+                              ))}
+                            </div>
                           </div>
                         )}
                         {message.role === 'agent' &&
@@ -2561,6 +2694,21 @@ function ChatView({
                               >
                                 <Download aria-hidden="true" />
                               </button>
+                              {(message.updatedAt || message.createdAt) && (
+                                <time
+                                  className="ws-chat-message-time"
+                                  dateTime={
+                                    message.updatedAt || message.createdAt
+                                  }
+                                  title={formatDate(
+                                    message.updatedAt || message.createdAt,
+                                  )}
+                                >
+                                  {formatMessageTime(
+                                    message.updatedAt || message.createdAt,
+                                  )}
+                                </time>
+                              )}
                             </div>
                           )}
                       </div>
@@ -2904,7 +3052,23 @@ function ChatView({
                     </Button>
                   </div>
                 ) : reviewTab === 'files' ? (
-                  <WorkspaceFiles key={reviewRunID} runId={reviewRunID} />
+                  <WorkspaceFiles
+                    key={reviewRunID}
+                    runId={reviewRunID}
+                    initialPath={
+                      workspaceTabs.find((tab) => tab.id === activeWorkspaceTab)
+                        ?.path || ''
+                    }
+                    onPathChange={(path) =>
+                      setWorkspaceTabs((tabs) =>
+                        tabs.map((tab) =>
+                          tab.id === activeWorkspaceTab
+                            ? { ...tab, path }
+                            : tab,
+                        ),
+                      )
+                    }
+                  />
                 ) : reviewTab === 'changes' ? (
                   <CodeReview
                     key={reviewMessage?.runId}
@@ -3005,7 +3169,24 @@ function ChatView({
   );
 }
 
-function WorkspaceFiles({ runId }: { runId: string }) {
+function workspaceRelativePath(path: string, root: string) {
+  const normalizedPath = path.replace(/^file:\/\//, '').replace(/\\/g, '/');
+  const normalizedRoot = root.replace(/\/$/, '').replace(/\\/g, '/');
+  if (normalizedPath === normalizedRoot) return '';
+  if (normalizedPath.startsWith(`${normalizedRoot}/`))
+    return normalizedPath.slice(normalizedRoot.length + 1);
+  return normalizedPath.replace(/^\.\//, '').replace(/^\//, '');
+}
+
+function WorkspaceFiles({
+  runId,
+  initialPath,
+  onPathChange,
+}: {
+  runId: string;
+  initialPath: string;
+  onPathChange: (path: string) => void;
+}) {
   const [fileFilter, setFileFilter] = useState('');
   const [data, setData] = useState<{
     root: string;
@@ -3016,59 +3197,103 @@ function WorkspaceFiles({ runId }: { runId: string }) {
   const [directory, setDirectory] = useState('');
   const [filePath, setFilePath] = useState('');
   const [content, setContent] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [listing, setListing] = useState(true);
+  const [reading, setReading] = useState(false);
   const [error, setError] = useState('');
-  const sequence = useRef(0);
-  const load = (operation: 'list' | 'read', path: string) => {
-    const current = ++sequence.current;
-    setLoading(true);
-    setError('');
-    if (operation === 'read') {
-      setFilePath(path);
-      setContent(null);
-    }
-    void steer
-      .inspectWorkspace(runId, operation, path)
-      .then((result) => {
-        if (current !== sequence.current) return;
-        if (operation === 'list') {
+  const listSequence = useRef(0);
+  const readSequence = useRef(0);
+  const loadList = useCallback(
+    (path: string) => {
+      const current = ++listSequence.current;
+      setListing(true);
+      setError('');
+      void steer
+        .inspectWorkspace(runId, 'list', path)
+        .then((result) => {
+          if (current !== listSequence.current) return;
           setData(result);
           setDirectory(path);
-          setFilePath('');
-          setContent(null);
-        } else setContent(result.content);
-      })
-      .catch((err) => {
-        if (current === sequence.current)
-          setError(
-            err instanceof Error ? err.message : 'Workspace unavailable',
-          );
-      })
-      .finally(() => {
-        if (current === sequence.current) setLoading(false);
-      });
-  };
+        })
+        .catch((err) => {
+          if (current === listSequence.current)
+            setError(
+              err instanceof Error ? err.message : 'Workspace unavailable',
+            );
+        })
+        .finally(() => {
+          if (current === listSequence.current) setListing(false);
+        });
+    },
+    [runId],
+  );
+  const loadFile = useCallback(
+    (path: string) => {
+      const current = ++readSequence.current;
+      setReading(true);
+      setFilePath(path);
+      setContent(null);
+      setError('');
+      void steer
+        .inspectWorkspace(runId, 'read', path)
+        .then((result) => {
+          if (current === readSequence.current) setContent(result.content);
+        })
+        .catch((err) => {
+          if (current === readSequence.current)
+            setError(
+              err instanceof Error ? err.message : 'Workspace unavailable',
+            );
+        })
+        .finally(() => {
+          if (current === readSequence.current) setReading(false);
+        });
+    },
+    [runId],
+  );
   useEffect(() => {
-    let cancelled = false;
     if (!runId) return;
+    const current = ++listSequence.current;
     void steer
       .inspectWorkspace(runId, 'list')
       .then((result) => {
-        if (!cancelled) setData(result);
+        if (current !== listSequence.current) return;
+        setData(result);
+        setDirectory('');
       })
       .catch((err) => {
-        if (!cancelled)
+        if (current === listSequence.current)
           setError(
             err instanceof Error ? err.message : 'Workspace unavailable',
           );
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (current === listSequence.current) setListing(false);
       });
     return () => {
-      cancelled = true;
+      listSequence.current += 1;
+      readSequence.current += 1;
     };
   }, [runId]);
+  useEffect(() => {
+    if (!data || !initialPath) return;
+    const normalizedPath = workspaceRelativePath(initialPath, data.root);
+    if (!normalizedPath || normalizedPath === filePath) return;
+    const current = ++readSequence.current;
+    void steer
+      .inspectWorkspace(runId, 'read', normalizedPath)
+      .then((result) => {
+        if (current !== readSequence.current) return;
+        setFilePath(normalizedPath);
+        setContent(result.content);
+      })
+      .catch((err) => {
+        if (current === readSequence.current)
+          setError(
+            err instanceof Error ? err.message : 'Workspace unavailable',
+          );
+      });
+  }, [data, filePath, initialPath, runId]);
+  const loading = listing || reading;
   if (!runId)
     return (
       <p className="ws-review-empty">
@@ -3102,7 +3327,7 @@ function WorkspaceFiles({ runId }: { runId: string }) {
           aria-label="Refresh files"
           title="Refresh files"
           disabled={loading}
-          onClick={() => load('list', directory)}
+          onClick={() => loadList(directory)}
         >
           <RefreshCw aria-hidden="true" />
         </Button>
@@ -3158,7 +3383,10 @@ function WorkspaceFiles({ runId }: { runId: string }) {
                   path={entry.name}
                   depth={0}
                   selected={filePath}
-                  onSelect={(path) => load('read', path)}
+                  onSelect={(path) => {
+                    onPathChange(path);
+                    loadFile(path);
+                  }}
                 />
               ))}
           </div>
@@ -4556,6 +4784,18 @@ function formatDate(value?: string) {
         minute: '2-digit',
       }).format(date);
 }
+
+function formatMessageTime(value?: string) {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(date);
+}
+
 function formatSize(value: number) {
   return value < 1024 ? `${value} B` : `${(value / 1024).toFixed(1)} KB`;
 }
