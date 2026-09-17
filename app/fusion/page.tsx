@@ -2937,7 +2937,11 @@ function ChatView({
                   onClick={() => working && onStop()}
                 >
                   {working ? (
-                    <Square aria-hidden="true" />
+                    <Square
+                      aria-hidden="true"
+                      fill="currentColor"
+                      strokeWidth={0}
+                    />
                   ) : (
                     <Send aria-hidden="true" />
                   )}
