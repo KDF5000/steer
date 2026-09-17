@@ -296,7 +296,6 @@ function SessionNavigationItem({
         <span>{session.title}</span>
       </SidebarMenuButton>
       <SidebarMenuAction
-        showOnHover
         className="ws-session-delete"
         aria-label={`Delete ${session.title}`}
         title="Delete conversation"

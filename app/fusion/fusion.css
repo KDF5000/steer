@@ -367,12 +367,22 @@
   background: linear-gradient(to right, transparent, #f7f7f8 38%);
   color: #777880;
   box-shadow: none;
+  opacity: 0;
+  pointer-events: none;
   transition:
     color 120ms ease,
     opacity 120ms ease;
 }
 
-.ws-sidebar .ws-session-nav-item:hover [data-slot='sidebar-menu-action'] {
+.ws-sidebar .ws-session-nav-item:hover > [data-slot='sidebar-menu-action'],
+.ws-sidebar
+  .ws-session-nav-item
+  > [data-slot='sidebar-menu-action']:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ws-sidebar .ws-session-nav-item:hover > [data-slot='sidebar-menu-action'] {
   background: linear-gradient(to right, transparent, #ececef 38%);
 }
 
@@ -380,7 +390,7 @@
   .ws-session-nav-item:has(
     [data-slot='sidebar-menu-button'][data-active]:not([data-active='false'])
   )
-  [data-slot='sidebar-menu-action'] {
+  > [data-slot='sidebar-menu-action'] {
   background: linear-gradient(to right, transparent, #e8e8fa 38%);
 }
 
