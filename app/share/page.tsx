@@ -86,29 +86,36 @@ export default function SharedConversationPage() {
                   }
                   key={`${message.role}-${message.createdAt}-${index}`}
                 >
-                  <header>
-                    <strong>{message.role === 'user' ? 'You' : 'Agent'}</strong>
-                    <time dateTime={message.createdAt}>
-                      {formatMessageDate(message.createdAt)}
-                    </time>
-                  </header>
-                  <div className={styles.markdown}>
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        a: ({ children, ...props }) => (
-                          <a
-                            {...props}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                          >
-                            {children}
-                          </a>
-                        ),
-                      }}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
+                  <div className={styles.messageContent}>
+                    {message.role === 'agent' && (
+                      <div className={styles.responseProcess}>
+                        <div className={styles.responseMeta}>
+                          {sharedResponseStatus(message)}
+                        </div>
+                        <div
+                          className={styles.responseDivider}
+                          aria-hidden="true"
+                        />
+                      </div>
+                    )}
+                    <div className={styles.markdown}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          a: ({ children, ...props }) => (
+                            <a
+                              {...props}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                            >
+                              {children}
+                            </a>
+                          ),
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -132,11 +139,29 @@ function formatSharedDate(value: string) {
   }).format(date);
 }
 
-function formatMessageDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+function sharedResponseStatus(
+  message: SharedConversation['messages'][number],
+) {
+  const elapsed = formatElapsed(message.createdAt, message.updatedAt);
+  if (!message.status) return elapsed ? `Completed in ${elapsed}` : 'Completed';
+  if (message.status === 'failed')
+    return elapsed ? `Failed after ${elapsed}` : 'Failed';
+  if (message.status === 'cancelled')
+    return elapsed ? `Stopped after ${elapsed}` : 'Stopped';
+  return elapsed ? `Completed in ${elapsed}` : 'Completed';
+}
+
+function formatElapsed(start?: string, end?: string) {
+  if (!start || !end) return '';
+  const startedAt = new Date(start).getTime();
+  const endedAt = new Date(end).getTime();
+  if (!Number.isFinite(startedAt) || !Number.isFinite(endedAt)) return '';
+  const totalSeconds = Math.max(1, Math.round((endedAt - startedAt) / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes < 60) return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }

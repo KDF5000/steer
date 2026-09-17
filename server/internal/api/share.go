@@ -14,7 +14,9 @@ import (
 type sharedMessage struct {
 	Role      string    `json:"role"`
 	Content   string    `json:"content"`
+	Status    string    `json:"status,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type sharedConversationSnapshot struct {
@@ -38,7 +40,7 @@ func (s *Server) shareSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	snapshot := sharedConversationSnapshot{
-		Version:   1,
+		Version:   2,
 		Scope:     "conversation",
 		Title:     session.Title,
 		Messages:  shareableMessages(messages),
@@ -60,7 +62,7 @@ func (s *Server) shareMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	snapshot := sharedConversationSnapshot{
-		Version:   1,
+		Version:   2,
 		Scope:     "message",
 		Title:     session.Title,
 		Messages:  shareableMessages([]store.Message{message}),
@@ -81,7 +83,9 @@ func shareableMessages(messages []store.Message) []sharedMessage {
 		result = append(result, sharedMessage{
 			Role:      message.Role,
 			Content:   message.Content,
-			CreatedAt: message.UpdatedAt,
+			Status:    message.Status,
+			CreatedAt: message.CreatedAt,
+			UpdatedAt: message.UpdatedAt,
 		})
 	}
 	return result

@@ -39,9 +39,9 @@
 }
 
 .content {
-  width: min(760px, calc(100% - 40px));
+  width: min(860px, calc(100% - 48px));
   margin: 0 auto;
-  padding: 58px 0 96px;
+  padding: 38px 0 96px;
 }
 
 .state {
@@ -80,7 +80,7 @@
 }
 
 .title {
-  padding-bottom: 30px;
+  padding-bottom: 22px;
   border-bottom: 1px solid #e7e7e9;
 }
 
@@ -93,12 +93,12 @@
 }
 
 .title h1 {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   color: #202124;
-  font-size: clamp(24px, 4vw, 34px);
-  font-weight: 640;
-  line-height: 1.24;
-  letter-spacing: -0.025em;
+  font-size: 18px;
+  font-weight: 620;
+  line-height: 1.4;
+  letter-spacing: -0.012em;
 }
 
 .title time {
@@ -107,59 +107,62 @@
 }
 
 .messages {
-  padding-top: 34px;
+  padding-top: 30px;
 }
 
 .messages article {
-  margin-bottom: 34px;
-}
-
-.messages article > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 9px;
-}
-
-.messages article > header strong {
-  color: #55565d;
-  font-size: 12px;
-  font-weight: 620;
-}
-
-.messages article > header time {
-  color: #a0a1a7;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
+  display: block;
+  margin-bottom: 30px;
+  overflow-wrap: anywhere;
 }
 
 .user {
   width: fit-content;
-  max-width: 78%;
+  max-width: min(78%, 720px);
   margin-left: auto;
 }
 
-.user > header strong {
-  margin-left: auto;
-}
-
-.user > header time {
-  order: -1;
+.user .messageContent {
+  padding: 11px 15px;
+  border-radius: 18px;
+  background: #e8f2ff;
 }
 
 .user .markdown {
-  padding: 11px 15px;
-  border-radius: 17px;
-  background: #e8f2ff;
   color: #172d4f;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.messageContent {
+  min-width: 0;
+}
+
+.responseProcess {
+  margin: 0 0 18px;
+}
+
+.responseMeta {
+  width: fit-content;
+  color: #85868d;
+  font-size: 13px;
+  font-weight: 520;
+  line-height: 1;
+  cursor: default;
+  user-select: text;
+}
+
+.responseDivider {
+  height: 1px;
+  margin-top: 12px;
+  background: #e5e5e7;
 }
 
 .markdown {
-  color: #202124;
+  color: #18191d;
   font-size: 14px;
   font-weight: 450;
-  line-height: 1.62;
+  line-height: 1.58;
   overflow-wrap: anywhere;
 }
 
@@ -177,7 +180,7 @@
 .markdown blockquote,
 .markdown pre,
 .markdown table {
-  margin: 0 0 9px;
+  margin: 0 0 8px;
 }
 
 .markdown ul,
@@ -186,7 +189,7 @@
 }
 
 .markdown li + li {
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .markdown h1,
@@ -250,7 +253,7 @@
 
   .content {
     width: calc(100% - 28px);
-    padding-top: 34px;
+    padding-top: 28px;
   }
 
   .user {

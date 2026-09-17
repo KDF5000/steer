@@ -109,7 +109,9 @@ export type SharedConversation = {
   messages: Array<{
     role: 'user' | 'agent';
     content: string;
+    status?: string;
     createdAt: string;
+    updatedAt?: string;
   }>;
   createdAt: string;
 };

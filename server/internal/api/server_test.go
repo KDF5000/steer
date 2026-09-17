@@ -70,14 +70,19 @@ func TestSharedConversationReadBypassesAuthentication(t *testing.T) {
 }
 
 func TestShareableMessagesOmitsEmptyAndInternalRoles(t *testing.T) {
+	startedAt := time.Date(2026, 9, 17, 8, 0, 0, 0, time.UTC)
+	completedAt := startedAt.Add(2*time.Minute + 9*time.Second)
 	messages := shareableMessages([]store.Message{
-		{Role: "user", Content: "Question", UpdatedAt: time.Now()},
+		{Role: "user", Content: "Question", CreatedAt: startedAt, UpdatedAt: startedAt},
 		{Role: "agent", Content: "  "},
 		{Role: "system", Content: "private"},
-		{Role: "agent", Content: "Answer", UpdatedAt: time.Now()},
+		{Role: "agent", Content: "Answer", Status: "succeeded", CreatedAt: startedAt, UpdatedAt: completedAt},
 	})
 	if len(messages) != 2 || messages[0].Content != "Question" || messages[1].Content != "Answer" {
 		t.Fatalf("unexpected share messages: %+v", messages)
+	}
+	if messages[1].Status != "succeeded" || !messages[1].CreatedAt.Equal(startedAt) || !messages[1].UpdatedAt.Equal(completedAt) {
+		t.Fatalf("share message lost completion metadata: %+v", messages[1])
 	}
 }
 
