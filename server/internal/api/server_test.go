@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -133,6 +134,34 @@ func TestConversationPrompt(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("prompt %q does not contain %q", got, want)
 		}
+	}
+}
+
+func TestConversationPromptCompressesOldMessagesAndKeepsRecentContext(t *testing.T) {
+	items := make([]store.Message, 0, 42)
+	items = append(items, store.Message{Role: "user", Content: "initial architecture decision", Status: "complete"})
+	for index := 0; index < 40; index++ {
+		items = append(items, store.Message{Role: "agent", Content: strings.Repeat(fmt.Sprintf("detail-%d ", index), 250), Status: "succeeded"})
+	}
+	items = append(items, store.Message{Role: "agent", Content: "unfinished output", Status: "running"})
+	got := conversationPrompt(items, "continue implementation")
+	for _, want := range []string{"Earlier conversation memory", "initial architecture decision", "Recent completed messages", "detail-39", "Current user request", "continue implementation"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("prompt does not contain %q", want)
+		}
+	}
+	if strings.Contains(got, "unfinished output") {
+		t.Fatal("prompt contains unfinished output")
+	}
+	if len([]rune(got)) > 48_000+len([]rune("continue implementation"))+2_000 {
+		t.Fatalf("recovery prompt is unexpectedly large: %d runes", len([]rune(got)))
+	}
+}
+
+func TestTruncateConversationExcerptPreservesBeginningAndEnd(t *testing.T) {
+	got := truncateConversationExcerpt("abcdefghijklmnopqrstuvwxyz", 20)
+	if !strings.HasPrefix(got, "abcdefghij") || !strings.HasSuffix(got, "vwxyz") || !strings.Contains(got, " … ") {
+		t.Fatalf("excerpt = %q", got)
 	}
 }
 
