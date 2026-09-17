@@ -4,6 +4,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -12,6 +13,7 @@ import {
 } from 'react';
 import {
   AlertCircle,
+  ArrowDown,
   FileCode,
   FileJson,
   FileImage,
@@ -101,6 +103,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
 import {
   ResizablePanelGroup,
@@ -185,6 +188,27 @@ const Markdown = memo(function Markdown({ children }: { children: string }) {
     <div className="ws-markdown">
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>
     </div>
+  );
+});
+
+// Keep the elapsed clock local: ticking must not re-render the transcript,
+// composer, file tree, or syntax-highlighted diff.
+const ResponseStatus = memo(function ResponseStatus({
+  message,
+}: {
+  message: ChatMessage;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const terminal = isTerminalStatus(message.status);
+  useEffect(() => {
+    if (terminal) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [terminal]);
+  return (
+    <span aria-live={terminal ? undefined : 'polite'}>
+      {responseStatusLabel(message, now)}
+    </span>
   );
 });
 
@@ -2088,8 +2112,8 @@ function ChatView({
   const changes = reviewMessage?.changes || [];
   const currentChange =
     changes.find((change) => change.path === selectedChange) || changes[0];
-  const [now, setNow] = useState(() => Date.now());
   const [copiedMessage, setCopiedMessage] = useState('');
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [draggingImages, setDraggingImages] = useState(false);
   const [composerPreviewID, setComposerPreviewID] = useState('');
   const [expandedActivity, setExpandedActivity] = useState<
@@ -2113,6 +2137,16 @@ function ChatView({
   const composer = useRef<HTMLTextAreaElement>(null);
   const imageDragDepth = useRef(0);
   const followBottom = useRef(true);
+  const thread = useRef<HTMLDivElement>(null);
+  const previousPrompts = useMemo(() => {
+    let prompt: string | undefined;
+    const prompts: Array<string | undefined> = [];
+    for (const message of messages) {
+      prompts.push(prompt);
+      if (message.role === 'user') prompt = message.text;
+    }
+    return prompts;
+  }, [messages]);
   const openWorkspaceTab = (
     kind: 'changes' | 'documents' | 'files',
     runId = '',
@@ -2175,10 +2209,24 @@ function ChatView({
     return () => window.cancelAnimationFrame(frame);
   }, [messages, working]);
   useEffect(() => {
-    if (!working) return;
-    const interval = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, [working]);
+    const area = scrollArea.current;
+    const content = thread.current;
+    if (!area || !content) return;
+    // Images, wrapping after a panel resize, and expanded tools can change
+    // height without a new message. Follow only while the reader is at bottom.
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        if (followBottom.current) area.scrollTop = area.scrollHeight;
+      });
+    });
+    observer.observe(content);
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frame);
+    };
+  }, [hasMessages, sessionLoading]);
   useEffect(() => {
     const textarea = composer.current;
     if (!textarea) return;
@@ -2268,9 +2316,11 @@ function ChatView({
             ref={scrollArea}
             onScroll={() => {
               const area = scrollArea.current;
-              if (area)
+              if (area) {
                 followBottom.current =
                   area.scrollHeight - area.scrollTop - area.clientHeight < 100;
+                setShowScrollToBottom(!followBottom.current);
+              }
             }}
           >
             {sessionLoading && (
@@ -2295,13 +2345,10 @@ function ChatView({
               </div>
             )}
             {!sessionLoading && hasMessages && (
-              <div className="ws-chat-thread">
+              <div className="ws-chat-thread" ref={thread}>
                 {messages.map((message, index) => {
                   const messageKey = message.id || `${message.role}-${index}`;
-                  const previousPrompt = messages
-                    .slice(0, index)
-                    .reverse()
-                    .find((item) => item.role === 'user')?.text;
+                  const previousPrompt = previousPrompts[index];
                   const terminal = isTerminalStatus(message.status);
                   const finalOutputStarted =
                     message.role === 'agent' &&
@@ -2357,18 +2404,12 @@ function ChatView({
                                   }))
                                 }
                               >
-                                <span
-                                  aria-live={terminal ? undefined : 'polite'}
-                                >
-                                  {responseStatusLabel(message, now)}
-                                </span>
+                                <ResponseStatus message={message} />
                                 <ChevronRight aria-hidden="true" />
                               </button>
                             ) : (
                               <div className="ws-chat-response-meta is-running">
-                                <span aria-live="polite">
-                                  {responseStatusLabel(message, now)}
-                                </span>
+                                <ResponseStatus message={message} />
                               </div>
                             )}
                             <div
@@ -2539,6 +2580,24 @@ function ChatView({
             )}
           </div>
           <div className="ws-chatbox-wrap">
+            {showScrollToBottom && hasMessages && (
+              <button
+                type="button"
+                className="ws-scroll-to-bottom"
+                aria-label="Scroll to latest message"
+                title="Scroll to latest message"
+                onClick={() => {
+                  followBottom.current = true;
+                  setShowScrollToBottom(false);
+                  scrollArea.current?.scrollTo({
+                    top: scrollArea.current.scrollHeight,
+                    behavior: 'instant',
+                  });
+                }}
+              >
+                <ArrowDown aria-hidden="true" />
+              </button>
+            )}
             <form
               className={`ws-chatbox${draggingImages ? ' is-dragging' : ''}`}
               onSubmit={(event) => {
@@ -2622,7 +2681,10 @@ function ChatView({
                   if (
                     event.key === 'Enter' &&
                     !event.shiftKey &&
-                    !event.nativeEvent.isComposing
+                    !event.nativeEvent.isComposing &&
+                    // Safari may clear isComposing before the IME confirmation Enter.
+                    // oxlint-disable-next-line typescript/no-deprecated -- 229 is the compatibility signal for IME input
+                    event.nativeEvent.keyCode !== 229
                   ) {
                     event.preventDefault();
                     followBottom.current = true;
@@ -4084,25 +4146,38 @@ function ProjectDialog({
           </label>
           {projectType === 'local' ? (
             <>
-              <label>
-                Runtime location
-                <select
+              <div className="ws-form-field">
+                <span>Runtime location</span>
+                <Select
                   key={defaultRuntimeId}
                   name="runtimeId"
-                  className="ws-form-select"
                   defaultValue={project?.runtimeId || defaultRuntimeId}
                   required
                 >
-                  <option value="" disabled>
-                    Select a Runtime
-                  </option>
-                  {runtimes.map((runtime) => (
-                    <option key={runtime.runtimeId} value={runtime.runtimeId}>
-                      {runtime.label} · {runtime.runtimeId}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <SelectTrigger
+                    className="ws-form-select"
+                    aria-label="Runtime location"
+                  >
+                    <SelectValue placeholder="Select a Runtime" />
+                  </SelectTrigger>
+                  <SelectContent className="ws-select-popup">
+                    {runtimes.length ? (
+                      runtimes.map((runtime) => (
+                        <SelectItem
+                          key={runtime.runtimeId}
+                          value={runtime.runtimeId}
+                        >
+                          {runtime.label} · {runtime.runtimeId}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="__unavailable" disabled>
+                        No Runtime available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
               <label>
                 Directory path
                 <input
