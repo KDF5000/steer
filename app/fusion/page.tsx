@@ -2251,16 +2251,18 @@ function ChatView({
     runId = '',
     path = '',
   ) => {
+    const resolvedRunId = runId || reviewRounds.at(-1)?.runId || '';
     const id =
       kind === 'changes'
-        ? `review:${runId || reviewRounds.at(-1)?.runId || 'latest'}`
-        : kind;
-    const resolvedRunId = runId || reviewRounds.at(-1)?.runId || '';
+        ? `review:${resolvedRunId || 'latest'}`
+        : kind === 'files' && path
+          ? `file:${resolvedRunId || 'latest'}:${path}`
+          : kind;
     const title =
       kind === 'changes'
         ? `Review · Turn ${reviewRounds.findIndex((message) => message.runId === resolvedRunId) + 1}`
         : kind === 'files'
-          ? 'Files'
+          ? path.split(/[\\/]/).filter(Boolean).at(-1) || 'Files'
           : 'Documents';
     setWorkspaceTabs((tabs) =>
       tabs.some((tab) => tab.id === id)
@@ -2715,7 +2717,7 @@ function ChatView({
                                   title={change.path}
                                   onClick={() =>
                                     openWorkspaceTab(
-                                      'changes',
+                                      'files',
                                       message.runId,
                                       change.path,
                                     )
@@ -3204,7 +3206,7 @@ function ChatView({
                     key={reviewMessage?.runId}
                     runId={reviewMessage?.runId || ''}
                     reportedChanges={changes}
-                    selectedPath={currentChange?.path || selectedChange}
+                    selectedPath={selectedChange || currentChange?.path || ''}
                     turn={reviewRounds.indexOf(reviewMessage!) + 1}
                     rounds={reviewRounds}
                     onTurn={(runId) => openWorkspaceTab('changes', runId)}
@@ -3305,6 +3307,9 @@ function workspaceRelativePath(path: string, root: string) {
   if (normalizedPath === normalizedRoot) return '';
   if (normalizedPath.startsWith(`${normalizedRoot}/`))
     return normalizedPath.slice(normalizedRoot.length + 1);
+  // Preserve absolute paths outside the prepared workspace so Relay can reject
+  // them explicitly instead of accidentally treating them as relative paths.
+  if (normalizedPath.startsWith('/')) return normalizedPath;
   return normalizedPath.replace(/^\.\//, '').replace(/^\//, '');
 }
 
