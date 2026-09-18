@@ -26,7 +26,6 @@ import {
   FileText,
   Folder,
   GitBranch,
-  MessageSquareText,
   MoreHorizontal,
   PanelLeft,
   ChevronDown,
@@ -2492,9 +2491,6 @@ function ChatView({
             )}
             {!sessionLoading && !hasMessages && (
               <div className="ws-chat-welcome">
-                <span className="ws-chat-mark">
-                  <MessageSquareText aria-hidden="true" />
-                </span>
                 <h1>What would you like to work on?</h1>
                 <p>
                   {selectedProject

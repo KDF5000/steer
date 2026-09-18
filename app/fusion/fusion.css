@@ -1032,24 +1032,6 @@
   text-align: center;
 }
 
-.ws-chat-mark {
-  display: grid;
-  width: 45px;
-  height: 45px;
-  margin: 0 auto 20px;
-  place-items: center;
-  border: 1px solid #e1e2ed;
-  border-radius: 14px;
-  background: linear-gradient(145deg, #f9f9ff, #eeeefb);
-  color: var(--ws-accent);
-  box-shadow: 0 10px 30px #2a2c5e12;
-}
-
-.ws-chat-mark svg {
-  width: 20px;
-  height: 20px;
-}
-
 .ws-chat-welcome h1 {
   color: var(--ws-text);
   font-size: clamp(25px, 3vw, 32px);

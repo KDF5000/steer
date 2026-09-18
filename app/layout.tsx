@@ -16,6 +16,10 @@ export const metadata: Metadata = {
   title: 'Steer — Human workspace',
   description:
     'A human-centered workspace for decisions, evidence, and agent-produced outcomes.',
+  icons: {
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({
