@@ -2507,6 +2507,15 @@ button.ws-chat-response-meta:focus-visible {
   min-height: 0;
   border-top: 1px solid var(--ws-border);
 }
+.ws-workspace-snapshot-notice {
+  margin: 0;
+  padding: 7px 14px;
+  border-top: 1px solid #e8e3c1;
+  background: #fffbea;
+  color: #725b1e;
+  font-size: 12px;
+  line-height: 1.5;
+}
 .ws-workspace-preview {
   min-width: 0;
   overflow: auto;

@@ -63,7 +63,12 @@ export type ChatMessage = {
   updatedAt?: string;
   activity?: string;
   activityLog?: ChatActivity[];
-  changes?: Array<{ id: string; path: string; diff: string }>;
+  changes?: Array<{
+    id: string;
+    path: string;
+    diff: string;
+    snapshot?: string;
+  }>;
   attachments?: ChatAttachment[];
 };
 

@@ -2195,6 +2195,7 @@ function ChatView({
       runId: string;
       path: string;
       title: string;
+      snapshot?: string;
     }>
   >([]);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('');
@@ -2250,6 +2251,7 @@ function ChatView({
     kind: 'changes' | 'documents' | 'files',
     runId = '',
     path = '',
+    snapshot?: string,
   ) => {
     const resolvedRunId = runId || reviewRounds.at(-1)?.runId || '';
     const id =
@@ -2267,9 +2269,11 @@ function ChatView({
     setWorkspaceTabs((tabs) =>
       tabs.some((tab) => tab.id === id)
         ? tabs.map((tab) =>
-            tab.id === id ? { ...tab, path, runId: resolvedRunId, title } : tab,
+            tab.id === id
+              ? { ...tab, path, runId: resolvedRunId, title, snapshot }
+              : tab,
           )
-        : [...tabs, { id, kind, runId: resolvedRunId, path, title }],
+        : [...tabs, { id, kind, runId: resolvedRunId, path, title, snapshot }],
     );
     setActiveWorkspaceTab(id);
     setReviewTab(kind);
@@ -2720,6 +2724,7 @@ function ChatView({
                                       'files',
                                       message.runId,
                                       change.path,
+                                      change.snapshot,
                                     )
                                   }
                                 >
@@ -3185,11 +3190,15 @@ function ChatView({
                   </div>
                 ) : reviewTab === 'files' ? (
                   <WorkspaceFiles
-                    key={reviewRunID}
+                    key={`${reviewRunID}:${activeWorkspaceTab}`}
                     runId={reviewRunID}
                     initialPath={
                       workspaceTabs.find((tab) => tab.id === activeWorkspaceTab)
                         ?.path || ''
+                    }
+                    fallbackSnapshot={
+                      workspaceTabs.find((tab) => tab.id === activeWorkspaceTab)
+                        ?.snapshot
                     }
                     onPathChange={(path) =>
                       setWorkspaceTabs((tabs) =>
@@ -3316,10 +3325,12 @@ function workspaceRelativePath(path: string, root: string) {
 function WorkspaceFiles({
   runId,
   initialPath,
+  fallbackSnapshot,
   onPathChange,
 }: {
   runId: string;
   initialPath: string;
+  fallbackSnapshot?: string;
   onPathChange: (path: string) => void;
 }) {
   const [fileFilter, setFileFilter] = useState('');
@@ -3335,6 +3346,7 @@ function WorkspaceFiles({
   const [listing, setListing] = useState(true);
   const [reading, setReading] = useState(false);
   const [error, setError] = useState('');
+  const [snapshotNotice, setSnapshotNotice] = useState('');
   const listSequence = useRef(0);
   const readSequence = useRef(0);
   const loadList = useCallback(
@@ -3368,22 +3380,35 @@ function WorkspaceFiles({
       setFilePath(path);
       setContent(null);
       setError('');
+      setSnapshotNotice('');
       void steer
         .inspectWorkspace(runId, 'read', path)
         .then((result) => {
-          if (current === readSequence.current) setContent(result.content);
+          if (current !== readSequence.current) return;
+          setContent(result.content);
+          setSnapshotNotice('');
         })
         .catch((err) => {
-          if (current === readSequence.current)
-            setError(
-              err instanceof Error ? err.message : 'Workspace unavailable',
+          if (current !== readSequence.current) return;
+          if (
+            path === workspaceRelativePath(initialPath, data?.root || '') &&
+            fallbackSnapshot !== undefined
+          ) {
+            setContent(fallbackSnapshot);
+            setSnapshotNotice(
+              'The live file is unavailable. Showing the content captured during the agent run.',
             );
+            return;
+          }
+          setError(
+            err instanceof Error ? err.message : 'Workspace unavailable',
+          );
         })
         .finally(() => {
           if (current === readSequence.current) setReading(false);
         });
     },
-    [runId],
+    [data?.root, fallbackSnapshot, initialPath, runId],
   );
   useEffect(() => {
     if (!runId) return;
@@ -3420,14 +3445,25 @@ function WorkspaceFiles({
         if (current !== readSequence.current) return;
         setFilePath(normalizedPath);
         setContent(result.content);
+        setError('');
+        setSnapshotNotice('');
       })
       .catch((err) => {
-        if (current === readSequence.current)
-          setError(
-            err instanceof Error ? err.message : 'Workspace unavailable',
+        if (current !== readSequence.current) return;
+        setFilePath(normalizedPath);
+        if (fallbackSnapshot !== undefined) {
+          setContent(fallbackSnapshot);
+          setError('');
+          setSnapshotNotice(
+            'The live file is unavailable. Showing the content captured during the agent run.',
           );
+          return;
+        }
+        setError(err instanceof Error ? err.message : 'Workspace unavailable');
+        setContent(null);
+        setSnapshotNotice('');
       });
-  }, [data, filePath, initialPath, runId]);
+  }, [data, fallbackSnapshot, filePath, initialPath, runId]);
   const loading = listing || reading;
   if (!runId)
     return (
@@ -3471,6 +3507,11 @@ function WorkspaceFiles({
         <p className="ws-form-error" role="alert">
           {error}
         </p>
+      )}
+      {snapshotNotice && (
+        <output className="ws-workspace-snapshot-notice">
+          {snapshotNotice}
+        </output>
       )}
       {loading && <output>Loading…</output>}
       <div className="ws-workspace-columns">

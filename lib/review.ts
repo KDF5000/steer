@@ -1,7 +1,10 @@
 import type { RelayEvent } from './domain';
 
 export function runFileChanges(events?: RelayEvent[] | null) {
-  const files = new Map<string, { id: string; path: string; diff: string }>();
+  const files = new Map<
+    string,
+    { id: string; path: string; diff: string; snapshot?: string }
+  >();
   for (const event of events || []) {
     const data = event.data || {};
     const item =
@@ -13,7 +16,8 @@ export function runFileChanges(events?: RelayEvent[] | null) {
       if (!change || typeof change !== 'object') continue;
       const path = typeof change.path === 'string' ? change.path : '';
       const diff = typeof change.diff === 'string' ? change.diff : '';
-      if (path) files.set(path, { id: path, path, diff });
+      const snapshot = looksLikeUnifiedDiff(diff) ? undefined : diff;
+      if (path) files.set(path, { id: path, path, diff, snapshot });
     }
     if (
       event.type.toLowerCase().includes('diff.updated') &&
@@ -27,4 +31,11 @@ export function runFileChanges(events?: RelayEvent[] | null) {
     }
   }
   return [...files.values()];
+}
+
+function looksLikeUnifiedDiff(value: string) {
+  return (
+    value.startsWith('diff --git ') ||
+    (/^--- .+\n\+\+\+ .+\n/m.test(value) && /^@@ .+ @@/m.test(value))
+  );
 }
