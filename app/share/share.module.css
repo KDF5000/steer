@@ -188,6 +188,33 @@
   padding-left: 1.6em;
 }
 
+.markdown ul {
+  list-style: disc outside;
+}
+
+.markdown ol {
+  list-style: decimal outside;
+}
+
+.markdown ul ul {
+  list-style-type: circle;
+}
+
+.markdown ul ul ul {
+  list-style-type: square;
+}
+
+.markdown ul ul,
+.markdown ul ol,
+.markdown ol ul,
+.markdown ol ol {
+  margin: 3px 0 0;
+}
+
+.markdown li::marker {
+  color: #303136;
+}
+
 .markdown li + li {
   margin-top: 1px;
 }
