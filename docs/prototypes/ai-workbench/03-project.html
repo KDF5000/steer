@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Steer 工作台原型 C · Project</title>
+  <link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">S</span><span class="brand-copy"><strong>Steer</strong><small>Personal workspace</small></span><span class="workspace-chevron">⌄</span></div>
+      <button class="capture-button" data-open-capture><strong>＋</strong><span>记录任何事情</span><kbd>⌘ K</kbd></button>
+      <nav class="nav">
+        <section class="nav-section">
+          <a class="nav-item" href="01-today.html"><span class="nav-icon">◉</span><span>Today</span><span class="nav-count">5</span></a>
+          <a class="nav-item" href="02-conversation.html"><span class="nav-icon">◌</span><span>Work</span><span class="nav-count">2</span></a>
+          <a class="nav-item active" href="03-project.html"><span class="nav-icon">▱</span><span>Projects</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">⌁</span><span>Library</span></a>
+        </section>
+        <section class="nav-section">
+          <div class="nav-label">Projects</div>
+          <a class="nav-item active" href="03-project.html"><span class="project-dot"></span><span>Steer</span><span class="nav-count">3</span></a>
+          <a class="nav-item" href="#"><span class="project-dot green"></span><span>Relay</span></a>
+          <a class="nav-item" href="#"><span class="project-dot orange"></span><span>个人研究</span><span class="nav-count">1</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">＋</span><span>New project</span></a>
+        </section>
+        <section class="nav-section">
+          <div class="nav-label">Saved views</div>
+          <a class="nav-item" href="#"><span class="nav-icon">✦</span><span>重要 Ideas</span><span class="nav-count">4</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">◇</span><span>最近决策</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">□</span><span>全部资产</span><span class="nav-count">46</span></a>
+        </section>
+        <section class="nav-section" style="margin-top:auto"><a class="nav-item" href="#"><span class="nav-icon">⚙</span><span>Agents & connections</span></a></section>
+      </nav>
+      <div class="account"><span class="avatar">K</span><span><strong>Kongdefei</strong><small>Personal workspace</small></span></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar"><span class="topbar-title">Projects / Steer</span><span class="topbar-meta">AI 持续维护的项目上下文</span><div class="topbar-actions"><a class="button" href="02-conversation.html">打开最近会话</a><button class="button primary" data-demo-action="已基于 Steer 项目创建新会话">＋ 开始工作</button></div></header>
+      <div class="page wide">
+        <section class="project-hero">
+          <div class="project-identity"><span class="project-symbol">S</span><div><div class="eyebrow">Active project</div><h1>Steer</h1><p>面向个人的 AI 工作台。通过对话完成工作，并由 AI 将过程沉淀为项目状态、记忆、Skill、资产、决策与下一步。</p><div style="display:flex;gap:7px;margin-top:12px"><span class="tag accent">产品设计</span><span class="tag">3 个工作位置</span><span class="tag green">2 个 Agent 在线</span></div></div></div>
+          <div class="project-health"><div><span>项目上下文完整度</span><strong>82%</strong></div><div class="progress"><span style="width:82%"></span></div><small style="color:var(--muted)">AI 建议补充目标用户与首个核心使用场景</small></div>
+        </section>
+
+        <nav class="tabs"><button class="tab active" data-tab>Overview</button><button class="tab" data-tab>Activity</button><button class="tab" data-tab>Knowledge</button><button class="tab" data-tab>Assets</button><button class="tab" data-tab>Settings</button></nav>
+
+        <div class="project-layout">
+          <section class="project-main">
+            <article class="card living-brief">
+              <header><span class="ai-orb"></span><strong>项目简报</strong><small>AI 更新于 10:43 · 查看变更</small></header>
+              <p>Steer 已从“多机 Agent Chat”逐步扩展为个人 AI 工作台。当前共识是：Chat 继续作为主要工作入口，Project 作为长期上下文容器；AI 应在工作过程中自动维护项目状态、资产、决策和下一步，而不是要求用户手工维护任务系统。下一阶段正在验证 Today-first、Conversation-first 和 Project-first 三种信息架构。</p>
+            </article>
+
+            <div class="grid equal">
+              <article class="card"><header class="card-header"><strong>正在推进</strong><small>3</small></header><div class="card-body item-list"><div class="item-row"><span class="item-type todo">…</span><div class="item-copy"><strong>比较三种工作台原型</strong><p>当前会话 · Codex 正在生成</p></div><span class="tag accent">进行中</span></div><div class="item-row"><span class="item-type todo">✓</span><div class="item-copy"><strong>定义统一 Entry 模型</strong><p>Todo / Idea / Note / Reminder</p></div><span class="tag">下一步</span></div><div class="item-row"><span class="item-type idea">✦</span><div class="item-copy"><strong>上下文提醒</strong><p>进入相关项目时自动浮现</p></div><span class="tag amber">Idea</span></div></div></article>
+              <article class="card"><header class="card-header"><strong>需要确认</strong><small>1</small></header><div class="card-body item-list"><div class="item-row"><span class="item-type review">!</span><div class="item-copy"><strong>Project 与 Working Location 是否拆分</strong><p>当前 Project 实际绑定目录或 Git 仓库，未来业务项目可能包含多个工作位置。</p></div><button class="button small" data-demo-action="已打开该决策">查看</button></div><div class="item-row"><span class="item-type done">✓</span><div class="item-copy"><strong>不采用 Goal / Issue 模型</strong><p>已确认 · 来源：产品定位讨论</p></div><span class="tag green">Decision</span></div></div></article>
+            </div>
+
+            <article class="card">
+              <header class="card-header"><strong>最近决策</strong><small>自动从对话提取，保留来源</small></header>
+              <div class="card-body decision-list">
+                <div class="decision"><time>今天 10:20</time><div><strong>工作台应围绕人的工作上下文，而不是机器和 Agent 管理</strong><p>来源：AI 时代工作台应该是什么 · 消息 24–27</p></div></div>
+                <div class="decision"><time>今天 09:54</time><div><strong>Chat 保持主入口，但工作结果需要结构化沉淀</strong><p>来源：产品设计讨论 · 可查看原始对话</p></div></div>
+                <div class="decision"><time>9 月 17 日</time><div><strong>Conversation 继续绑定固定 Runtime 和 Workspace</strong><p>来源：长上下文与 Runtime Session 修复</p></div></div>
+              </div>
+            </article>
+
+            <article class="card">
+              <header class="card-header"><strong>项目资产</strong><small>查看全部 12</small></header>
+              <div class="card-body asset-grid">
+                <div class="asset"><span class="asset-icon">MD</span><strong>AI workbench IA</strong><small>文档 · 刚刚更新</small></div>
+                <div class="asset"><span class="asset-icon">UI</span><strong>Today-first prototype</strong><small>HTML · 生成中</small></div>
+                <div class="asset"><span class="asset-icon">UI</span><strong>Conversation prototype</strong><small>HTML · 生成中</small></div>
+                <div class="asset"><span class="asset-icon">↗</span><strong>ChatGPT desktop research</strong><small>外部资料 · 3 个来源</small></div>
+                <div class="asset"><span class="asset-icon">DI</span><strong>Entity relationship draft</strong><small>Diagram · 版本 2</small></div>
+                <div class="asset"><span class="asset-icon">DF</span><strong>Workspace review changes</strong><small>Code diff · 已确认</small></div>
+              </div>
+            </article>
+          </section>
+
+          <aside class="project-side">
+            <article class="card"><header class="card-header"><strong>项目上下文</strong><small>本轮默认加载</small></header><div class="card-body scope-list"><div class="scope-row"><span>◇</span><div><strong>Project memories</strong><small>架构、定位、约束和历史决策</small></div><em>8</em></div><div class="scope-row"><span>⌘</span><div><strong>Project skills</strong><small>产品设计审查、UI 规范</small></div><em>3</em></div><div class="scope-row"><span>□</span><div><strong>Reference assets</strong><small>文档、截图和竞品资料</small></div><em>12</em></div></div></article>
+            <article class="card"><header class="card-header"><strong>工作位置</strong><small>与项目分离</small></header><div class="card-body item-list"><div class="item-row"><span class="item-type done">●</span><div class="item-copy"><strong>MacBook / steer</strong><p>/Users/kongdefei/Documents/Coding/steer</p></div><span class="tag green">在线</span></div><div class="item-row"><span class="item-type done">●</span><div class="item-copy"><strong>77 / relay</strong><p>/home/kongdefei/.../relay</p></div><span class="tag green">在线</span></div><div class="item-row"><span class="item-type">○</span><div class="item-copy"><strong>Git workspace</strong><p>github.com/KDF5000/steer</p></div><span class="tag">按会话创建</span></div></div></article>
+            <article class="card"><header class="card-header"><strong>关联 Ideas</strong><small>4</small></header><div class="card-body item-list"><div class="item-row"><span class="item-type idea">✦</span><div class="item-copy"><strong>从重复习惯自动生成 Skill</strong><p>与 Skill 管理高度相关</p></div></div><div class="item-row"><span class="item-type idea">✦</span><div class="item-copy"><strong>项目主页由 AI 持续维护</strong><p>今天从讨论中提取</p></div></div><button class="button ghost small" data-open-capture>＋ 记录相关想法</button></div></article>
+          </aside>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <details class="architecture-note"><summary>方案 C · Project-first</summary><div class="architecture-content"><h3>项目成为长期上下文容器</h3><p>不是 Issue 看板，而是由 AI 持续维护的 living brief：状态、决策、Ideas、资产、记忆、Skill 和会话自然关联。</p><div class="architecture-flow"><span>Conversation</span><i>→</i><span>Project context</span><i>→</i><span>Decision / Asset / Memory</span></div></div></details>
+  <div class="dialog-backdrop" data-capture-dialog><form class="dialog" data-capture-form><header><h2>记录到 Steer 项目</h2><button class="close" type="button" data-close-capture>✕</button></header><textarea placeholder="记录项目相关的 Todo、Idea、Note 或 Reminder……"></textarea><div class="type-picker"><button class="active" type="button" data-entry-type>自动判断</button><button type="button" data-entry-type>Todo</button><button type="button" data-entry-type>Idea</button><button type="button" data-entry-type>Note</button><button type="button" data-entry-type>Reminder</button></div><div class="dialog-footer"><small>自动关联：Steer project</small><button class="button" type="button" data-close-capture>取消</button><button class="button primary" type="submit">记录</button></div></form></div>
+  <div class="toast" data-toast></div>
+  <script src="prototype.js"></script>
+</body>
+</html>

@@ -244,3 +244,51 @@ func TestVisibleAssistantContentFallsBackToRuntimeSummary(t *testing.T) {
 		t.Fatalf("content=%q", content)
 	}
 }
+
+func TestSkillImportURL(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+		err   bool
+	}{
+		{name: "github blob", input: "https://github.com/acme/skills/blob/main/review/SKILL.md", want: "https://raw.githubusercontent.com/acme/skills/main/review/SKILL.md"},
+		{name: "gitlab blob", input: "https://gitlab.com/acme/skills/-/blob/main/SKILL.md", want: "https://gitlab.com/acme/skills/-/raw/main/SKILL.md"},
+		{name: "raw github", input: "https://raw.githubusercontent.com/acme/skills/main/SKILL.md", want: "https://raw.githubusercontent.com/acme/skills/main/SKILL.md"},
+		{name: "private network rejected", input: "https://127.0.0.1/SKILL.md", err: true},
+		{name: "http rejected", input: "http://github.com/acme/skills/blob/main/SKILL.md", err: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, got, err := skillImportURL(test.input)
+			if test.err {
+				if err == nil {
+					t.Fatalf("skillImportURL(%q) succeeded", test.input)
+				}
+				return
+			}
+			if err != nil || got != test.want {
+				t.Fatalf("got=%q err=%v, want=%q", got, err, test.want)
+			}
+		})
+	}
+}
+
+func TestParseSkillFrontmatter(t *testing.T) {
+	name, description := parseSkillFrontmatter("---\nname: UI review\ndescription: 'Review interface consistency'\n---\n# Instructions")
+	if name != "UI review" || description != "Review interface consistency" {
+		t.Fatalf("name=%q description=%q", name, description)
+	}
+}
+
+func TestSkillInstructionFragments(t *testing.T) {
+	updated := time.Date(2026, 9, 18, 8, 30, 0, 0, time.UTC)
+	fragments := skillInstructionFragments([]store.Skill{{ID: "skill-1", Name: "UI review", Content: "Check spacing.", UpdatedAt: updated}})
+	if len(fragments) != 1 {
+		t.Fatalf("fragments=%d", len(fragments))
+	}
+	fragment := fragments[0]
+	if fragment.ID != "steer-skill-skill-1" || fragment.Title != "Assigned skill: UI review" || !strings.Contains(fragment.Content, "Check spacing.") || fragment.Version != updated.Format(time.RFC3339Nano) {
+		t.Fatalf("unexpected fragment: %+v", fragment)
+	}
+}

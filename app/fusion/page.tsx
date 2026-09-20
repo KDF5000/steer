@@ -35,8 +35,11 @@ import {
   Search,
   Send,
   Server,
+  Settings,
   Share2,
   LogOut,
+  Library,
+  NotebookPen,
   Square,
   SquarePen,
   SquareTerminal,
@@ -127,12 +130,16 @@ import {
   type AgentRecord,
   type ArtifactRecord,
   type ChatSessionRecord,
+  type DocumentRecord,
   type ProjectRecord,
+  type SkillRecord,
+  type WorkspaceSettingsRecord,
   type WorkspaceRecord,
 } from '@/lib/steer-client';
+import { AssetsView, WorkLogView } from './workspace-library';
 import './fusion.css';
 
-type View = 'chat' | 'artifacts' | 'agents';
+type View = 'chat' | 'artifacts' | 'agents' | 'assets' | 'notes' | 'settings';
 const noProjectSessionGroup = '__no-project__';
 
 type PendingImage = { id: string; file: File; url: string };
@@ -421,6 +428,13 @@ export default function Fusion() {
   const [agentList, setAgentList] = useState<AgentItem[]>([]);
   const [projectList, setProjectList] = useState<ProjectRecord[]>([]);
   const [artifactList, setArtifactList] = useState<Artifact[]>([]);
+  const [skillList, setSkillList] = useState<SkillRecord[]>([]);
+  const [documentList, setDocumentList] = useState<DocumentRecord[]>([]);
+  const [agentSkillAssignments, setAgentSkillAssignments] = useState<
+    Record<string, string[]>
+  >({});
+  const [workspaceSettings, setWorkspaceSettings] =
+    useState<WorkspaceSettingsRecord | null>(null);
   const [selectedArtifact, setSelectedArtifact] = useState(0);
   const [runtimeNodes, setRuntimeNodes] = useState<RelayNode[]>([]);
   const [relayConnected, setRelayConnected] = useState(false);
@@ -528,6 +542,10 @@ export default function Fusion() {
     setAgentList(agents);
     setProjectList(data.projects || []);
     setArtifactList(data.artifacts.map(artifactFromRecord));
+    setSkillList(data.skills || []);
+    setDocumentList(data.documents || []);
+    setAgentSkillAssignments(data.agentSkills || {});
+    setWorkspaceSettings(data.settings || null);
     setChatSessions(data.sessions || []);
     setExpandedSessionGroups(
       new Set(
@@ -933,6 +951,12 @@ export default function Fusion() {
           const index = artifactList.findIndex((item) => item.id === id);
           setSelectedArtifact(index < 0 ? 0 : index);
         }
+      } else if (
+        section === 'assets' ||
+        section === 'notes' ||
+        section === 'settings'
+      ) {
+        setView(section);
       } else {
         setView('chat');
         if (section === 'chat' && id) void openChatSession(id);
@@ -1238,10 +1262,22 @@ export default function Fusion() {
         runtimeId: selectedRuntimeChoice.runtimeId || null,
         model: agentModel === 'Runtime default' ? null : agentModel,
       });
+      const selectedSkillIDs = data.getAll('skills').map(String);
+      if (selectedSkillIDs.length) {
+        await steer.setAgentSkills(created.id, selectedSkillIDs);
+        setAgentSkillAssignments((current) => ({
+          ...current,
+          [created.id]: selectedSkillIDs,
+        }));
+      }
       setAgentList((current) => [...current, agentFromRecord(created)]);
       setChatAgent((current) => current || created.id);
       setAgentDialog(false);
-      setNotice('Agent created.');
+      setNotice(
+        selectedSkillIDs.length
+          ? 'Agent created with assigned Skills.'
+          : 'Agent created.',
+      );
     } catch (error) {
       setFormError(
         error instanceof Error ? error.message : 'Could not create Agent.',
@@ -1649,6 +1685,27 @@ export default function Fusion() {
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
+                    isActive={view === 'assets'}
+                    onClick={() => setView('assets')}
+                  >
+                    <Library aria-hidden="true" />
+                    <span>Assets</span>
+                  </SidebarMenuButton>
+                  <SidebarMenuBadge>
+                    {skillList.length + documentList.length}
+                  </SidebarMenuBadge>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={view === 'notes'}
+                    onClick={() => setView('notes')}
+                  >
+                    <NotebookPen aria-hidden="true" />
+                    <span>Work log</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
                     isActive={view === 'artifacts'}
                     onClick={() => setView('artifacts')}
                   >
@@ -1664,6 +1721,15 @@ export default function Fusion() {
             <SidebarGroupLabel>System</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={view === 'settings'}
+                    onClick={() => setView('settings')}
+                  >
+                    <Settings aria-hidden="true" />
+                    <span>Settings</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     isActive={view === 'agents' && agentTab === 'agents'}
@@ -1735,9 +1801,15 @@ export default function Fusion() {
             <span>
               {view === 'artifacts'
                 ? 'Artifacts'
-                : agentTab === 'agents'
-                  ? 'Agents'
-                  : 'Runtimes'}
+                : view === 'assets'
+                  ? 'Assets'
+                  : view === 'notes'
+                    ? 'Work log'
+                    : view === 'settings'
+                      ? 'Settings'
+                      : agentTab === 'agents'
+                        ? 'Agents'
+                        : 'Runtimes'}
             </span>
           </header>
         )}
@@ -1842,6 +1914,26 @@ export default function Fusion() {
             artifacts={artifactList}
             selected={selectedArtifact}
             onSelect={setSelectedArtifact}
+          />
+        ) : view === 'assets' ? (
+          <AssetsView
+            skills={skillList}
+            documents={documentList}
+            agents={agentList}
+            agentSkills={agentSkillAssignments}
+            onSkills={setSkillList}
+            onDocuments={setDocumentList}
+            onAgentSkills={setAgentSkillAssignments}
+            onNotice={setNotice}
+          />
+        ) : view === 'notes' ? (
+          <WorkLogView onNotice={setNotice} />
+        ) : view === 'settings' ? (
+          <SystemSettingsView
+            agents={agentList}
+            settings={workspaceSettings}
+            onSettings={setWorkspaceSettings}
+            onNotice={setNotice}
           />
         ) : (
           <AgentsView
@@ -1995,6 +2087,7 @@ export default function Fusion() {
         runtime={agentRuntime}
         model={agentModel}
         choices={allRuntimeChoices}
+        skills={skillList}
         selectedChoice={selectedRuntimeChoice}
         onOpen={setAgentDialog}
         onRuntime={(value) => {
@@ -4386,6 +4479,138 @@ function AgentsView({
   );
 }
 
+function SystemSettingsView({
+  agents,
+  settings,
+  onSettings,
+  onNotice,
+}: {
+  agents: AgentItem[];
+  settings: WorkspaceSettingsRecord | null;
+  onSettings: (settings: WorkspaceSettingsRecord) => void;
+  onNotice: (message: string) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const selected = agents.find((agent) => agent.id === settings?.systemAgentId);
+  const language = settings?.language || 'auto';
+
+  const update = async (next: {
+    systemAgentId?: string | null;
+    language?: WorkspaceSettingsRecord['language'];
+  }) => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const saved = await steer.updateSystemSettings({
+        systemAgentId:
+          next.systemAgentId === undefined
+            ? settings?.systemAgentId || null
+            : next.systemAgentId,
+        language: next.language || language,
+      });
+      onSettings(saved);
+      onNotice('Settings updated.');
+    } catch (error) {
+      onNotice(
+        error instanceof Error ? error.message : 'Could not update settings.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="ws-page ws-settings-page">
+      <PageIntro
+        eyebrow="SYSTEM"
+        title="Settings"
+        description="Manage how Steer works across this workspace."
+        action={null}
+      />
+      <section className="ws-settings-group">
+        <div className="ws-settings-heading">
+          <h2>General</h2>
+          <p>Basic preferences for Steer.</p>
+        </div>
+        <div className="ws-settings-row">
+          <div className="ws-settings-copy">
+            <label htmlFor="interface-language-select">Language</label>
+            <p>Language used throughout the Steer interface.</p>
+          </div>
+          <Select
+            value={language}
+            onValueChange={(value) =>
+              void update({
+                language: String(value) as WorkspaceSettingsRecord['language'],
+              })
+            }
+            disabled={saving}
+          >
+            <SelectTrigger
+              id="interface-language-select"
+              className="ws-settings-select"
+              aria-label="Steer language"
+            >
+              <span>
+                {language === 'zh-CN'
+                  ? '简体中文'
+                  : language === 'en'
+                    ? 'English'
+                    : 'System default'}
+              </span>
+            </SelectTrigger>
+            <SelectContent className="ws-select-popup">
+              <SelectItem value="auto">System default</SelectItem>
+              <SelectItem value="zh-CN">简体中文</SelectItem>
+              <SelectItem value="en">English</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </section>
+      <section className="ws-settings-group">
+        <div className="ws-settings-heading">
+          <h2>AI &amp; automation</h2>
+          <p>Choose how Steer handles workspace AI tasks.</p>
+        </div>
+        <div className="ws-settings-row">
+          <div className="ws-settings-copy">
+            <label htmlFor="system-agent-select">System Agent</label>
+            <p>Used for work log summaries and future AI features.</p>
+          </div>
+          <Select
+            value={settings?.systemAgentId || 'none'}
+            onValueChange={(value) =>
+              void update({
+                systemAgentId: String(value) === 'none' ? null : String(value),
+              })
+            }
+            disabled={saving || agents.length === 0}
+          >
+            <SelectTrigger
+              id="system-agent-select"
+              className="ws-settings-select"
+              aria-label="System Agent"
+            >
+              <span>
+                {selected?.name ||
+                  (agents.length ? 'Not configured' : 'No agents available')}
+              </span>
+            </SelectTrigger>
+            <SelectContent className="ws-select-popup">
+              <SelectItem value="none">Not configured</SelectItem>
+              {agents.map((agent) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  {agent.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function SearchDialog({
   open,
   onOpen,
@@ -4679,6 +4904,7 @@ function AgentDialog({
   runtime,
   model,
   choices,
+  skills,
   selectedChoice,
   onOpen,
   onRuntime,
@@ -4691,6 +4917,7 @@ function AgentDialog({
   runtime: string;
   model: string;
   choices: RuntimeChoice[];
+  skills: SkillRecord[];
   selectedChoice?: RuntimeChoice;
   onOpen: (open: boolean) => void;
   onRuntime: (value: string) => void;
@@ -4778,6 +5005,33 @@ function AgentDialog({
               placeholder="Role, constraints, and output preferences…"
             />
           </label>
+          {!!skills.length && (
+            <fieldset className="ws-agent-skill-fieldset">
+              <legend>Skills</legend>
+              <p>
+                Relay installs selected instructions into this Agent’s remote
+                workspace for every run.
+              </p>
+              <div>
+                {skills.map((skill) => (
+                  <label key={skill.id} className="ws-agent-skill-checkbox">
+                    <input
+                      type="checkbox"
+                      name="skills"
+                      value={skill.id}
+                      aria-label={`Assign ${skill.name}`}
+                    />
+                    <span>
+                      <strong>{skill.name}</strong>
+                      <small>
+                        {skill.description || 'Reusable instructions'}
+                      </small>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
           {error && (
             <p className="ws-form-error" role="alert">
               {error}

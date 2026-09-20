@@ -83,6 +83,90 @@ export type ProjectRecord = {
   updatedAt: string;
 };
 
+export type SkillRecord = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string;
+  content: string;
+  sourceKind: 'manual' | 'url';
+  sourceUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DocumentRecord = {
+  id: string;
+  workspaceId: string;
+  title: string;
+  url: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NoteRecord = {
+  id: string;
+  workspaceId: string;
+  title: string;
+  content: string;
+  tags: string[];
+  pinned: boolean;
+  archived: boolean;
+  reminderAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WorkLogEntryRecord = {
+  id: string;
+  workspaceId: string;
+  content: string;
+  occurredAt: string;
+  sourceKind: 'manual' | 'agent_activity' | 'legacy_note';
+  sourceSessionIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WorkLogSummaryRecord = {
+  id: string;
+  workspaceId: string;
+  periodKind: 'week';
+  periodStart: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AgentActivityRecord = {
+  sessionId: string;
+  title: string;
+  agentName: string;
+  messageCount: number;
+  totalMessageCount: number;
+  updatedAt: string;
+};
+
+export type WorkspaceSettingsRecord = {
+  workspaceId: string;
+  systemAgentId: string | null;
+  language: 'auto' | 'zh-CN' | 'en';
+};
+
+export type SystemRunRecord = {
+  runId: string;
+  status: string;
+};
+
+export type WorkLogActivityRunRecord = {
+  runId: string;
+  status: string;
+  summary: string | null;
+  error: string | null;
+  createdAt: string;
+};
+
 export type ChatMessageRecord = {
   id: string;
   role: 'user' | 'agent';
@@ -122,6 +206,11 @@ export type Bootstrap = {
   projects: ProjectRecord[];
   artifacts: ArtifactRecord[];
   sessions: ChatSessionRecord[];
+  skills: SkillRecord[];
+  agentSkills: Record<string, string[]>;
+  documents: DocumentRecord[];
+  notes: NoteRecord[];
+  settings: WorkspaceSettingsRecord;
   relay: {
     connected: boolean;
     publicUrl: string;
@@ -259,6 +348,153 @@ export const steer = {
   createAgent: (input: Partial<AgentRecord>) =>
     request<AgentRecord>('/agents', {
       method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  systemSettings: () => request<WorkspaceSettingsRecord>('/system/settings'),
+  updateSystemSettings: (settings: {
+    systemAgentId: string | null;
+    language: WorkspaceSettingsRecord['language'];
+  }) =>
+    request<WorkspaceSettingsRecord>('/system/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
+  skills: () => request<SkillRecord[]>('/skills'),
+  createSkill: (input: {
+    name: string;
+    description: string;
+    content: string;
+  }) =>
+    request<SkillRecord>('/skills', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  importSkill: (url: string) =>
+    request<SkillRecord>('/skills/import', {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    }),
+  updateSkill: (
+    id: string,
+    input: Pick<SkillRecord, 'name' | 'description' | 'content'>,
+  ) =>
+    request<SkillRecord>(`/skills/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+  deleteSkill: (id: string) =>
+    request<SkillRecord>(`/skills/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  agentSkills: (agentId: string) =>
+    request<SkillRecord[]>(`/agents/${encodeURIComponent(agentId)}/skills`),
+  setAgentSkills: (agentId: string, skillIds: string[]) =>
+    request<SkillRecord[]>(`/agents/${encodeURIComponent(agentId)}/skills`, {
+      method: 'PUT',
+      body: JSON.stringify({ skillIds }),
+    }),
+  documents: () => request<DocumentRecord[]>('/documents'),
+  createDocument: (
+    input: Pick<DocumentRecord, 'title' | 'url' | 'description'>,
+  ) =>
+    request<DocumentRecord>('/documents', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  updateDocument: (
+    id: string,
+    input: Pick<DocumentRecord, 'title' | 'url' | 'description'>,
+  ) =>
+    request<DocumentRecord>(`/documents/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+  deleteDocument: (id: string) =>
+    request<DocumentRecord>(`/documents/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  notes: () => request<NoteRecord[]>('/notes'),
+  createNote: (
+    input: Pick<
+      NoteRecord,
+      'title' | 'content' | 'tags' | 'pinned' | 'archived' | 'reminderAt'
+    >,
+  ) =>
+    request<NoteRecord>('/notes', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  updateNote: (
+    id: string,
+    input: Pick<
+      NoteRecord,
+      'title' | 'content' | 'tags' | 'pinned' | 'archived' | 'reminderAt'
+    >,
+  ) =>
+    request<NoteRecord>(`/notes/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+  deleteNote: (id: string) =>
+    request<NoteRecord>(`/notes/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  workLog: (since: string) =>
+    request<{
+      entries: WorkLogEntryRecord[];
+      summaries: WorkLogSummaryRecord[];
+    }>(`/work-log?since=${encodeURIComponent(since)}`),
+  createWorkLogEntry: (input: {
+    content: string;
+    occurredAt?: string;
+    sourceKind?: string;
+    sourceSessionIds?: string[];
+  }) =>
+    request<WorkLogEntryRecord>('/work-log/entries', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  updateWorkLogEntry: (id: string, content: string) =>
+    request<WorkLogEntryRecord>(`/work-log/entries/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    }),
+  deleteWorkLogEntry: (id: string) =>
+    request<WorkLogEntryRecord>(`/work-log/entries/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  workLogActivity: (from: string, to: string) =>
+    request<{
+      activities: AgentActivityRecord[];
+      runId?: string;
+      status?: string;
+    }>('/work-log/activity', {
+      method: 'POST',
+      body: JSON.stringify({ from, to }),
+    }),
+  workLogActivityRun: (from: string, to: string) =>
+    request<{
+      run: WorkLogActivityRunRecord | null;
+      activities: AgentActivityRecord[];
+    }>(
+      `/work-log/activity-run?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    ),
+  dismissWorkLogActivityRun: (runId: string) =>
+    request<void>(`/work-log/activity-run/${encodeURIComponent(runId)}`, {
+      method: 'DELETE',
+    }),
+  generateWeeklySummary: (periodStart: string, from: string, to: string) =>
+    request<SystemRunRecord>('/work-log/weekly-summary', {
+      method: 'POST',
+      body: JSON.stringify({ periodStart, from, to }),
+    }),
+  saveWorkLogSummary: (input: {
+    periodKind: 'week';
+    periodStart: string;
+    content: string;
+  }) =>
+    request<WorkLogSummaryRecord>('/work-log/summaries', {
+      method: 'PUT',
       body: JSON.stringify(input),
     }),
   createProject: (

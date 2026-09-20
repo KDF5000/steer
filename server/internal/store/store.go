@@ -41,6 +41,12 @@ type Agent struct {
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
+type WorkspaceSettings struct {
+	WorkspaceID   string  `json:"workspaceId"`
+	SystemAgentID *string `json:"systemAgentId"`
+	Language      string  `json:"language"`
+}
+
 type Project struct {
 	ID              string     `json:"id"`
 	WorkspaceID     string     `json:"workspaceId"`
@@ -169,16 +175,17 @@ type Artifact struct {
 }
 
 type RunLink struct {
-	RelayRunID  string    `json:"runId"`
-	WorkspaceID string    `json:"-"`
-	Purpose     string    `json:"purpose"`
-	SessionID   *string   `json:"sessionId"`
-	AgentID     string    `json:"agentId"`
-	Status      string    `json:"status"`
-	Summary     *string   `json:"summary"`
-	Error       *string   `json:"error"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	RelayRunID     string     `json:"runId"`
+	WorkspaceID    string     `json:"-"`
+	Purpose        string     `json:"purpose"`
+	SessionID      *string    `json:"sessionId"`
+	AgentID        string     `json:"agentId"`
+	Status         string     `json:"status"`
+	Summary        *string    `json:"summary"`
+	Error          *string    `json:"error"`
+	AcknowledgedAt *time.Time `json:"acknowledgedAt"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
 }
 
 type SharedConversation struct {
@@ -287,6 +294,26 @@ func (s *Store) CreateAgent(ctx context.Context, workspaceID string, a Agent) (A
 	a.WorkspaceID = workspaceID
 	return scanAgent(s.pool.QueryRow(ctx, `INSERT INTO agents(id,workspace_id,name,role,instructions,runtime_provider,runtime_id,model,workspace_kind,workspace_source,workspace_ref) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING `+agentColumns,
 		a.ID, a.WorkspaceID, a.Name, a.Role, a.Instructions, a.RuntimeProvider, a.RuntimeID, a.Model, a.WorkspaceKind, a.WorkspaceSource, a.WorkspaceRef))
+}
+
+func (s *Store) WorkspaceSettings(ctx context.Context, workspaceID string) (WorkspaceSettings, error) {
+	settings := WorkspaceSettings{WorkspaceID: workspaceID, Language: "auto"}
+	err := s.pool.QueryRow(ctx, `SELECT system_agent_id,language FROM workspace_settings WHERE workspace_id=$1`, workspaceID).Scan(&settings.SystemAgentID, &settings.Language)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return settings, nil
+	}
+	return settings, err
+}
+
+func (s *Store) SetWorkspaceSettings(ctx context.Context, workspaceID string, agentID *string, language string) (WorkspaceSettings, error) {
+	if agentID != nil {
+		if _, err := s.Agent(ctx, workspaceID, *agentID); err != nil {
+			return WorkspaceSettings{}, err
+		}
+	}
+	settings := WorkspaceSettings{WorkspaceID: workspaceID, SystemAgentID: agentID, Language: language}
+	err := s.pool.QueryRow(ctx, `INSERT INTO workspace_settings(workspace_id,system_agent_id,language) VALUES($1,$2,$3) ON CONFLICT(workspace_id) DO UPDATE SET system_agent_id=EXCLUDED.system_agent_id,language=EXCLUDED.language,updated_at=now() RETURNING system_agent_id,language`, workspaceID, agentID, language).Scan(&settings.SystemAgentID, &settings.Language)
+	return settings, err
 }
 
 func (s *Store) Sessions(ctx context.Context, wid string) ([]Session, error) {
@@ -512,6 +539,11 @@ func (s *Store) SaveChatRun(ctx context.Context, wid, sessionID, agentID, prompt
 	return user, assistant, nil
 }
 
+func (s *Store) SaveSystemRun(ctx context.Context, wid, agentID, purpose, runID, status string) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO run_links(relay_run_id,workspace_id,purpose,agent_id,status) VALUES($1,$2,$3,$4,$5)`, runID, wid, purpose, agentID, status)
+	return err
+}
+
 func (s *Store) MessageAttachment(ctx context.Context, wid, messageID, attachmentID string) (MessageAttachment, error) {
 	var item MessageAttachment
 	err := s.pool.QueryRow(ctx, `SELECT id,message_id,name,content_type,size,content,created_at FROM message_attachments WHERE workspace_id=$1 AND message_id=$2 AND id=$3`, wid, messageID, attachmentID).Scan(&item.ID, &item.MessageID, &item.Name, &item.ContentType, &item.Size, &item.Content, &item.CreatedAt)
@@ -555,11 +587,33 @@ func isTerminal(status string) bool {
 }
 func (s *Store) RunLink(ctx context.Context, wid, runID string) (RunLink, error) {
 	var x RunLink
-	err := s.pool.QueryRow(ctx, `SELECT relay_run_id,workspace_id,purpose,session_id,agent_id,status,summary,error,created_at,updated_at FROM run_links WHERE workspace_id=$1 AND relay_run_id=$2`, wid, runID).Scan(&x.RelayRunID, &x.WorkspaceID, &x.Purpose, &x.SessionID, &x.AgentID, &x.Status, &x.Summary, &x.Error, &x.CreatedAt, &x.UpdatedAt)
+	err := s.pool.QueryRow(ctx, `SELECT relay_run_id,workspace_id,purpose,session_id,agent_id,status,summary,error,acknowledged_at,created_at,updated_at FROM run_links WHERE workspace_id=$1 AND relay_run_id=$2`, wid, runID).Scan(&x.RelayRunID, &x.WorkspaceID, &x.Purpose, &x.SessionID, &x.AgentID, &x.Status, &x.Summary, &x.Error, &x.AcknowledgedAt, &x.CreatedAt, &x.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return RunLink{}, ErrNotFound
 	}
 	return x, err
+}
+
+func (s *Store) LatestUnacknowledgedSystemRun(ctx context.Context, wid, purpose string, from, to time.Time) (RunLink, error) {
+	var x RunLink
+	err := s.pool.QueryRow(ctx, `SELECT relay_run_id,workspace_id,purpose,session_id,agent_id,status,summary,error,acknowledged_at,created_at,updated_at
+		FROM run_links WHERE workspace_id=$1 AND purpose=$2 AND session_id IS NULL AND acknowledged_at IS NULL
+			AND created_at >= $3 AND created_at < $4 ORDER BY created_at DESC LIMIT 1`, wid, purpose, from, to).Scan(&x.RelayRunID, &x.WorkspaceID, &x.Purpose, &x.SessionID, &x.AgentID, &x.Status, &x.Summary, &x.Error, &x.AcknowledgedAt, &x.CreatedAt, &x.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RunLink{}, ErrNotFound
+	}
+	return x, err
+}
+
+func (s *Store) AcknowledgeSystemRun(ctx context.Context, wid, runID, purpose string) error {
+	result, err := s.pool.Exec(ctx, `UPDATE run_links SET acknowledged_at=now(),updated_at=now() WHERE workspace_id=$1 AND relay_run_id=$2 AND purpose=$3 AND session_id IS NULL`, wid, runID, purpose)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) Artifacts(ctx context.Context, wid string) ([]Artifact, error) {

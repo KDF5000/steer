@@ -35,6 +35,8 @@ type Server struct {
 	sessionTTL       time.Duration
 }
 
+var errSystemAgentNotConfigured = errors.New("no system Agent is configured; choose one in System settings")
+
 func New(st *store.Store, relayURL, relayToken, relayPublicURL, defaultWorkspace string, origins []string, options ...Option) *Server {
 	transport := httpapi.NewAuthenticatedClient(relayURL, relayToken)
 	allowed := map[string]bool{}
@@ -63,6 +65,32 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/bootstrap", s.bootstrap)
 	mux.HandleFunc("GET /api/v1/agents", s.listAgents)
 	mux.HandleFunc("POST /api/v1/agents", s.createAgent)
+	mux.HandleFunc("GET /api/v1/system/settings", s.systemSettings)
+	mux.HandleFunc("PUT /api/v1/system/settings", s.updateSystemSettings)
+	mux.HandleFunc("GET /api/v1/agents/{id}/skills", s.agentSkills)
+	mux.HandleFunc("PUT /api/v1/agents/{id}/skills", s.setAgentSkills)
+	mux.HandleFunc("GET /api/v1/skills", s.listSkills)
+	mux.HandleFunc("POST /api/v1/skills", s.createSkill)
+	mux.HandleFunc("POST /api/v1/skills/import", s.importSkill)
+	mux.HandleFunc("PUT /api/v1/skills/{id}", s.updateSkill)
+	mux.HandleFunc("DELETE /api/v1/skills/{id}", s.deleteSkill)
+	mux.HandleFunc("GET /api/v1/documents", s.listDocuments)
+	mux.HandleFunc("POST /api/v1/documents", s.createDocument)
+	mux.HandleFunc("PUT /api/v1/documents/{id}", s.updateDocument)
+	mux.HandleFunc("DELETE /api/v1/documents/{id}", s.deleteDocument)
+	mux.HandleFunc("GET /api/v1/notes", s.listNotes)
+	mux.HandleFunc("POST /api/v1/notes", s.createNote)
+	mux.HandleFunc("PUT /api/v1/notes/{id}", s.updateNote)
+	mux.HandleFunc("DELETE /api/v1/notes/{id}", s.deleteNote)
+	mux.HandleFunc("GET /api/v1/work-log", s.listWorkLog)
+	mux.HandleFunc("POST /api/v1/work-log/entries", s.createWorkLogEntry)
+	mux.HandleFunc("PUT /api/v1/work-log/entries/{id}", s.updateWorkLogEntry)
+	mux.HandleFunc("DELETE /api/v1/work-log/entries/{id}", s.deleteWorkLogEntry)
+	mux.HandleFunc("POST /api/v1/work-log/activity", s.workLogActivity)
+	mux.HandleFunc("GET /api/v1/work-log/activity-run", s.workLogActivityRun)
+	mux.HandleFunc("DELETE /api/v1/work-log/activity-run/{id}", s.dismissWorkLogActivityRun)
+	mux.HandleFunc("POST /api/v1/work-log/weekly-summary", s.generateWeeklySummary)
+	mux.HandleFunc("PUT /api/v1/work-log/summaries", s.saveWorkLogSummary)
 	mux.HandleFunc("GET /api/v1/projects", s.listProjects)
 	mux.HandleFunc("POST /api/v1/projects", s.createProject)
 	mux.HandleFunc("PUT /api/v1/projects/{id}", s.updateProject)
@@ -160,6 +188,31 @@ func (s *Server) bootstrap(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	skills, err := s.store.Skills(ctx, wid)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	agentSkills, err := s.store.AgentSkillAssignments(ctx, wid)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	documents, err := s.store.Documents(ctx, wid)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	notes, err := s.store.Notes(ctx, wid)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	settings, err := s.store.WorkspaceSettings(ctx, wid)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	sessions, err := s.store.Sessions(ctx, wid)
 	if err != nil {
 		writeError(w, err)
@@ -172,7 +225,48 @@ func (s *Server) bootstrap(w http.ResponseWriter, r *http.Request) {
 	} else {
 		relayState["error"] = relayErr.Error()
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"workspace": map[string]string{"id": wid, "name": workspaceName}, "agents": agents, "projects": projects, "artifacts": artifacts, "sessions": sessions, "relay": relayState})
+	writeJSON(w, http.StatusOK, map[string]any{"workspace": map[string]string{"id": wid, "name": workspaceName}, "agents": agents, "projects": projects, "artifacts": artifacts, "sessions": sessions, "skills": skills, "agentSkills": agentSkills, "documents": documents, "notes": notes, "settings": settings, "relay": relayState})
+}
+
+func (s *Server) systemSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.store.WorkspaceSettings(r.Context(), s.workspace(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, settings)
+}
+
+func (s *Server) updateSystemSettings(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		SystemAgentID *string `json:"systemAgentId"`
+		Language      string  `json:"language"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, err)
+		return
+	}
+	if input.SystemAgentID != nil {
+		value := strings.TrimSpace(*input.SystemAgentID)
+		if value == "" {
+			input.SystemAgentID = nil
+		} else {
+			input.SystemAgentID = &value
+		}
+	}
+	if input.Language == "" {
+		input.Language = "auto"
+	}
+	if input.Language != "auto" && input.Language != "zh-CN" && input.Language != "en" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported language"})
+		return
+	}
+	settings, err := s.store.SetWorkspaceSettings(r.Context(), s.workspace(r), input.SystemAgentID, input.Language)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, settings)
 }
 
 func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
@@ -576,6 +670,12 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	if agent.Instructions != "" {
 		request.Instructions.Agent = []relay.InstructionFragment{{ID: agent.ID, Version: "1", Title: agent.Name, Content: agent.Instructions}}
 	}
+	assignedSkills, err := s.store.AgentSkills(r.Context(), wid, agent.ID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	request.Instructions.Agent = append(request.Instructions.Agent, skillInstructionFragments(assignedSkills)...)
 	if session.WorkspaceKind != nil && session.WorkspaceSource != nil {
 		request.Workspace = relay.WorkspaceSpec{Kind: *session.WorkspaceKind, Source: *session.WorkspaceSource, Ref: value(session.WorkspaceRef), Subdir: value(session.WorkspaceSubdir)}
 	} else if project != nil {
@@ -698,6 +798,64 @@ func (s *Server) submitRelayRun(ctx context.Context, request relay.Request) (rel
 		}
 	}
 	return relay.Run{}, lastErr
+}
+
+// submitSystemAgentRun is the common execution path for product features that
+// need AI assistance. It deliberately creates no chat Session or Message: the
+// configured Agent is acting on behalf of Steer, and callers own the result.
+func (s *Server) submitSystemAgentRun(ctx context.Context, workspaceID, purpose, prompt string) (relay.Run, error) {
+	settings, err := s.store.WorkspaceSettings(ctx, workspaceID)
+	if err != nil {
+		return relay.Run{}, err
+	}
+	if settings.SystemAgentID == nil {
+		return relay.Run{}, errSystemAgentNotConfigured
+	}
+	switch settings.Language {
+	case "zh-CN":
+		prompt += "\n\nWrite all user-visible text in Simplified Chinese, including every heading and bullet label. Do not mix in English except for proper nouns, product names, code identifiers, or source text that should remain unchanged."
+	case "en":
+		prompt += "\n\nWrite all user-visible text in English, including every heading and bullet label. Do not mix in another language except for proper nouns, product names, code identifiers, or source text that should remain unchanged."
+	default:
+		prompt += "\n\nUse the predominant language of the source material for the final answer."
+	}
+	agent, err := s.store.Agent(ctx, workspaceID, *settings.SystemAgentID)
+	if err != nil {
+		return relay.Run{}, fmt.Errorf("resolve system Agent: %w", err)
+	}
+	runtimeID := value(agent.RuntimeID)
+	if runtimeID == "" {
+		runtimeID, err = s.firstWorkspaceRuntime(ctx, workspaceID, agent.RuntimeProvider)
+		if err != nil {
+			return relay.Run{}, err
+		}
+	}
+	request := relay.Request{
+		TenantID:       workspaceID,
+		AgentID:        agent.ID,
+		IdempotencyKey: uuid.NewString(),
+		Runtime:        relay.RuntimeRequirement{ID: runtimeID, Provider: agent.RuntimeProvider, Model: value(agent.Model)},
+		Source:         relay.Source{Kind: "steer.system", ExternalID: purpose},
+		Input:          relay.Input{Type: "text", Version: "1", Prompt: prompt},
+		Principal:      relay.Principal{Type: "system", ID: "workspace:" + workspaceID},
+		Workspace:      relay.WorkspaceSpec{Kind: value(agent.WorkspaceKind), Source: value(agent.WorkspaceSource), Ref: value(agent.WorkspaceRef)},
+	}
+	if agent.Instructions != "" {
+		request.Instructions.Agent = []relay.InstructionFragment{{ID: agent.ID, Version: "1", Title: agent.Name, Content: agent.Instructions}}
+	}
+	assignedSkills, err := s.store.AgentSkills(ctx, workspaceID, agent.ID)
+	if err != nil {
+		return relay.Run{}, err
+	}
+	request.Instructions.Agent = append(request.Instructions.Agent, skillInstructionFragments(assignedSkills)...)
+	run, err := s.submitRelayRun(ctx, request)
+	if err != nil {
+		return relay.Run{}, fmt.Errorf("submit system Agent run: %w", err)
+	}
+	if err := s.store.SaveSystemRun(ctx, workspaceID, agent.ID, purpose, run.ID, string(run.Status)); err != nil {
+		return relay.Run{}, err
+	}
+	return run, nil
 }
 
 func (s *Server) messageAttachment(w http.ResponseWriter, r *http.Request) {
@@ -1034,6 +1192,8 @@ func writeError(w http.ResponseWriter, err error) {
 	if errors.Is(err, store.ErrNotFound) {
 		status = http.StatusNotFound
 	} else if errors.Is(err, store.ErrConflict) {
+		status = http.StatusConflict
+	} else if errors.Is(err, errSystemAgentNotConfigured) {
 		status = http.StatusConflict
 	}
 	slog.Error("request failed", "error", err)

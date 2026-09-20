@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Steer 工作台原型 A · Today</title>
+  <link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">S</span><span class="brand-copy"><strong>Steer</strong><small>Personal workspace</small></span><span class="workspace-chevron">⌄</span></div>
+      <button class="capture-button" data-open-capture><strong>＋</strong><span>记录任何事情</span><kbd>⌘ K</kbd></button>
+      <nav class="nav">
+        <section class="nav-section">
+          <a class="nav-item active" href="01-today.html"><span class="nav-icon">◉</span><span>Today</span><span class="nav-count">5</span></a>
+          <a class="nav-item" href="02-conversation.html"><span class="nav-icon">◌</span><span>Work</span><span class="nav-count">2</span></a>
+          <a class="nav-item" href="03-project.html"><span class="nav-icon">▱</span><span>Projects</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">⌁</span><span>Library</span></a>
+        </section>
+        <section class="nav-section">
+          <div class="nav-label">Projects</div>
+          <a class="nav-item" href="03-project.html"><span class="project-dot"></span><span>Steer</span><span class="nav-count">3</span></a>
+          <a class="nav-item" href="#"><span class="project-dot green"></span><span>Relay</span></a>
+          <a class="nav-item" href="#"><span class="project-dot orange"></span><span>个人研究</span><span class="nav-count">1</span></a>
+        </section>
+        <section class="nav-section">
+          <div class="nav-label">Library</div>
+          <a class="nav-item" href="#"><span class="nav-icon">✦</span><span>Ideas</span><span class="nav-count">12</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">◇</span><span>Memories</span><span class="nav-count">28</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">⌘</span><span>Skills</span><span class="nav-count">7</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">□</span><span>Assets</span><span class="nav-count">46</span></a>
+        </section>
+        <section class="nav-section" style="margin-top:auto">
+          <div class="nav-label">System</div>
+          <a class="nav-item" href="#"><span class="nav-icon">⚙</span><span>Agents & connections</span></a>
+        </section>
+      </nav>
+      <div class="account"><span class="avatar">K</span><span><strong>Kongdefei</strong><small>kongdefei@example.com</small></span></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar"><span class="topbar-title">Today</span><span class="topbar-meta">AI 根据你的工作、提醒和项目变化生成</span><div class="topbar-actions"><button class="button ghost icon" data-demo-action="已刷新今日简报">↻</button><button class="button primary" data-open-capture>＋ 快速记录</button></div></header>
+      <div class="page">
+        <div class="page-heading"><div><div class="eyebrow">Thursday · 18 September</div><h1>早上好，Kongdefei</h1><p>先处理一个需要判断的问题，之后可以继续推进 Steer 产品设计。今天没有必须立即处理的截止事项。</p></div></div>
+
+        <div class="grid two">
+          <section class="grid" style="align-content:start">
+            <article class="card brief-card">
+              <div class="card-body"><div class="brief-label"><span class="ai-orb"></span>AI BRIEFING · 刚刚更新</div><h2>Steer 的产品模型已经收敛，下一步适合先定义 Project、Memory、Skill 与 Asset 的关系。</h2><p>昨天完成了远端 Agent 长上下文修复和 UI 调整。当前讨论产生了 2 个产品决策、3 个待确认方向和 1 个两周后重新浮现的 Idea。</p><div class="brief-actions"><a class="button primary" href="02-conversation.html">继续产品讨论</a><button class="button" data-demo-action="已打开昨日工作摘要">查看昨日摘要</button></div></div>
+            </article>
+
+            <div class="stat-strip">
+              <div class="stat"><span>正在执行</span><strong>2</strong></div><div class="stat"><span>需要我</span><strong>1</strong></div><div class="stat"><span>今日提醒</span><strong>2</strong></div><div class="stat"><span>最近成果</span><strong>6</strong></div>
+            </div>
+
+            <article class="card">
+              <header class="card-header"><strong>需要你关注</strong><small>按重要程度排序</small></header>
+              <div class="card-body item-list">
+                <div class="item-row"><span class="item-type review">!</span><div class="item-copy"><strong>确认 Steer 工作台的信息架构</strong><p>AI 已整理三种工作台原型，需要选择下一阶段方向。</p></div><div class="item-meta"><span class="tag accent">Steer</span><span>现在</span></div></div>
+                <div class="item-row"><span class="item-type todo">✓</span><div class="item-copy"><strong>更新线上 Relay Node 安装文档</strong><p>重要但不紧急 · 来自 9 月 17 日部署会话</p></div><div class="item-meta"><span class="tag">Relay</span><span>今天</span></div></div>
+                <div class="item-row"><span class="item-type idea">✦</span><div class="item-copy"><strong>从重复工作习惯中自动生成 Skill</strong><p>两周前记录的想法，与当前 Skill 管理讨论高度相关。</p></div><div class="item-meta"><span class="tag amber">重新浮现</span></div></div>
+              </div>
+            </article>
+
+            <article class="card">
+              <header class="card-header"><strong>项目动态</strong><small>AI 自动维护</small></header>
+              <div class="card-body project-pulse">
+                <div class="project-line"><div><strong>Steer</strong><small>产品模型与工作台原型</small></div><div class="progress"><span style="width:72%"></span></div><small>刚刚更新</small></div>
+                <div class="project-line"><div><strong>Relay</strong><small>Runtime 会话持久化</small></div><div class="progress"><span style="width:88%;background:#359567"></span></div><small>昨日完成</small></div>
+                <div class="project-line"><div><strong>个人研究</strong><small>AI 原生工作方式</small></div><div class="progress"><span style="width:35%;background:#c49055"></span></div><small>3 天未推进</small></div>
+              </div>
+            </article>
+          </section>
+
+          <aside class="grid" style="align-content:start">
+            <article class="card">
+              <header class="card-header"><strong>今天</strong><small>9 月 18 日</small></header>
+              <div class="card-body timeline">
+                <div class="timeline-row"><span class="timeline-time">09:30</span><span class="timeline-line"></span><div class="timeline-copy"><strong>检查线上部署状态</strong><small>提醒 · Steer</small></div></div>
+                <div class="timeline-row"><span class="timeline-time">现在</span><span class="timeline-line"></span><div class="timeline-copy"><strong>产品工作台设计</strong><small>正在讨论 · 已持续 42 分钟</small></div></div>
+                <div class="timeline-row"><span class="timeline-time">14:00</span><span class="timeline-line"></span><div class="timeline-copy"><strong>重新查看权限模型</strong><small>上下文提醒 · 打开 Relay 时</small></div></div>
+                <div class="timeline-row"><span class="timeline-time">17:30</span><span class="timeline-line"></span><div class="timeline-copy"><strong>AI 工作小结</strong><small>自动生成</small></div></div>
+              </div>
+            </article>
+            <article class="card">
+              <header class="card-header"><strong>Agent 活动</strong><small>跨会话</small></header>
+              <div class="card-body item-list">
+                <div class="item-row"><span class="item-type done">✓</span><div class="item-copy"><strong>Relay 安装器修复</strong><p>Codex · 10.37.82.77 · 已完成</p></div><span class="tag green">完成</span></div>
+                <div class="item-row"><span class="item-type todo">…</span><div class="item-copy"><strong>整理竞品资料</strong><p>Trae · research-node · 运行 8m</p></div><span class="tag accent">执行中</span></div>
+              </div>
+            </article>
+            <article class="card">
+              <header class="card-header"><strong>稍后再看</strong><small>4</small></header>
+              <div class="card-body item-list"><div class="item-row"><span class="item-type idea">✦</span><div class="item-copy"><strong>工作台支持“上下文提醒”</strong><p>进入相关项目或话题时自动浮现，而不仅是定时提醒。</p></div><span class="tag amber">Idea</span></div><div class="item-row"><span class="item-type">≡</span><div class="item-copy"><strong>AI 原生项目管理文章</strong><p>待读资料 · 来源网页收藏</p></div><span class="tag">Note</span></div></div>
+            </article>
+          </aside>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <details class="architecture-note"><summary>方案 A · Today-first</summary><div class="architecture-content"><h3>以人的注意力为中心</h3><p>Today 不是任务看板，而是 AI 从项目、会话、提醒、Idea 和 Agent 活动中生成的每日工作入口。</p><div class="architecture-flow"><span>Capture</span><i>→</i><span>AI 整理</span><i>→</i><span>Today</span><i>→</i><span>Work</span><i>→</i><span>沉淀</span></div></div></details>
+  <div class="dialog-backdrop" data-capture-dialog><form class="dialog" data-capture-form><header><h2>记录任何事情</h2><button class="close" type="button" data-close-capture>✕</button></header><textarea placeholder="例如：两周后提醒我重新讨论 Skill 自动生成；或者记录一个尚未成熟的想法……"></textarea><div class="type-picker"><button class="active" type="button" data-entry-type>自动判断</button><button type="button" data-entry-type>Todo</button><button type="button" data-entry-type>Idea</button><button type="button" data-entry-type>Note</button><button type="button" data-entry-type>Reminder</button></div><div class="dialog-footer"><small>AI 会建议项目、时间和相关内容</small><button class="button" type="button" data-close-capture>取消</button><button class="button primary" type="submit">记录</button></div></form></div>
+  <div class="toast" data-toast></div>
+  <script src="prototype.js"></script>
+</body>
+</html>

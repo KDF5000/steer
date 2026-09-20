@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Steer 工作台原型 B · Conversation</title>
+  <link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">S</span><span class="brand-copy"><strong>Steer</strong><small>Personal workspace</small></span><span class="workspace-chevron">⌄</span></div>
+      <button class="capture-button" data-open-capture><strong>＋</strong><span>记录任何事情</span><kbd>⌘ K</kbd></button>
+      <nav class="nav">
+        <section class="nav-section">
+          <a class="nav-item" href="01-today.html"><span class="nav-icon">◉</span><span>Today</span><span class="nav-count">5</span></a>
+          <a class="nav-item active" href="02-conversation.html"><span class="nav-icon">◌</span><span>Work</span><span class="nav-count">2</span></a>
+          <a class="nav-item" href="03-project.html"><span class="nav-icon">▱</span><span>Projects</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">⌁</span><span>Library</span></a>
+        </section>
+        <section class="nav-section">
+          <div class="nav-label">Steer · Recent</div>
+          <a class="nav-item active" href="#"><span class="nav-icon">›</span><span>AI 时代工作台应该是什么</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">›</span><span>网站 UI 与交互审查</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">›</span><span>长对话上下文方案</span></a>
+        </section>
+        <section class="nav-section">
+          <div class="nav-label">Relay · Recent</div>
+          <a class="nav-item" href="#"><span class="nav-icon">›</span><span>Runtime Session 修复</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">›</span><span>发布 v0.4.2</span></a>
+        </section>
+        <section class="nav-section" style="margin-top:auto">
+          <a class="nav-item" href="#"><span class="nav-icon">⚙</span><span>Agents & connections</span></a>
+        </section>
+      </nav>
+      <div class="account"><span class="avatar">K</span><span><strong>Kongdefei</strong><small>Personal workspace</small></span></div>
+    </aside>
+
+    <main class="main" style="overflow:hidden">
+      <header class="topbar"><span class="topbar-title">AI 时代工作台应该是什么</span><span class="context-chip"><i></i> Steer project</span><span class="context-chip">Codex · 77/steer</span><div class="topbar-actions"><button class="button ghost" data-demo-action="已生成分享链接">分享</button><button class="button icon" data-demo-action="右侧上下文已收起">◫</button></div></header>
+      <div class="work-layout">
+        <section class="conversation">
+          <div class="conversation-scroll">
+            <div class="thread">
+              <div class="message user"><div><p>有时候我们会有一些不紧急但重要的 Todo，也会有临时灵感，希望工作台能记录、提醒，并在必要时关联起来。</p></div></div>
+              <article class="message agent">
+                <div class="agent-process"><span class="pulse"></span><span>完成 · 已参考项目上下文、产品记忆和 2 个相关 Skill</span></div>
+                <div class="agent-response">
+                  <h3>可以把它设计成统一的 Capture，而不是三个割裂的系统。</h3>
+                  <p>用户只需要快速记录，AI 再判断它是 Todo、Idea、Note 还是 Reminder，并建议关联项目、会话和已有资产。Idea 不应自动成为任务，Note 也不应直接污染长期记忆。</p>
+                  <ul><li><strong>Todo</strong>：已经承诺执行的动作。</li><li><strong>Idea</strong>：尚未承诺、适合未来重新浮现的可能性。</li><li><strong>Reminder</strong>：在时间、上下文或条件满足时重新获得注意。</li></ul>
+                  <div class="extraction-card">
+                    <header><strong>本次讨论已整理</strong><span>可撤销</span></header>
+                    <div class="extracted-item"><span class="item-type idea">✦</span><strong>上下文提醒：进入相关项目或话题时重新浮现</strong><span class="tag amber">Idea</span></div>
+                    <div class="extracted-item"><span class="item-type todo">✓</span><strong>设计统一 Entry 模型与关联关系</strong><span class="tag accent">Todo</span></div>
+                    <div class="extracted-item"><span class="item-type">◇</span><strong>Todo、Idea、Memory 与 Asset 的边界</strong><span class="tag">Decision</span></div>
+                  </div>
+                </div>
+                <div class="message-actions"><button data-demo-action="已复制回复">复制</button><button data-demo-action="已标记为有帮助">有帮助</button><button data-demo-action="已打开整理详情">查看整理详情</button><span>10:42</span></div>
+              </article>
+              <div class="message user"><div><p>把这些内容重新梳理清楚，然后给我几个工作台方案。</p></div></div>
+              <article class="message agent">
+                <div class="agent-process"><span class="pulse"></span><span>正在设计工作台原型 · 读取了 5 个文件 · 更新项目简报</span></div>
+                <div class="agent-response"><p>我会使用同一套信息架构，分别验证 Today-first、Conversation-first 和 Project-first 三种重心。完成后会将原型作为项目资产保存。</p></div>
+              </article>
+            </div>
+          </div>
+          <div class="composer-wrap">
+            <form class="composer" onsubmit="event.preventDefault(); document.querySelector('[data-toast]').textContent='消息已发送给当前 Agent'; document.querySelector('[data-toast]').classList.add('show'); setTimeout(()=>document.querySelector('[data-toast]').classList.remove('show'),1800)">
+              <textarea aria-label="Message" placeholder="继续讨论，或者让 AI 处理下一步……"></textarea>
+              <div class="composer-footer"><button class="button ghost small" type="button" data-open-capture>＋</button><span class="context-chip">Codex</span><span class="context-chip">Steer</span><button class="send" aria-label="发送">↑</button></div>
+            </form>
+          </div>
+        </section>
+
+        <aside class="context-panel">
+          <header><strong>本次工作的上下文</strong><button class="button ghost icon" style="margin-left:auto" data-demo-action="上下文检查器已打开">⋯</button></header>
+          <section class="context-section"><h4>Project</h4><div class="context-row"><span class="project-dot"></span><span><strong>Steer</strong><small>AI-native personal workbench</small></span></div><div class="context-row"><span class="dot"></span><span>项目简报刚刚由 AI 更新<small>来源：当前会话</small></span></div></section>
+          <section class="context-section"><h4>Working context</h4><div class="context-row"><span class="dot" style="background:#319365"></span><span>10.37.82.77 / steer<small>在线 · main · 2 个未提交文件</small></span></div><div class="context-row"><span class="dot"></span><span>Codex · GPT-5.6 Sol<small>原生会话已连接</small></span></div></section>
+          <section class="context-section"><h4>Active memories · 3</h4><div class="context-row"><span class="dot"></span><span>产品应避免退化为传统任务管理<small>Project memory · 9 月 18 日</small></span></div><div class="context-row"><span class="dot"></span><span>重要产品决策需要保留来源<small>Personal preference</small></span></div><button class="button ghost small" data-demo-action="已展开本轮使用的记忆">查看全部</button></section>
+          <section class="context-section"><h4>Active skills · 2</h4><div class="scope-row"><span>UI</span><div><strong>Product design review</strong><small>Project scope · v3</small></div><em>启用</em></div><div class="scope-row"><span>文</span><div><strong>Chinese product writing</strong><small>Personal scope · v2</small></div><em>启用</em></div></section>
+          <section class="context-section"><h4>Linked items</h4><div class="context-row"><span class="item-type idea">✦</span><span>从工作习惯中自动生成 Skill<small>Idea · 两周后重新浮现</small></span></div><div class="context-row"><span class="item-type">□</span><span>AI workbench IA.md<small>Asset · 正在生成</small></span></div></section>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <details class="architecture-note"><summary>方案 B · Conversation-first</summary><div class="architecture-content"><h3>保留 ChatGPT 式主体验</h3><p>对话仍然是主工作面，但右侧持续显示 AI 本轮使用的项目、记忆、Skill、位置和关联内容；工作结束后自动沉淀。</p><div class="architecture-flow"><span>Chat</span><i>+</i><span>Context</span><i>→</i><span>执行</span><i>→</i><span>自动整理</span></div></div></details>
+  <div class="dialog-backdrop" data-capture-dialog><form class="dialog" data-capture-form><header><h2>从当前上下文记录</h2><button class="close" type="button" data-close-capture>✕</button></header><textarea placeholder="记录 Todo、Idea、Note 或 Reminder；当前项目与会话会自动关联……"></textarea><div class="type-picker"><button class="active" type="button" data-entry-type>自动判断</button><button type="button" data-entry-type>Todo</button><button type="button" data-entry-type>Idea</button><button type="button" data-entry-type>Note</button><button type="button" data-entry-type>Reminder</button></div><div class="dialog-footer"><small>关联：Steer · 当前会话</small><button class="button" type="button" data-close-capture>取消</button><button class="button primary" type="submit">记录</button></div></form></div>
+  <div class="toast" data-toast></div>
+  <script src="prototype.js"></script>
+</body>
+</html>

@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Steer · 工作日志方案</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #fff; --sidebar: #f7f7f8; --surface: #fff; --subtle: #f7f7f8; --hover: #f0f0f2;
+      --border: #e5e5e7; --border-strong: #d5d5d9; --text: #202124; --secondary: #686970;
+      --tertiary: #92939b; --accent: #5556cf; --accent-hover: #4849bb; --accent-soft: #ececfd;
+      --positive: #27845a; --positive-soft: #eaf6ef; --warning: #9a681f;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; }
+    body { margin: 0; overflow: hidden; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    button, textarea { color: inherit; font: inherit; } button { cursor: pointer; }
+    svg { width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.75; }
+    button:focus-visible, textarea:focus-visible { outline: 2px solid #8e8fe0; outline-offset: 2px; }
+    .app { display: grid; grid-template-columns: 238px minmax(0, 1fr); height: 100%; }
+    .sidebar { display: flex; min-width: 0; flex-direction: column; border-right: 1px solid var(--border); background: var(--sidebar); }
+    .sidebar-head { display: grid; gap: 12px; padding: 14px 10px 8px; }
+    .workspace { display: flex; width: 100%; align-items: center; gap: 10px; border: 0; border-radius: 9px; background: transparent; padding: 3px 5px; text-align: left; }
+    .workspace:hover, .account:hover { background: #ededf0; }
+    .logo { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 9px; background: #2f3038; color: #fff; font-size: 13px; font-weight: 720; }
+    .workspace-copy, .account-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; line-height: 1.3; }
+    .workspace-copy strong { font-size: 14px; font-weight: 650; }
+    .workspace-copy small, .account-copy small { color: var(--tertiary); font-size: 11px; }
+    .workspace > svg, .account > svg { width: 14px; height: 14px; color: var(--tertiary); }
+    .search { display: flex; width: 100%; height: 34px; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 0 9px; color: #83848c; text-align: left; box-shadow: 0 1px 2px #17181b08; }
+    .search:hover { border-color: var(--border-strong); } .search kbd { margin-left: auto; color: #a0a1a8; font-family: inherit; font-size: 12px; }
+    .sidebar-scroll { min-height: 0; flex: 1; overflow: auto; padding: 1px 8px 8px; scrollbar-width: none; }
+    .menu-label { height: 30px; padding: 8px 8px 0; color: #96979e; font-size: 12px; font-weight: 620; letter-spacing: .025em; }
+    .menu { display: grid; gap: 1px; margin: 0; padding: 5px 0; list-style: none; }
+    .nav { display: flex; width: 100%; height: 36px; align-items: center; gap: 9px; border: 0; border-radius: 7px; background: transparent; padding: 0 9px; color: #686970; text-align: left; }
+    .nav:hover { background: #ececef; color: #3d3e43; } .nav.active { background: #e8e8fa; color: #4c4db5; font-weight: 560; }
+    .nav svg { width: 15px; height: 15px; color: #81828a; } .nav.active svg { color: #595bd0; }
+    .nav .count { margin-left: auto; color: #9a9ba2; font-size: 12px; }
+    .sidebar-foot { border-top: 1px solid var(--border); padding: 9px 10px 12px; }
+    .account { display: flex; width: 100%; align-items: center; gap: 9px; border: 0; border-radius: 9px; background: transparent; padding: 4px 5px; text-align: left; }
+    .avatar { display: grid; width: 29px; height: 29px; place-items: center; border-radius: 8px; background: #e8e8ea; color: #5e6068; font-size: 12px; font-weight: 650; }
+    .account-copy strong { color: #52535a; font-size: 12px; font-weight: 560; }
+    .main { display: flex; min-width: 0; height: 100dvh; flex-direction: column; overflow: hidden; background: #fff; }
+    .topbar { display: flex; height: 58px; flex: 0 0 auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); padding: 0 18px; }
+    .icon-button { display: grid; width: 34px; height: 34px; place-items: center; border: 0; border-radius: 9px; background: transparent; color: #707179; }
+    .icon-button:hover { background: var(--subtle); color: #3f4046; }
+    .topbar-title { font-size: 13px; font-weight: 620; } .topbar-title span { margin-left: 6px; color: var(--tertiary); font-size: 11px; font-weight: 450; }
+    .concept-switch { display: flex; gap: 3px; margin-left: auto; border-radius: 10px; background: var(--subtle); padding: 3px; }
+    .concept-switch button { height: 30px; border: 0; border-radius: 8px; background: transparent; padding: 0 12px; color: var(--secondary); font-size: 12px; }
+    .concept-switch button:hover { color: var(--text); } .concept-switch button.active { background: #fff; color: var(--text); box-shadow: 0 1px 3px #18181b14; font-weight: 600; }
+    .viewport { min-height: 0; flex: 1; overflow: hidden; } .concept { display: none; height: 100%; } .concept.active { display: flex; }
+    .date-rail { width: 212px; flex: 0 0 auto; border-right: 1px solid var(--border); background: #fbfbfc; padding: 22px 12px; }
+    .rail-head { display: flex; align-items: center; padding: 0 7px 14px; } .rail-head h2 { margin: 0; font-size: 15px; font-weight: 650; }
+    .rail-head button { width: 28px; height: 28px; margin-left: auto; border: 0; border-radius: 7px; background: transparent; color: var(--tertiary); } .rail-head button:hover { background: var(--hover); }
+    .week-link { display: flex; width: 100%; height: 38px; align-items: center; gap: 8px; margin-bottom: 16px; border: 0; border-radius: 8px; background: var(--accent-soft); padding: 0 10px; color: #4c4db5; font-size: 12px; font-weight: 600; text-align: left; } .week-link svg { width: 14px; height: 14px; }
+    .rail-label { padding: 0 8px 6px; color: var(--tertiary); font-size: 10px; font-weight: 620; letter-spacing: .05em; text-transform: uppercase; }
+    .day-list { display: grid; gap: 2px; } .day-button { display: grid; width: 100%; grid-template-columns: 1fr auto; gap: 2px 8px; border: 0; border-radius: 8px; background: transparent; padding: 9px 10px; text-align: left; }
+    .day-button:hover { background: var(--hover); } .day-button.active { background: #ededfa; }
+    .day-button strong { font-size: 12px; font-weight: 600; } .day-button small { color: var(--tertiary); font-size: 10px; } .day-button .state { grid-row: 1 / 3; grid-column: 2; align-self: center; color: var(--positive); font-size: 12px; } .day-button.active .state { color: var(--accent); }
+    .journal { min-width: 0; flex: 1; overflow: auto; scrollbar-width: none; }
+    .journal-inner { width: min(780px, calc(100% - 72px)); margin: 0 auto; padding: 46px 0 64px; }
+    .journal-head { display: flex; align-items: flex-start; gap: 20px; } .journal-head h1 { margin: 0; font-size: 27px; font-weight: 660; letter-spacing: -.035em; } .journal-head p { margin: 5px 0 0; color: var(--tertiary); font-size: 11px; }
+    .saved { display: flex; align-items: center; gap: 5px; margin: 7px 0 0 auto; color: var(--positive); font-size: 10px; } .saved svg { width: 12px; height: 12px; }
+    .journal-text { display: block; width: 100%; min-height: 280px; margin-top: 32px; resize: vertical; border: 0; outline: 0; color: #33343a; font-size: 14px; line-height: 1.82; } .journal-text::placeholder { color: #afb0b6; }
+    .summary-card { margin-top: 30px; border: 1px solid #e7e7f4; border-radius: 14px; background: #fafaff; padding: 18px; }
+    .summary-head { display: flex; align-items: center; gap: 8px; } .spark { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 8px; background: var(--accent-soft); color: var(--accent); } .spark svg { width: 14px; height: 14px; }
+    .summary-head strong { font-size: 13px; font-weight: 640; } .summary-head span { color: var(--tertiary); font-size: 10px; }
+    .summary-card p { margin: 14px 0 0 36px; color: #595a62; font-size: 12.5px; line-height: 1.75; }
+    .summary-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 14px; }
+    .button { display: inline-flex; height: 34px; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 0 11px; color: var(--secondary); font-size: 11px; font-weight: 570; } .button:hover { background: var(--hover); } .button.primary { border-color: var(--accent); background: var(--accent); color: #fff; } .button.primary:hover { background: var(--accent-hover); } .button svg { width: 13px; height: 13px; }
+    /* B timeline */
+    .feed-wrap { width: min(790px, calc(100% - 64px)); margin: 0 auto; padding: 40px 0 70px; } .feed-top { display: flex; align-items: center; } .feed-top h1 { margin: 0; font-size: 27px; font-weight: 660; letter-spacing: -.035em; } .feed-top .button { margin-left: auto; }
+    .capture { margin-top: 24px; border: 1px solid var(--border-strong); border-radius: 14px; background: #fff; padding: 12px; box-shadow: 0 7px 24px #18181b0a; } .capture textarea { display: block; width: 100%; min-height: 62px; resize: none; border: 0; outline: 0; padding: 2px; font-size: 13px; line-height: 1.6; } .capture footer { display: flex; align-items: center; color: var(--tertiary); font-size: 10px; } .capture footer .button { margin-left: auto; }
+    .capture-tools { display: flex; align-items: center; gap: 8px; border-top: 1px solid #f0f0f2; padding-top: 10px; }
+    .ai-button { display: inline-flex; height: 32px; align-items: center; gap: 6px; border: 0; border-radius: 8px; background: var(--accent-soft); padding: 0 10px; color: #4e50bd; font-size: 11px; font-weight: 600; } .ai-button:hover { background: #e3e3fb; } .ai-button:disabled { cursor: wait; opacity: .72; } .ai-button svg { width: 13px; height: 13px; }
+    .capture-hint { margin-left: 2px; color: var(--tertiary); font-size: 10px; }
+    .capture-meta { display: none; align-items: center; gap: 7px; margin: 3px 2px 10px; color: #777881; font-size: 10px; } .capture-meta.show { display: flex; } .capture-meta .source-pill { border-radius: 10px; background: var(--positive-soft); padding: 2px 7px; color: var(--positive); }
+    .activity-progress { display: none; margin: 2px 2px 11px; border-radius: 9px; background: #f7f7fd; padding: 9px 10px; color: #6869a8; font-size: 10.5px; } .activity-progress.show { display: flex; align-items: center; gap: 8px; } .activity-progress i { width: 12px; height: 12px; border: 2px solid #c8c9ef; border-top-color: var(--accent); border-radius: 50%; animation: spin .75s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
+    .feed-day { margin-top: 34px; } .feed-day > header { display: flex; align-items: baseline; border-bottom: 1px solid var(--border); padding-bottom: 10px; } .feed-day h2 { margin: 0; font-size: 14px; font-weight: 640; } .feed-day header span { margin-left: 7px; color: var(--tertiary); font-size: 11px; }
+    .entries { padding: 8px 0 5px; } .entry { display: grid; grid-template-columns: 48px 10px minmax(0, 1fr); gap: 9px; align-items: start; min-height: 48px; padding: 10px 4px; } .entry time { color: var(--tertiary); font-size: 10px; } .entry-dot { width: 6px; height: 6px; margin-top: 5px; border-radius: 50%; background: #b8b9c0; } .entry p { margin: 0; color: #484950; font-size: 12.5px; }
+    .inline-summary { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0 0 62px; border-radius: 11px; background: #f8f8fe; padding: 12px; } .inline-summary .spark { width: 25px; height: 25px; } .inline-summary p { margin: 1px 0 0; color: #666770; font-size: 11.5px; line-height: 1.65; } .inline-summary strong { color: #4d4e55; font-size: 11.5px; }
+    .feed-toolbar { display: flex; align-items: center; gap: 7px; margin-top: 28px; border-bottom: 1px solid var(--border); padding-bottom: 10px; } .feed-toolbar h2 { margin: 0; font-size: 12px; font-weight: 630; } .feed-toolbar .month-button { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; border: 0; border-radius: 7px; background: transparent; padding: 6px 8px; color: var(--secondary); font-size: 10.5px; } .feed-toolbar .month-button:hover { background: var(--hover); }
+    .today-day { margin-top: 18px; }
+    .day-group { margin-top: 12px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #fff; } .day-toggle { display: grid; width: 100%; grid-template-columns: minmax(0,1fr) auto; gap: 3px 12px; border: 0; background: #fff; padding: 14px 15px; text-align: left; } .day-toggle:hover { background: #fbfbfc; } .day-toggle strong { font-size: 12px; font-weight: 630; } .day-toggle small { grid-column: 1; color: var(--tertiary); font-size: 10px; } .day-toggle .chevron { grid-row: 1 / 3; grid-column: 2; align-self: center; color: var(--tertiary); transition: transform 160ms ease; } .day-group.open .chevron { transform: rotate(180deg); }
+    .day-preview { display: flex; gap: 8px; border-top: 1px solid #f0f0f2; background: #fbfbfc; padding: 10px 15px; color: #777880; font-size: 10.5px; line-height: 1.55; } .day-preview .mini-spark { color: var(--accent); } .day-group.open .day-preview { display: none; }
+    .day-detail { display: none; border-top: 1px solid var(--border); padding: 5px 15px 14px; } .day-group.open .day-detail { display: block; } .day-detail .entries { padding-left: 0; } .day-detail .inline-summary { margin-left: 62px; }
+    .load-more { display: flex; width: 100%; height: 38px; align-items: center; justify-content: center; margin-top: 14px; border: 1px dashed var(--border-strong); border-radius: 10px; background: transparent; color: var(--secondary); font-size: 10.5px; } .load-more:hover { border-style: solid; background: var(--subtle); }
+    .source-detail { display: none; margin-top: 9px; border: 1px solid var(--border); border-radius: 10px; background: #fbfbfc; padding: 6px; } .source-detail.show { display: grid; } .source-row { display: flex; align-items: center; gap: 9px; border-radius: 7px; padding: 7px 8px; color: #666770; font-size: 10.5px; } .source-row:hover { background: #f0f0f2; } .source-icon { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 6px; background: #e9e9ec; color: #60616a; font-size: 9px; font-weight: 700; } .source-row span:nth-child(2) { min-width: 0; flex: 1; } .source-row time { color: var(--tertiary); font-size: 9px; }
+    /* Full-page weekly summary concepts */
+    .week-view { width: 100%; overflow: auto; background: #fbfbfc; }
+    .week-shell { width: min(1120px, calc(100% - 64px)); margin: 0 auto; padding: 34px 0 72px; }
+    .week-page-head { display: flex; align-items: flex-start; gap: 20px; } .week-page-head h1 { margin: 0; font-size: 26px; font-weight: 660; letter-spacing: -.035em; } .week-page-head p { margin: 5px 0 0; color: var(--tertiary); font-size: 11px; }
+    .week-head-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; } .week-step { display: flex; gap: 2px; margin-right: 4px; } .week-step button { display: grid; width: 31px; height: 31px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--secondary); font-size: 18px; } .week-step button:hover { background: var(--hover); }
+    .week-browser { margin: 25px 0 18px; }
+    .week-browser-head { display: flex; align-items: center; margin-bottom: 9px; } .week-browser-head strong { font-size: 11px; font-weight: 650; } .week-browser-head span { margin-left: 7px; color: var(--tertiary); font-size: 10px; } .week-browser-head button { margin-left: auto; border: 0; border-radius: 7px; background: transparent; padding: 5px 8px; color: var(--secondary); font-size: 10px; } .week-browser-head button:hover { background: var(--hover); }
+    .week-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; } .week-card { position: relative; min-width: 0; border: 1px solid var(--border); border-radius: 11px; background: #fff; padding: 11px 12px; text-align: left; } .week-card:hover { border-color: var(--border-strong); background: #fdfdfe; } .week-card.active { border-color: #c8c8ee; background: var(--accent-soft); box-shadow: 0 0 0 1px #dadaf5 inset; } .week-card strong { display: block; overflow: hidden; font-size: 11.5px; font-weight: 640; text-overflow: ellipsis; white-space: nowrap; } .week-card span { display: block; margin-top: 3px; overflow: hidden; color: var(--tertiary); font-size: 9.5px; text-overflow: ellipsis; white-space: nowrap; } .week-card em { position: absolute; top: 11px; right: 11px; width: 6px; height: 6px; border-radius: 50%; background: #58a77d; } .week-card.active strong { color: #4c4db5; }
+    .week-option { display: none; } .week-option.active { display: block; }
+    .week-panel { border: 1px solid var(--border); border-radius: 14px; background: #fff; box-shadow: 0 4px 18px #18181b08; }
+    .week-summary-large { padding: 26px 28px; } .week-summary-large header { display: flex; align-items: center; gap: 10px; } .week-summary-large header > div { min-width: 0; } .week-summary-large h2 { margin: 0; font-size: 16px; font-weight: 660; } .week-summary-large header p { margin: 2px 0 0; color: var(--tertiary); font-size: 10px; } .week-summary-large header .summary-actions { margin: 0 0 0 auto; }
+    .week-lead { margin: 22px 0 0; color: #505159; font-size: 13px; line-height: 1.75; } .week-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 34px; margin-top: 25px; } .week-summary-block h3 { margin: 0 0 9px; color: #4f5057; font-size: 11px; font-weight: 660; } .week-summary-block ul { display: grid; gap: 7px; margin: 0; padding-left: 17px; color: #696a72; font-size: 11.5px; line-height: 1.55; }
+    .week-a-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(310px, .65fr); gap: 16px; align-items: start; } .week-a-days { display: grid; gap: 8px; }
+    .week-day-row { border: 1px solid var(--border); border-radius: 11px; background: #fff; overflow: hidden; } .week-day-row > button { display: grid; width: 100%; grid-template-columns: 46px minmax(0,1fr) auto; gap: 11px; align-items: center; border: 0; background: transparent; padding: 13px 14px; text-align: left; } .week-day-row > button:hover { background: #fbfbfc; } .day-date { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 9px; background: var(--subtle); color: var(--secondary); line-height: 1.1; } .day-date strong { font-size: 14px; } .day-date small { font-size: 8px; } .week-day-row.today .day-date { background: var(--accent-soft); color: #4c4db5; } .week-day-copy strong { display: block; font-size: 11.5px; font-weight: 630; } .week-day-copy span { display: block; margin-top: 3px; overflow: hidden; color: var(--tertiary); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; } .week-day-count { color: var(--tertiary); font-size: 9.5px; } .week-day-detail { display: none; border-top: 1px solid var(--border); padding: 8px 15px 14px 72px; } .week-day-row.open .week-day-detail { display: block; } .week-day-detail p { margin: 7px 0; color: #63646c; font-size: 10.5px; }
+    .week-b-summary { margin-bottom: 16px; } .week-card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; } .week-day-card { min-height: 178px; padding: 17px; } .week-day-card header { display: flex; align-items: baseline; border-bottom: 1px solid #efeff1; padding-bottom: 10px; } .week-day-card h3 { margin: 0; font-size: 12px; font-weight: 650; } .week-day-card header span { margin-left: auto; color: var(--tertiary); font-size: 9px; } .week-day-card ul { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; color: #62636b; font-size: 10.5px; line-height: 1.5; } .week-day-card li::before { margin-right: 7px; color: #b0b1b8; content: "•"; } .week-day-card.empty { display: grid; place-items: center; border-style: dashed; color: var(--tertiary); font-size: 10px; box-shadow: none; }
+    .week-c-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 24px; align-items: start; } .week-outline { position: sticky; top: 22px; padding: 16px; } .week-outline strong { display: block; margin-bottom: 10px; font-size: 11px; } .week-outline button { display: flex; width: 100%; align-items: center; gap: 8px; border: 0; border-radius: 7px; background: transparent; padding: 7px 8px; color: var(--secondary); font-size: 10.5px; text-align: left; } .week-outline button:hover, .week-outline button.active { background: var(--accent-soft); color: #4c4db5; } .week-document { padding: 38px 46px; } .week-document .week-summary-large { padding: 0 0 32px; border-bottom: 1px solid var(--border); box-shadow: none; } .document-day { padding: 26px 0; border-bottom: 1px solid var(--border); } .document-day:last-child { border-bottom: 0; } .document-day header { display: flex; align-items: baseline; } .document-day h3 { margin: 0; font-size: 14px; } .document-day header span { margin-left: 8px; color: var(--tertiary); font-size: 10px; } .document-day ul { display: grid; gap: 8px; margin: 13px 0 0; padding-left: 18px; color: #5f6068; font-size: 11.5px; line-height: 1.6; }
+    .toast { position: fixed; z-index: 10; right: 22px; bottom: 22px; transform: translateY(12px); border-radius: 10px; background: #2f3038; padding: 9px 13px; color: #fff; opacity: 0; pointer-events: none; box-shadow: 0 14px 36px #18181b29; transition: 180ms ease; font-size: 11px; } .toast.show { transform: translateY(0); opacity: 1; }
+    @media (max-width: 980px) { .date-rail { width: 180px; } .week-a-grid { grid-template-columns: 1fr; } .week-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } .week-card-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 780px) { body { overflow: auto; } .app { grid-template-columns: 1fr; } .sidebar { display: none; } .topbar { position: sticky; z-index: 3; top: 0; background: #ffffffed; backdrop-filter: blur(12px); } .topbar-title span { display: none; } .concept-switch button { padding: 0 9px; } .viewport { overflow: auto; } .concept { min-height: calc(100dvh - 58px); height: auto; } .date-rail { display: none; } .journal-inner, .feed-wrap { width: calc(100% - 32px); padding-top: 28px; } .journal-text { min-height: 340px; } .week-shell { width: calc(100% - 32px); padding-top: 24px; } .week-page-head { flex-wrap: wrap; } .week-head-actions { width: 100%; margin-left: 0; } .week-concept-bar { align-items: flex-start; overflow-x: auto; } .week-concept-bar > span { display: none; } .week-switch { min-width: max-content; } .week-summary-grid { grid-template-columns: 1fr; } .week-card-grid { grid-template-columns: 1fr; } .week-c-layout { grid-template-columns: 1fr; } .week-outline { position: static; display: flex; overflow-x: auto; } .week-outline strong { display: none; } .week-outline button { width: auto; min-width: max-content; } .week-document { padding: 28px 22px; } }
+    @media (max-width: 520px) { .topbar { padding: 0 10px; } .topbar-title { display: none; } .concept-switch { width: 100%; } .concept-switch button { flex: 1; padding: 0 5px; } .journal-head h1, .feed-top h1, .week-page-head h1 { font-size: 23px; } .summary-card p { margin-left: 0; } .inline-summary, .day-detail .inline-summary { margin-left: 0; } .capture-tools { flex-wrap: wrap; } .capture-hint { order: 3; width: 100%; } .feed-top .button { padding: 0 8px; } .week-head-actions .week-step { display: none; } .week-list { display: flex; overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x mandatory; } .week-card { min-width: 164px; scroll-snap-align: start; } .week-summary-large { padding: 21px 18px; } .week-summary-large header { flex-wrap: wrap; } .week-summary-large header .summary-actions { width: 100%; margin: 8px 0 0; justify-content: flex-start; } .week-day-row > button { grid-template-columns: 42px minmax(0,1fr); } .week-day-count { display: none; } .week-day-detail { padding-left: 66px; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <header class="sidebar-head">
+        <button class="workspace" type="button"><span class="logo">S</span><span class="workspace-copy"><strong>Steer</strong><small>Personal workspace</small></span><svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></button>
+        <button class="search" type="button"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search <kbd>⌘ K</kbd></button>
+      </header>
+      <div class="sidebar-scroll">
+        <ul class="menu"><li><button class="nav" type="button"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>New chat</button></li></ul>
+        <div class="menu-label">Projects</div>
+        <ul class="menu"><li><button class="nav" type="button"><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v10H3Z"/></svg>Steer</button></li><li><button class="nav" type="button"><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v10H3Z"/></svg>Relay</button></li><li><button class="nav" type="button"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add project</button></li></ul>
+        <div class="menu-label">Workspace</div>
+        <ul class="menu">
+          <li><button class="nav" type="button"><svg viewBox="0 0 24 24"><path d="M4 19.5V5a2 2 0 0 1 2-2h11v18H6a2 2 0 0 1-2-1.5Z"/></svg>Assets<span class="count">8</span></button></li>
+          <li><button class="nav active" type="button"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>工作日志</button></li>
+          <li><button class="nav" type="button"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5"/></svg>Artifacts<span class="count">3</span></button></li>
+        </ul>
+        <div class="menu-label">System</div>
+        <ul class="menu"><li><button class="nav" type="button"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="3"/><path d="M9 12h.01M15 12h.01M12 3v3"/></svg>Agents<span class="count">2</span></button></li><li><button class="nav" type="button"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="2"/><rect x="4" y="14" width="16" height="6" rx="2"/></svg>Runtimes<span class="count">1</span></button></li></ul>
+      </div>
+      <footer class="sidebar-foot"><button class="account" type="button"><span class="avatar">K</span><span class="account-copy"><strong>Kongdefei</strong><small>kongdefei@example.com</small></span><svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></button></footer>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-button" type="button" aria-label="折叠侧栏"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+        <div class="topbar-title">工作日志 <span>时间流交互预览</span></div>
+      </header>
+      <div class="viewport">
+        <section class="concept" data-panel="a">
+          <aside class="date-rail">
+            <div class="rail-head"><h2>工作日志</h2><button type="button" aria-label="更多">•••</button></div>
+            <button class="week-link" type="button" data-go-week><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>查看本周总结</button>
+            <div class="rail-label">9 月</div>
+            <div class="day-list">
+              <button class="day-button active" type="button" data-date="9月19日 周六"><strong>今天</strong><small>9 月 19 日</small><span class="state">●</span></button>
+              <button class="day-button" type="button" data-date="9月18日 周五"><strong>昨天</strong><small>9 月 18 日</small><span class="state">✓</span></button>
+              <button class="day-button" type="button" data-date="9月17日 周四"><strong>周四</strong><small>9 月 17 日</small><span class="state">✓</span></button>
+              <button class="day-button" type="button" data-date="9月16日 周三"><strong>周三</strong><small>9 月 16 日</small><span class="state">·</span></button>
+              <button class="day-button" type="button" data-date="9月15日 周二"><strong>周二</strong><small>9 月 15 日</small><span class="state">✓</span></button>
+            </div>
+          </aside>
+          <div class="journal"><div class="journal-inner">
+            <header class="journal-head"><div><h1 data-date-title>9月19日 周六</h1><p>记录今天完成的工作、进展或遇到的问题</p></div><span class="saved"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg><span data-save-state>已保存</span></span></header>
+            <textarea class="journal-text" aria-label="今日日志" data-save-input placeholder="今天做了什么？&#10;&#10;直接开始输入即可，内容会自动保存……">- 完成资产管理接口联调&#10;- 重新设计工作日志的产品模型和交互方案&#10;- 排查 PostgreSQL 集成测试中的数据残留问题&#10;&#10;明天继续完成移动端体验和 AI 总结流程。</textarea>
+            <article class="summary-card"><header class="summary-head"><span class="spark"><svg viewBox="0 0 24 24"><path d="m12 3 1.4 4.1L17.5 9l-4.1 1.4L12 14.5l-1.4-4.1L6.5 9l4.1-1.9Z"/></svg></span><div><strong>今日总结</strong><br><span>由 AI 根据今天的日志生成</span></div></header><p data-summary>今天完成了资产管理接口联调，并重新梳理了工作日志的产品方向。与此同时排查了 PostgreSQL 测试问题，下一步将继续优化移动端体验和 AI 总结流程。</p><footer class="summary-actions"><button class="button" type="button" data-copy>复制</button><button class="button primary" type="button" data-generate><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v6h-6"/></svg>重新生成</button></footer></article>
+          </div></div>
+        </section>
+        <section class="concept active" data-panel="b"><div class="journal"><div class="feed-wrap">
+          <header class="feed-top"><div><h1>工作日志</h1><p style="margin:5px 0 0;color:var(--tertiary);font-size:11px">记录工作进展，或让 AI 从 Agent 活动中帮你整理</p></div><button class="button" type="button" data-go-week>本周总结</button></header>
+          <form class="capture" data-capture>
+            <textarea aria-label="快速记录" placeholder="记录刚刚完成的工作，或让 AI 自动整理今日活动…"></textarea>
+            <div class="activity-progress" data-activity-progress><i></i><span>正在读取今天的 Agent 活动…</span></div>
+            <div class="capture-meta" data-capture-meta><span class="source-pill">AI 已整理</span><span>基于今天 8 个 Agent 任务 · 内容可继续编辑</span><button class="button" style="height:25px;margin-left:auto" type="button" data-show-sources>查看来源</button></div>
+            <div class="source-detail" data-source-detail><div class="source-row"><span class="source-icon">S</span><span>资产管理接口联调与 Skill 工作流验证</span><time>16:28</time></div><div class="source-row"><span class="source-icon">S</span><span>工作日志交互与移动端布局优化</span><time>14:42</time></div><div class="source-row"><span class="source-icon">S</span><span>PostgreSQL 集成测试问题排查</span><time>11:16</time></div></div>
+            <footer class="capture-tools"><button class="ai-button" type="button" data-agent-summary><svg viewBox="0 0 24 24"><path d="m12 3 1.4 4.1L17.5 9l-4.1 1.4L12 14.5l-1.4-4.1L6.5 9l4.1-1.9Z"/></svg><span>汇总今日 Agent 活动</span></button><span class="capture-hint">你确认后才会写入日志</span><button class="button primary" type="submit" data-submit-log>添加到日志</button></footer>
+          </form>
+          <div class="feed-toolbar"><h2>最近记录</h2><button class="month-button" type="button" data-month><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>2026 年 9 月</button></div>
+          <section class="feed-day today-day"><header><h2>今天</h2><span data-today-count>9 月 19 日 · 3 条记录</span></header><div class="entries" data-entries><article class="entry"><time>16:40</time><span class="entry-dot"></span><p>完成工作日志的三套交互方案</p></article><article class="entry"><time>14:15</time><span class="entry-dot"></span><p>修复资产管理接口异常，并补充集成测试</p></article><article class="entry"><time>10:30</time><span class="entry-dot"></span><p>和团队确认本周发布范围</p></article></div><div class="inline-summary"><span class="spark"><svg viewBox="0 0 24 24"><path d="m12 3 1.4 4.1L17.5 9l-4.1 1.4L12 14.5l-1.4-4.1L6.5 9l4.1-1.9Z"/></svg></span><p><strong>今日总结</strong><br>今天主要完成了资产管理联调和工作日志方案设计，并明确了本周发布范围。</p></div></section>
+          <section class="day-group open"><button class="day-toggle" type="button"><strong>昨天 · 9 月 18 日</strong><small>2 条记录</small><svg class="chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></button><div class="day-preview"><span class="mini-spark">✦</span><span>完成 Skill 导入和 Agent 绑定验证，并优化了移动端布局。</span></div><div class="day-detail"><div class="entries"><article class="entry"><time>17:20</time><span class="entry-dot"></span><p>完成 Skill 导入与 Agent 绑定测试</p></article><article class="entry"><time>11:00</time><span class="entry-dot"></span><p>优化工作日志移动端布局</p></article></div><div class="inline-summary"><span class="spark">✦</span><p><strong>昨日总结</strong><br>完成 Skill 导入和 Agent 绑定验证，并优化了移动端布局。</p></div></div></section>
+          <section class="day-group"><button class="day-toggle" type="button"><strong>9 月 17 日 · 周四</strong><small>5 条记录</small><svg class="chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></button><div class="day-preview"><span class="mini-spark">✦</span><span>完成聊天 Skill 透传、数据库迁移和真实 HTTP 流程验证。</span></div><div class="day-detail"><div class="entries"><article class="entry"><time>18:05</time><span class="entry-dot"></span><p>验证聊天请求中的 Skill 指令透传</p></article><article class="entry"><time>15:30</time><span class="entry-dot"></span><p>完成数据库迁移与 HTTP 集成测试</p></article><article class="entry"><time>10:20</time><span class="entry-dot"></span><p>补齐文档链接和工作区隔离逻辑</p></article></div></div></section>
+          <section class="day-group"><button class="day-toggle" type="button"><strong>9 月 16 日 · 周三</strong><small>3 条记录</small><svg class="chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></button><div class="day-preview"><span class="mini-spark">✦</span><span>完成资产管理页面和文档外链的首轮实现。</span></div><div class="day-detail"><div class="entries"><article class="entry"><time>16:10</time><span class="entry-dot"></span><p>完成资产管理页面的 Skill 列表与操作</p></article><article class="entry"><time>13:45</time><span class="entry-dot"></span><p>实现文档外链的新增、编辑和删除</p></article></div></div></section>
+          <div data-older-days></div><button class="load-more" type="button" data-load-more>加载更早 7 天</button>
+        </div></div></section>
+        <section class="concept" data-panel="c"><div class="week-view"><div class="week-shell">
+          <header class="week-page-head"><div><h1>每周总结</h1><p data-week-meta>第 38 周 · 9 月 14 日—9 月 20 日 · 已记录 5 天，共 16 条</p></div><div class="week-head-actions"><div class="week-step"><button type="button" aria-label="上一周" data-week-prev>‹</button><button type="button" aria-label="下一周" data-week-next disabled>›</button></div><button class="button" type="button" data-back-feed>← 返回工作日志</button></div></header>
+          <section class="week-browser" aria-label="按周查看总结"><div class="week-browser-head"><strong>2026 年 9 月</strong><span>按周查看历史总结</span><button type="button" data-month-picker>选择月份⌄</button></div><div class="week-list"><button class="week-card active" type="button" data-week="38"><strong>第 38 周 · 本周</strong><span>9 月 14 日—20 日 · 16 条</span><em title="已生成总结"></em></button><button class="week-card" type="button" data-week="37"><strong>第 37 周</strong><span>9 月 7 日—13 日 · 21 条</span><em title="已生成总结"></em></button><button class="week-card" type="button" data-week="36"><strong>第 36 周</strong><span>8 月 31 日—9 月 6 日 · 13 条</span><em title="已生成总结"></em></button><button class="week-card" type="button" data-week="35"><strong>第 35 周</strong><span>8 月 24 日—30 日 · 8 条</span><em title="已生成总结"></em></button></div></section>
+
+          <div class="week-option active" data-week-panel="a"><div class="week-a-grid">
+            <article class="week-panel week-summary-large" data-week-summary><header><span class="spark"><svg viewBox="0 0 24 24"><path d="m12 3 1.4 4.1L17.5 9l-4.1 1.4L12 14.5l-1.4-4.1L6.5 9l4.1-1.9Z"/></svg></span><div><h2 data-week-title>第 38 周工作总结</h2><p data-week-source>根据 5 天、16 条工作记录生成 · 今天 17:42 更新</p></div><footer class="summary-actions"><button class="button" type="button" data-copy-week>复制</button><button class="button primary" type="button" data-generate>更新总结</button></footer></header><p class="week-lead" data-week-lead>本周围绕资产管理与工作日志完成了从功能联调、可靠性验证到产品交互重构的完整推进，核心链路已经具备进入生产实现阶段的条件。</p><div class="week-summary-grid" data-week-blocks><section class="week-summary-block"><h3>本周完成</h3><ul><li>完成资产管理、Skill 导入与 Agent 绑定流程</li><li>验证数据库迁移和真实 HTTP 工作流</li><li>确定工作日志时间流与 AI 活动汇总方案</li></ul></section><section class="week-summary-block"><h3>进行中</h3><ul><li>完善工作日志移动端体验</li><li>细化日总结和周总结生成流程</li></ul></section><section class="week-summary-block"><h3>遇到的问题</h3><ul><li>PostgreSQL 集成测试存在共享数据残留</li><li>浏览器视觉验证受本地沙箱限制</li></ul></section><section class="week-summary-block"><h3>下周建议</h3><ul><li>完成工作日志首版并开展可用性验证</li><li>补齐 Agent 活动来源的去重与追溯</li></ul></section></div></article>
+            <div class="week-a-days" data-week-days></div>
+          </div></div>
+
+          <div class="week-option" data-week-panel="b"><article class="week-panel week-summary-large week-b-summary"><header><span class="spark">✦</span><div><h2>本周概览</h2><p>先看结论，再逐日扫描所有记录</p></div><footer class="summary-actions"><button class="button" type="button" data-copy-week>复制</button><button class="button primary" type="button" data-generate>更新总结</button></footer></header><p class="week-lead">本周完成资产管理核心链路并通过集成验证，同时将便签产品重构为更轻量的工作日志时间流。下周重点是完成生产实现和 Agent 活动汇总。</p></article><div class="week-card-grid"><article class="week-panel week-day-card"><header><h3>周一 · 14 日</h3><span>3 条</span></header><ul><li>梳理资产与日志需求</li><li>确定工作区数据模型</li><li>设计数据库迁移</li></ul></article><article class="week-panel week-day-card"><header><h3>周二 · 15 日</h3><span>3 条</span></header><ul><li>完成 Skill 和文档接口</li><li>实现工作区数据隔离</li><li>补齐 Store 测试</li></ul></article><article class="week-panel week-day-card empty">周三没有记录</article><article class="week-panel week-day-card"><header><h3>周四 · 17 日</h3><span>5 条</span></header><ul><li>验证聊天 Skill 透传</li><li>完成数据库迁移测试</li><li>补齐真实 HTTP 工作流</li></ul></article><article class="week-panel week-day-card"><header><h3>周五 · 18 日</h3><span>2 条</span></header><ul><li>完成 Skill 导入验证</li><li>优化移动端布局</li></ul></article><article class="week-panel week-day-card"><header><h3>今天 · 19 日</h3><span>3 条</span></header><ul><li>重构工作日志产品方案</li><li>完善 Agent 活动汇总交互</li><li>明确周总结展示方式</li></ul></article></div></div>
+
+          <div class="week-option" data-week-panel="c"><div class="week-c-layout"><nav class="week-panel week-outline"><strong>本周目录</strong><button class="active" type="button">✦ 本周总结</button><button type="button">14 日 · 周一</button><button type="button">15 日 · 周二</button><button type="button">17 日 · 周四</button><button type="button">18 日 · 周五</button><button type="button">19 日 · 今天</button></nav><article class="week-panel week-document"><section class="week-summary-large"><header><span class="spark">✦</span><div><h2>第 38 周工作总结</h2><p>AI 生成 · 可直接复制为周报</p></div><footer class="summary-actions"><button class="button" type="button" data-copy-week>复制周报</button><button class="button primary" type="button" data-generate>重新生成</button></footer></header><p class="week-lead">本周主要完成资产管理核心功能的开发与验证，并重新定义了工作日志的产品模型。Skill 创建、导入、Agent 绑定与聊天透传链路已经跑通；工作日志确定采用时间流记录、AI 汇总 Agent 活动、按周生成报告的方向。</p><div class="week-summary-grid"><section class="week-summary-block"><h3>成果</h3><ul><li>资产管理核心工作流通过验证</li><li>工作日志产品方向完成重构</li></ul></section><section class="week-summary-block"><h3>下周计划</h3><ul><li>将时间流方案落地到生产代码</li><li>实现 Agent 活动汇总与去重</li></ul></section></div></section><section class="document-day"><header><h3>9 月 19 日 · 周六</h3><span>3 条记录</span></header><ul><li>完成工作日志时间流交互方案</li><li>修复资产管理接口异常并补充测试</li><li>确认本周发布范围</li></ul></section><section class="document-day"><header><h3>9 月 18 日 · 周五</h3><span>2 条记录</span></header><ul><li>完成 Skill 导入与 Agent 绑定测试</li><li>优化工作日志移动端布局</li></ul></section><section class="document-day"><header><h3>9 月 17 日 · 周四</h3><span>5 条记录</span></header><ul><li>验证聊天请求中的 Skill 指令透传</li><li>完成数据库迁移与 HTTP 集成测试</li><li>补齐文档链接和工作区隔离逻辑</li></ul></section></article></div></div>
+        </div></div></section>
+      </div>
+    </main>
+  </div>
+  <div class="toast" role="status" aria-live="polite"></div>
+  <script>
+    const toast = document.querySelector('.toast'); let toastTimer;
+    function notify(message) { toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 1800); }
+    function showConcept(name) { document.querySelectorAll('[data-concept]').forEach(b => b.classList.toggle('active', b.dataset.concept === name)); document.querySelectorAll('[data-panel]').forEach(p => p.classList.toggle('active', p.dataset.panel === name)); }
+    document.querySelectorAll('[data-concept]').forEach(button => button.addEventListener('click', () => showConcept(button.dataset.concept)));
+    document.querySelectorAll('[data-go-week]').forEach(button => button.addEventListener('click', () => showConcept('c')));
+    document.querySelectorAll('[data-back-feed]').forEach(button => button.addEventListener('click', () => showConcept('b')));
+    const weeklyData = {
+      38: { meta: '第 38 周 · 9 月 14 日—9 月 20 日 · 已记录 5 天，共 16 条', source: '根据 5 天、16 条工作记录生成 · 今天 17:42 更新', lead: '本周围绕资产管理与工作日志完成了从功能联调、可靠性验证到产品交互重构的完整推进，核心链路已经具备进入生产实现阶段的条件。', blocks: [['本周完成', '完成资产管理、Skill 导入与 Agent 绑定流程|验证数据库迁移和真实 HTTP 工作流|确定工作日志时间流与 AI 活动汇总方案'], ['进行中', '完善工作日志移动端体验|细化日总结和周总结生成流程'], ['遇到的问题', 'PostgreSQL 集成测试存在共享数据残留|浏览器视觉验证受本地沙箱限制'], ['下周建议', '完成工作日志首版并开展可用性验证|补齐 Agent 活动来源的去重与追溯']], days: [['19','周六','今天','完成工作日志交互方案与资产接口联调','3','16:40　完成工作日志时间流交互方案|14:15　修复资产管理接口异常并补充测试|10:30　确认本周发布范围'],['18','周五','9 月 18 日','完成 Skill 导入、Agent 绑定验证和移动端优化','2','17:20　完成 Skill 导入与 Agent 绑定测试|11:00　优化工作日志移动端布局'],['17','周四','9 月 17 日','完成聊天 Skill 透传和数据库迁移验证','5','18:05　验证聊天请求 Skill 指令透传|15:30　完成数据库迁移与 HTTP 集成测试'],['16','周三','9 月 16 日','完成资产管理页面和文档外链首轮实现','3','16:10　完成资产管理页面功能|13:45　实现文档外链增删改']] },
+      37: { meta: '第 37 周 · 9 月 7 日—9 月 13 日 · 已记录 6 天，共 21 条', source: '根据 6 天、21 条工作记录生成 · 9 月 13 日更新', lead: '本周完成资产与便签模块的基础设计和核心开发，打通数据库、Store 与 API 层，为前端联调建立了稳定基础。', blocks: [['本周完成', '完成 Skill、文档与便签的数据模型|实现工作区级数据隔离|打通 Store 与 HTTP API'],['关键进展','确定 Skill 导入和 Agent 绑定流程|完成首轮接口测试'],['遇到的问题','外部 Skill 来源格式不完全一致'],['下周建议','完成前端工作台集成|验证端到端真实工作流']], days: [['13','周日','9 月 13 日','完成 API 测试并整理联调清单','4','17:10　补齐 Library API 测试|14:20　整理前端联调清单'],['12','周六','9 月 12 日','实现 Skill 导入与文档链接接口','5','16:45　支持公开 SKILL.md 导入|11:30　完成文档链接接口'],['10','周四','9 月 10 日','完成 Store 层和工作区隔离','4','17:25　实现 Library Store|13:15　验证工作区隔离'],['8','周二','9 月 8 日','确定资产与日志数据模型','3','15:40　完成数据库模型设计|10:20　梳理产品需求']] },
+      36: { meta: '第 36 周 · 8 月 31 日—9 月 6 日 · 已记录 4 天，共 13 条', source: '根据 4 天、13 条工作记录生成 · 9 月 6 日更新', lead: '本周聚焦工作台基础体验和 Agent 任务流程，完成关键页面梳理，并明确资产管理能力的接入位置。', blocks: [['本周完成','优化工作台导航与响应式布局|梳理 Agent 创建和任务流程'],['关键决策','资产与工作日志作为工作区一级入口'],['遇到的问题','移动端信息密度仍然偏高'],['下周建议','启动资产管理后端开发|收敛日志首版范围']], days: [['5','周六','9 月 5 日','完成移动端布局走查','3','16:30　调整移动端导航|11:10　检查关键页面断点'],['3','周四','9 月 3 日','梳理 Agent 任务链路','4','17:00　整理任务创建流程|14:00　确认 Agent 配置入口'],['1','周二','9 月 1 日','优化工作台导航结构','4','16:20　重排主导航|10:45　统一页面标题样式']] },
+      35: { meta: '第 35 周 · 8 月 24 日—8 月 30 日 · 已记录 3 天，共 8 条', source: '根据 3 天、8 条工作记录生成 · 8 月 30 日更新', lead: '本周主要完成项目结构熟悉与现有功能盘点，识别出资产复用和日常工作沉淀是下一阶段最值得投入的方向。', blocks: [['本周完成','完成代码结构与主要模块梳理|盘点现有 Agent 工作流'],['关键发现','Skill 缺少统一管理与复用入口'],['遇到的问题','工作记录分散在多个会话中'],['下周建议','设计资产管理模块|探索轻量工作记录方式']], days: [['29','周六','8 月 29 日','完成现有模块盘点','3','15:50　整理现有页面清单|11:20　检查后端 API 结构'],['27','周四','8 月 27 日','梳理 Agent 工作流','3','16:10　分析任务生命周期|10:30　整理配置入口'],['25','周二','8 月 25 日','熟悉项目与开发环境','2','14:40　运行前后端测试|10:00　浏览项目结构']] }
+    };
+    let activeWeek = 38;
+    function renderWeek(week) {
+      const data = weeklyData[week]; if (!data) return; activeWeek = Number(week);
+      document.querySelector('[data-week-meta]').textContent = data.meta;
+      document.querySelector('[data-week-title]').textContent = `第 ${week} 周工作总结`;
+      document.querySelector('[data-week-source]').textContent = data.source;
+      document.querySelector('[data-week-lead]').textContent = data.lead;
+      document.querySelector('[data-week-blocks]').innerHTML = data.blocks.map(([title, items]) => `<section class="week-summary-block"><h3>${title}</h3><ul>${items.split('|').map(item => `<li>${item}</li>`).join('')}</ul></section>`).join('');
+      document.querySelector('[data-week-days]').innerHTML = data.days.map((day, index) => `<article class="week-day-row ${week === '38' && index === 0 ? 'today ' : ''}${index === 0 ? 'open' : ''}"><button type="button"><span class="day-date"><strong>${day[0]}</strong><small>${day[1]}</small></span><span class="week-day-copy"><strong>${day[2]}</strong><span>${day[3]}</span></span><span class="week-day-count">${day[4]} 条</span></button><div class="week-day-detail">${day[5].split('|').map(item => `<p>${item}</p>`).join('')}</div></article>`).join('');
+      document.querySelectorAll('[data-week]').forEach(button => button.classList.toggle('active', button.dataset.week === String(week)));
+      document.querySelector('[data-week-prev]').disabled = activeWeek === 35; document.querySelector('[data-week-next]').disabled = activeWeek === 38;
+      document.querySelectorAll('[data-week-days] .week-day-row > button').forEach(button => button.addEventListener('click', () => button.closest('.week-day-row').classList.toggle('open')));
+    }
+    document.querySelectorAll('[data-week]').forEach(button => button.addEventListener('click', () => renderWeek(button.dataset.week)));
+    document.querySelector('[data-week-prev]').addEventListener('click', () => renderWeek(String(activeWeek - 1)));
+    document.querySelector('[data-week-next]').addEventListener('click', () => renderWeek(String(activeWeek + 1)));
+    document.querySelector('[data-month-picker]').addEventListener('click', () => notify('正式版本将在这里选择月份'));
+    renderWeek('38');
+    document.querySelectorAll('[data-copy-week]').forEach(button => button.addEventListener('click', () => { const title = document.querySelector('[data-week-title]')?.textContent || '本周工作总结'; const content = document.querySelector('[data-week-lead]')?.textContent || ''; navigator.clipboard?.writeText(`${title}：${content}`); notify('本周总结已复制'); }));
+    document.querySelector('.nav.active').addEventListener('click', () => showConcept('b'));
+    document.querySelectorAll('.day-button').forEach(button => button.addEventListener('click', () => { document.querySelectorAll('.day-button').forEach(b => b.classList.remove('active')); button.classList.add('active'); document.querySelector('[data-date-title]').textContent = button.dataset.date; notify('已切换到' + button.dataset.date); }));
+    document.querySelectorAll('[data-save-input]').forEach(input => input.addEventListener('input', () => { const status = input.closest('.journal-inner, .week-editor-inner')?.querySelector('.saved'); if (status) status.lastElementChild ? status.lastElementChild.textContent = '保存中…' : status.lastChild.textContent = ' 保存中…'; clearTimeout(input.saveTimer); input.saveTimer = setTimeout(() => { if (status) status.lastElementChild ? status.lastElementChild.textContent = '已保存' : status.lastChild.textContent = ' 已保存'; }, 700); }));
+    document.querySelectorAll('[data-generate]').forEach(button => button.addEventListener('click', () => { const old = button.textContent; button.textContent = '生成中…'; button.disabled = true; setTimeout(() => { button.textContent = old; button.disabled = false; notify('AI 总结已更新'); }, 900); }));
+    document.querySelector('[data-copy]').addEventListener('click', () => { navigator.clipboard?.writeText(document.querySelector('[data-summary]').textContent); notify('总结已复制'); });
+    const capture = document.querySelector('[data-capture]');
+    const captureField = capture.querySelector('textarea');
+    const activityButton = document.querySelector('[data-agent-summary]');
+    activityButton.addEventListener('click', () => {
+      const progress = document.querySelector('[data-activity-progress]');
+      const progressText = progress.querySelector('span');
+      const meta = document.querySelector('[data-capture-meta]');
+      const sourceDetail = document.querySelector('[data-source-detail]');
+      activityButton.disabled = true;
+      activityButton.querySelector('span').textContent = '正在汇总…';
+      meta.classList.remove('show'); sourceDetail.classList.remove('show'); progress.classList.add('show');
+      progressText.textContent = '正在读取今天的 Agent 活动…';
+      setTimeout(() => { progressText.textContent = '已找到 8 个相关任务，正在整理工作成果…'; }, 700);
+      setTimeout(() => {
+        captureField.value = '完成资产管理接口联调，验证 Skill 创建、导入、Agent 绑定及聊天透传流程；重新设计工作日志的时间流交互，并优化移动端布局；排查 PostgreSQL 集成测试中的共享数据残留问题。';
+        progress.classList.remove('show'); meta.classList.add('show'); activityButton.disabled = false;
+        activityButton.querySelector('span').textContent = '重新汇总'; captureField.focus(); notify('AI 已整理 8 个 Agent 任务');
+      }, 1700);
+    });
+    document.querySelector('[data-show-sources]').addEventListener('click', event => { const detail = document.querySelector('[data-source-detail]'); detail.classList.toggle('show'); event.currentTarget.textContent = detail.classList.contains('show') ? '收起来源' : '查看来源'; });
+    capture.addEventListener('submit', event => { event.preventDefault(); if (!captureField.value.trim()) { captureField.focus(); return; } const now = new Date(); const article = document.createElement('article'); article.className = 'entry'; article.innerHTML = `<time>${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}</time><span class="entry-dot"></span><p></p>`; article.querySelector('p').textContent = captureField.value.trim(); document.querySelector('[data-entries]').prepend(article); captureField.value = ''; document.querySelector('[data-capture-meta]').classList.remove('show'); document.querySelector('[data-source-detail]').classList.remove('show'); const count = document.querySelectorAll('[data-entries] .entry').length; document.querySelector('[data-today-count]').textContent = `9 月 19 日 · ${count} 条记录`; activityButton.querySelector('span').textContent = '汇总今日 Agent 活动'; notify('已添加到今天的工作日志'); });
+    captureField.addEventListener('keydown', event => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); capture.requestSubmit(); } });
+    document.querySelectorAll('.day-toggle').forEach(button => button.addEventListener('click', () => button.closest('.day-group').classList.toggle('open')));
+    document.querySelector('[data-month]').addEventListener('click', () => notify('正式版本将在这里选择月份'));
+    document.querySelector('[data-load-more]').addEventListener('click', event => {
+      event.currentTarget.disabled = true; event.currentTarget.textContent = '加载中…';
+      setTimeout(() => {
+        document.querySelector('[data-older-days]').insertAdjacentHTML('beforeend', `<section class="day-group"><button class="day-toggle" type="button"><strong>9 月 15 日 · 周二</strong><small>4 条记录</small><svg class="chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></button><div class="day-preview"><span class="mini-spark">✦</span><span>搭建资产管理与工作日志的后端数据模型。</span></div><div class="day-detail"><div class="entries"><article class="entry"><time>17:35</time><span class="entry-dot"></span><p>完成 Skill、文档和日志的数据表迁移</p></article><article class="entry"><time>13:10</time><span class="entry-dot"></span><p>实现工作区级的数据隔离</p></article></div></div></section>`);
+        document.querySelectorAll('[data-older-days] .day-toggle').forEach(button => button.addEventListener('click', () => button.closest('.day-group').classList.toggle('open'))); event.currentTarget.disabled = false; event.currentTarget.textContent = '没有更早的演示记录'; notify('已加载更早的记录');
+      }, 650);
+    });
+  </script>
+</body>
+</html>

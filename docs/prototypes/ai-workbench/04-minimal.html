@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Steer 工作台原型 · Minimal</title>
+  <link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+  <div class="app-shell minimal-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">S</span><span class="brand-copy"><strong>Steer</strong><small>Personal workspace</small></span><span class="workspace-chevron">⌄</span></div>
+      <button class="capture-button" data-open-capture><strong>＋</strong><span>记录任何事情</span><kbd>⌘ K</kbd></button>
+      <nav class="nav">
+        <section class="nav-section">
+          <a class="nav-item active" href="04-minimal.html"><span class="nav-icon">⌂</span><span>Home</span></a>
+          <a class="nav-item" href="02-conversation.html"><span class="nav-icon">◌</span><span>Work</span><span class="nav-count">2</span></a>
+          <a class="nav-item" href="03-project.html"><span class="nav-icon">▱</span><span>Projects</span></a>
+        </section>
+        <section class="nav-section">
+          <div class="nav-label">Recent</div>
+          <a class="nav-item" href="02-conversation.html"><span>AI 时代工作台</span></a>
+          <a class="nav-item" href="#"><span>Relay 发布问题</span></a>
+          <a class="nav-item" href="#"><span>长对话上下文方案</span></a>
+        </section>
+        <section class="nav-section" style="margin-top:auto">
+          <a class="nav-item" href="#"><span class="nav-icon">⌕</span><span>搜索全部内容</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">⚙</span><span>Settings</span></a>
+        </section>
+      </nav>
+      <div class="account"><span class="avatar">K</span><span><strong>Kongdefei</strong><small>Personal workspace</small></span></div>
+    </aside>
+
+    <main class="main">
+      <header class="minimal-topbar">
+        <strong>Home</strong><span>AI 只在需要你判断时打扰</span>
+        <div class="topbar-actions"><button class="button ghost small" data-demo-action="已打开今日工作摘要">今日摘要</button><button class="button ghost icon" data-demo-action="已打开通知">◔</button></div>
+      </header>
+
+      <div class="minimal-home">
+        <section class="minimal-greeting">
+          <h1>今天想做什么？</h1>
+          <p>开始一项工作、继续上次的对话，或者随手记下一件事。</p>
+        </section>
+
+        <form class="minimal-composer">
+          <textarea aria-label="开始工作" placeholder="描述你想完成的事情……"></textarea>
+          <div class="minimal-composer-footer">
+            <button class="quiet-chip" type="button" data-open-capture>＋</button>
+            <button class="quiet-chip" type="button" data-demo-action="已打开 Agent 选择">Codex⌄</button>
+            <button class="quiet-chip" type="button" data-demo-action="已打开项目选择">Steer⌄</button>
+            <button class="minimal-send" type="button" data-demo-action="演示消息已发送">↑</button>
+          </div>
+        </form>
+
+        <div class="minimal-content">
+          <section class="minimal-section">
+            <header><strong>继续工作</strong><span>最近</span></header>
+            <div class="work-list">
+              <a class="work-row" href="02-conversation.html"><div><strong>AI 时代工作台应该是什么</strong><p>Steer · 正在比较新的极简信息架构</p></div><time>刚刚</time></a>
+              <a class="work-row" href="#"><div><strong>Relay Runtime 会话持久化</strong><p>Relay · 修复已完成，等待部署验证</p></div><time>昨天</time></a>
+              <a class="work-row" href="#"><div><strong>长对话上下文方案</strong><p>Steer · 已记录验证方法</p></div><time>昨天</time></a>
+            </div>
+          </section>
+
+          <section class="minimal-section">
+            <header><strong>需要关注</strong><span>1</span></header>
+            <div class="attention-row">
+              <span class="attention-mark">!</span>
+              <div><strong>确认工作台的极简方向</strong><p>AI 已隐藏项目、记忆、Skill 和 Agent 的日常管理信息。</p></div>
+              <button class="text-action" data-demo-action="已打开确认详情">查看</button>
+            </div>
+          </section>
+
+          <section class="minimal-section">
+            <header><strong>稍后提醒</strong><span>查看全部</span></header>
+            <div class="reminder-line"><time>周五</time><strong>检查长对话上下文的线上效果</strong></div>
+          </section>
+        </div>
+
+        <div class="minimal-footnote">Steer 已在后台整理 2 条项目信息和 1 个想法 · <button data-demo-action="已打开整理记录">查看记录</button></div>
+      </div>
+    </main>
+  </div>
+
+  <div class="dialog-backdrop" data-capture-dialog>
+    <form class="dialog" data-capture-form>
+      <header><h2>随手记录</h2><button class="close" type="button" data-close-capture>✕</button></header>
+      <textarea placeholder="记下待办、想法或提醒，不需要先整理……"></textarea>
+      <div class="type-picker"><button class="active" type="button" data-entry-type>由 AI 整理</button><button type="button" data-entry-type>Todo</button><button type="button" data-entry-type>Idea</button><button type="button" data-entry-type>Reminder</button></div>
+      <div class="dialog-footer"><small>默认关联当前工作上下文</small><button class="button" type="button" data-close-capture>取消</button><button class="button primary" type="submit">记录</button></div>
+    </form>
+  </div>
+  <div class="toast" data-toast></div>
+  <script src="prototype.js"></script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Steer · AI 工作台高保真原型</title>
+  <link rel="stylesheet" href="05-high-fidelity.css" />
+</head>
+<body>
+  <div class="hf-app">
+    <aside class="hf-sidebar">
+      <header class="hf-sidebar-head">
+        <button class="hf-workspace" type="button" data-toast="Workspace 切换器">
+          <span class="hf-logo">S</span>
+          <span class="hf-workspace-copy"><strong>Steer</strong><small>Personal workspace</small></span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
+        </button>
+        <button class="hf-search" type="button" data-toast="搜索会话、项目和工作记录">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <span>Search</span><kbd>⌘ K</kbd>
+        </button>
+      </header>
+
+      <div class="hf-sidebar-scroll">
+        <ul class="hf-menu">
+          <li><button class="hf-nav-item active" type="button"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span>New chat</span></button></li>
+        </ul>
+
+        <div class="hf-menu-label">Projects</div>
+        <div class="hf-project-row">
+          <button class="hf-project-toggle" type="button" aria-label="折叠 Steer"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+          <button class="hf-nav-item" type="button" data-toast="已选择 Steer 项目"><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v10H3Z"/><path d="M3 7V5h6l2 2"/></svg><span>Steer</span></button>
+          <div class="hf-session-list">
+            <a class="hf-session active" href="#"><span>AI 时代工作台应该是什么</span></a>
+            <a class="hf-session" href="#"><span>网站 UI 与交互审查</span></a>
+            <a class="hf-session" href="#"><span>长对话上下文方案</span></a>
+          </div>
+        </div>
+        <div class="hf-project-row">
+          <button class="hf-project-toggle" type="button" aria-label="折叠 Relay"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+          <button class="hf-nav-item" type="button" data-toast="已选择 Relay 项目"><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v10H3Z"/><path d="M3 7V5h6l2 2"/></svg><span>Relay</span></button>
+          <div class="hf-session-list">
+            <a class="hf-session" href="#"><span>Runtime Session 修复</span></a>
+            <a class="hf-session" href="#"><span>发布 v0.4.2</span></a>
+          </div>
+        </div>
+
+        <div class="hf-menu-label">Workspace</div>
+        <ul class="hf-menu">
+          <li><button class="hf-nav-item" type="button" data-toast="按需打开项目资料"><svg viewBox="0 0 24 24"><path d="M4 19.5V5a2 2 0 0 1 2-2h11v18H6a2 2 0 0 1-2-1.5Z"/><path d="M8 7h5M8 11h5"/></svg><span>Library</span></button></li>
+        </ul>
+      </div>
+
+      <footer class="hf-sidebar-footer">
+        <button class="hf-account" type="button" data-toast="账户与 Workspace 设置">
+          <span class="hf-avatar">K</span>
+          <span class="hf-account-copy"><strong>Kongdefei</strong><small>kongdefei@example.com</small></span>
+          <svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg>
+        </button>
+      </footer>
+    </aside>
+
+    <main class="hf-main">
+      <header class="hf-appbar">
+        <button class="hf-icon-button" type="button" aria-label="折叠侧栏" data-toast="折叠侧栏">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+        </button>
+        <div class="hf-appbar-spacer"></div>
+        <button class="hf-appbar-note" type="button" data-attention-open><span class="hf-attention-dot"></span><span>1 项需要关注</span></button>
+      </header>
+
+      <div class="hf-home">
+        <div class="hf-home-inner">
+          <section class="hf-welcome">
+            <h1>What would you like to work on?</h1>
+            <p>与远端 Agent 一起开始工作，或继续最近的上下文。</p>
+          </section>
+
+          <form class="hf-composer" data-composer>
+            <textarea aria-label="Message Agent" rows="2" placeholder="Ask a question or describe a task…"></textarea>
+            <footer class="hf-composer-footer">
+              <button class="hf-context-button hf-plus" type="button" aria-label="记录或添加内容" data-capture-open>
+                <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+              <button class="hf-context-button" type="button" data-toast="选择远端 Agent">
+                <span class="hf-avatar">C</span><span>Codex</span><svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg>
+              </button>
+              <button class="hf-context-button" type="button" data-toast="选择项目与工作目录">
+                <svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v10H3Z"/><path d="M3 7V5h6l2 2"/></svg><span>Steer</span><svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg>
+              </button>
+              <button class="hf-send" type="submit" aria-label="Send message"><svg viewBox="0 0 24 24"><path d="m12 19V5M6 11l6-6 6 6"/></svg></button>
+            </footer>
+          </form>
+
+          <div class="hf-home-content">
+            <div class="hf-home-status">今天没有紧急事项 <span>·</span> <button type="button" data-toast="AI 已在后台整理工作记录">AI 正在后台整理工作上下文</button></div>
+
+            <section>
+              <header class="hf-section-head"><strong>Continue working</strong><span>Recent</span></header>
+              <div class="hf-continue-list">
+                <a class="hf-continue-row" href="#" data-toast="打开「AI 时代工作台应该是什么」"><div><strong>AI 时代工作台应该是什么</strong><p>Steer · 产品设计 · Codex</p></div><time>刚刚</time></a>
+                <a class="hf-continue-row" href="#" data-toast="打开「Relay Runtime 会话持久化」"><div><strong>Relay Runtime 会话持久化</strong><p>Relay · 修复已完成，等待部署验证</p></div><time>昨天</time></a>
+                <a class="hf-continue-row" href="#" data-toast="打开「长对话上下文方案」"><div><strong>长对话上下文方案</strong><p>Steer · 已记录验证方法</p></div><time>昨天</time></a>
+              </div>
+            </section>
+
+            <section data-attention-section>
+              <header class="hf-section-head"><strong>Needs attention</strong><span>1</span></header>
+              <div class="hf-attention">
+                <span class="hf-attention-icon"><svg viewBox="0 0 24 24"><path d="M12 8v4M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg></span>
+                <div><strong>确认工作台的新首页方向</strong><p>其余项目、记忆、Skill 与 Agent 状态已转为按需展示。</p></div>
+                <button class="hf-text-button" type="button" data-toast="打开确认详情">Review</button>
+              </div>
+            </section>
+
+            <section>
+              <header class="hf-section-head"><strong>Later</strong><span>1 reminder</span></header>
+              <div class="hf-reminder"><time>周五</time><span>检查长对话上下文的线上效果</span></div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="hf-dialog-layer" data-capture-dialog>
+    <form class="hf-dialog" data-capture-form>
+      <header class="hf-dialog-head"><h2>记录任何事情</h2><button class="hf-icon-button" type="button" aria-label="关闭" data-capture-close><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button></header>
+      <textarea aria-label="随手记录" placeholder="先记下来即可，AI 会判断它是待办、想法还是提醒，并关联当前工作。"></textarea>
+      <div class="hf-dialog-hint">关联：Steer · 当前 Workspace</div>
+      <footer class="hf-dialog-actions"><button class="hf-button" type="button" data-capture-close>Cancel</button><button class="hf-button primary" type="submit">Save</button></footer>
+    </form>
+  </div>
+  <div class="hf-toast" role="status" data-toast-output></div>
+  <script src="05-high-fidelity.js"></script>
+</body>
+</html>

@@ -83,12 +83,69 @@ func TestConversationWorkflowHTTP(t *testing.T) {
 	json.Unmarshal(call("POST", "/agents", `{"name":"Executor","runtimeProvider":"test"}`, 201).Body.Bytes(), &agent)
 	var reviewer store.Agent
 	json.Unmarshal(call("POST", "/agents", `{"name":"Reviewer","runtimeProvider":"test"}`, 201).Body.Bytes(), &reviewer)
+	settingsResponse := call("PUT", "/system/settings", fmt.Sprintf(`{"systemAgentId":%q,"language":"zh-CN"}`, reviewer.ID), 200)
+	if !strings.Contains(settingsResponse.Body.String(), `"language":"zh-CN"`) {
+		t.Fatalf("system language was not saved: %s", settingsResponse.Body.String())
+	}
+	var skill store.Skill
+	json.Unmarshal(call("POST", "/skills", `{"name":"Careful review","description":"Review changes","content":"Always inspect the complete diff."}`, 201).Body.Bytes(), &skill)
+	call("PUT", "/agents/"+reviewer.ID+"/skills", fmt.Sprintf(`{"skillIds":[%q]}`, skill.ID), 200)
+	var document store.Document
+	json.Unmarshal(call("POST", "/documents", `{"title":"Runbook","url":"https://example.test/runbook","description":"Operations reference"}`, 201).Body.Bytes(), &document)
+	var note store.Note
+	json.Unmarshal(call("POST", "/notes", `{"title":"Follow up","content":"Check the rollout","tags":["release","release"],"pinned":true}`, 201).Body.Bytes(), &note)
+	if skill.ID == "" || document.ID == "" || note.ID == "" || len(note.Tags) != 1 {
+		t.Fatalf("library resources were not created: skill=%+v document=%+v note=%+v", skill, document, note)
+	}
+	var logEntry store.WorkLogEntry
+	json.Unmarshal(call("POST", "/work-log/entries", `{"content":"Finished the work log API"}`, 201).Body.Bytes(), &logEntry)
+	if logEntry.ID == "" || logEntry.Content != "Finished the work log API" || logEntry.SourceKind != "manual" {
+		t.Fatalf("work log entry was not created: %+v", logEntry)
+	}
+	call("PUT", "/work-log/summaries", `{"periodKind":"week","periodStart":"2026-09-14","content":"Completed the work log API."}`, 200)
+	call("PUT", "/work-log/summaries", `{"periodKind":"day","periodStart":"2026-09-19","content":"Daily summaries are not supported."}`, 400)
+	var workLog struct {
+		Entries   []store.WorkLogEntry   `json:"entries"`
+		Summaries []store.WorkLogSummary `json:"summaries"`
+	}
+	json.Unmarshal(call("GET", "/work-log?since=2026-09-01T00:00:00Z", "", 200).Body.Bytes(), &workLog)
+	if len(workLog.Entries) != 1 || len(workLog.Summaries) != 1 {
+		t.Fatalf("work log was not returned: %+v", workLog)
+	}
 	var project store.Project
 	json.Unmarshal(call("POST", "/projects", `{"name":"Remote repository","workspaceKind":"local","workspaceSource":"/srv/repository","runtimeId":"test-node/test"}`, 201).Body.Bytes(), &project)
 	var started struct{ SessionID, RunID string }
 	json.Unmarshal(call("POST", "/chat", fmt.Sprintf(`{"prompt":"Inspect","agentId":%q,"projectId":%q}`, agent.ID, project.ID), 202).Body.Bytes(), &started)
 	call("POST", "/chat", fmt.Sprintf(`{"prompt":"Continue","agentId":%q,"sessionId":%q}`, reviewer.ID, started.SessionID), 202)
 	call("GET", "/runs/"+started.RunID, "", 200)
+	activity := call("POST", "/work-log/activity", `{"from":"2000-01-01T00:00:00Z","to":"2100-01-01T00:00:00Z"}`, 202)
+	if !strings.Contains(activity.Body.String(), "runId") {
+		t.Fatalf("Agent activity did not start a system run: %s", activity.Body.String())
+	}
+	var activityRun struct {
+		RunID string `json:"runId"`
+	}
+	json.Unmarshal(activity.Body.Bytes(), &activityRun)
+	if activityRun.RunID == "" {
+		t.Fatalf("Agent activity returned no durable run: %s", activity.Body.String())
+	}
+	activeRun := call("GET", "/work-log/activity-run?from=2000-01-01T00:00:00Z&to=2100-01-01T00:00:00Z", "", 200)
+	if !strings.Contains(activeRun.Body.String(), activityRun.RunID) {
+		t.Fatalf("Agent activity run was not recoverable: %s", activeRun.Body.String())
+	}
+	duplicateActivity := call("POST", "/work-log/activity", `{"from":"2000-01-01T00:00:00Z","to":"2100-01-01T00:00:00Z"}`, 202)
+	if !strings.Contains(duplicateActivity.Body.String(), activityRun.RunID) {
+		t.Fatalf("Repeated activity request did not reuse the background run: %s", duplicateActivity.Body.String())
+	}
+	call("DELETE", "/work-log/activity-run/"+activityRun.RunID, "", 204)
+	dismissedRun := call("GET", "/work-log/activity-run?from=2000-01-01T00:00:00Z&to=2100-01-01T00:00:00Z", "", 200)
+	if !strings.Contains(dismissedRun.Body.String(), `"run":null`) {
+		t.Fatalf("Acknowledged activity run was still returned: %s", dismissedRun.Body.String())
+	}
+	weekly := call("POST", "/work-log/weekly-summary", `{"periodStart":"2026-09-14","from":"2026-09-14T00:00:00Z","to":"2026-09-21T00:00:00Z"}`, 202)
+	if !strings.Contains(weekly.Body.String(), "runId") {
+		t.Fatalf("weekly summary did not start a system run: %s", weekly.Body.String())
+	}
 	stream := call("GET", "/runs/"+started.RunID+"/events/stream?after=0", "", 200)
 	if contentType := stream.Header().Get("Content-Type"); contentType != "text/event-stream" {
 		t.Fatalf("stream content type=%q", contentType)
@@ -99,11 +156,25 @@ func TestConversationWorkflowHTTP(t *testing.T) {
 	mu.Lock()
 	sent := append([]relay.Request(nil), requests...)
 	mu.Unlock()
-	if len(sent) != 2 || sent[0].Workspace.Source != "/srv/repository" || sent[1].Workspace.Source != "/srv/repository" || !strings.Contains(sent[0].Input.Prompt, "direct working conversation") {
+	if len(sent) != 4 || sent[0].Workspace.Source != "/srv/repository" || sent[1].Workspace.Source != "/srv/repository" || !strings.Contains(sent[0].Input.Prompt, "direct working conversation") {
 		t.Fatalf("conversation context not propagated: %+v", sent)
 	}
 	if sent[1].AgentID != reviewer.ID || sent[1].Runtime.Provider != "test" || sent[1].Runtime.ID != "test-node/test" {
 		t.Fatalf("Agent switch not propagated: %+v", sent[1])
+	}
+	if sent[2].AgentID != reviewer.ID || sent[2].Source.Kind != "steer.system" || sent[3].AgentID != reviewer.ID || sent[3].Source.Kind != "steer.system" {
+		t.Fatalf("system Agent not used for AI tasks: %+v", sent[2:])
+	}
+	if !strings.Contains(sent[2].Input.Prompt, "Original task: Inspect") ||
+		!strings.Contains(sent[2].Input.Prompt, "user (complete):\nInspect") ||
+		!strings.Contains(sent[2].Input.Prompt, "user (complete):\nContinue") {
+		t.Fatalf("today's session messages not propagated to activity summary: %s", sent[2].Input.Prompt)
+	}
+	if !strings.Contains(sent[2].Input.Prompt, "Simplified Chinese") || !strings.Contains(sent[3].Input.Prompt, "Simplified Chinese") {
+		t.Fatalf("system language not propagated to AI tasks: %+v", sent[2:])
+	}
+	if len(sent[1].Instructions.Agent) != 1 || !strings.Contains(sent[1].Instructions.Agent[0].Content, "Always inspect the complete diff.") {
+		t.Fatalf("assigned Skill not propagated: %+v", sent[1].Instructions.Agent)
 	}
 	call("PUT", "/projects/"+project.ID, `{"name":"Moved repository","workspaceKind":"local","workspaceSource":"/srv/moved","runtimeId":"test-node/test","executionMode":"in_place"}`, 200)
 	call("DELETE", "/projects/"+project.ID, "", 200)
