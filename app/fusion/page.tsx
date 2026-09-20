@@ -547,13 +547,7 @@ export default function Fusion() {
     setAgentSkillAssignments(data.agentSkills || {});
     setWorkspaceSettings(data.settings || null);
     setChatSessions(data.sessions || []);
-    setExpandedSessionGroups(
-      new Set(
-        (data.sessions || []).map(
-          (session) => session.projectId || noProjectSessionGroup,
-        ),
-      ),
-    );
+    setExpandedSessionGroups(new Set());
     setRuntimeNodes(data.relay.nodes || []);
     setRelayConnected(data.relay.connected);
     setRelayError(data.relay.error || '');
@@ -2759,7 +2753,7 @@ function ChatView({
                               </button>
                             </div>
                           )}
-                        {!!message.changes?.length && (
+                        {terminal && !!message.changes?.length && (
                           <div className="ws-message-changes">
                             <div className="ws-message-changes-header">
                               <span className="ws-message-changes-icon">
