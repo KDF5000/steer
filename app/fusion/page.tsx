@@ -3818,7 +3818,12 @@ const HighlightedFile = memo(function HighlightedFile({
     </pre>
   );
 });
-type ReviewChange = { id: string; path: string; diff: string };
+type ReviewChange = {
+  id: string;
+  path: string;
+  diff: string;
+  snapshot?: string;
+};
 
 function splitWorkspaceDiff(diff: string): ReviewChange[] {
   const changes: ReviewChange[] = [];
@@ -3840,6 +3845,27 @@ function splitWorkspaceDiff(diff: string): ReviewChange[] {
   }
   flush();
   return changes;
+}
+
+function mergeWorkspaceChanges(
+  liveChanges: ReviewChange[],
+  reportedChanges: ReviewChange[],
+  root: string,
+) {
+  const normalizedRoot = root.replace(/\\/g, '/').replace(/\/$/, '');
+  const relativePath = (path: string) => {
+    const normalized = path.replace(/^file:\/\//, '').replace(/\\/g, '/');
+    return normalizedRoot && normalized.startsWith(`${normalizedRoot}/`)
+      ? normalized.slice(normalizedRoot.length + 1)
+      : normalized;
+  };
+  const changes = new Map<string, ReviewChange>();
+  for (const change of reportedChanges) {
+    const path = relativePath(change.path);
+    changes.set(path, { ...change, id: path, path });
+  }
+  for (const change of liveChanges) changes.set(change.path, change);
+  return [...changes.values()];
 }
 
 function changeStats(change: ReviewChange) {
@@ -3882,17 +3908,32 @@ function CodeReview({
     setError('');
     void steer
       .inspectWorkspace(runId, 'diff')
-      .then((result) => setWorkspaceChanges(splitWorkspaceDiff(result.content)))
+      .then((result) =>
+        setWorkspaceChanges(
+          mergeWorkspaceChanges(
+            splitWorkspaceDiff(result.content),
+            reportedChanges,
+            result.root,
+          ),
+        ),
+      )
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [runId]);
+  }, [reportedChanges, runId]);
   useEffect(() => {
     if (!runId) return;
     let cancelled = false;
     void steer
       .inspectWorkspace(runId, 'diff')
       .then((result) => {
-        if (!cancelled) setWorkspaceChanges(splitWorkspaceDiff(result.content));
+        if (!cancelled)
+          setWorkspaceChanges(
+            mergeWorkspaceChanges(
+              splitWorkspaceDiff(result.content),
+              reportedChanges,
+              result.root,
+            ),
+          );
       })
       .catch((err) => {
         if (!cancelled) setError(err.message);
@@ -3903,7 +3944,7 @@ function CodeReview({
     return () => {
       cancelled = true;
     };
-  }, [runId]);
+  }, [reportedChanges, runId]);
   const changes = workspaceChanges?.length ? workspaceChanges : reportedChanges;
   const current =
     changes.find((change) => change.path === selectedPath) || changes[0];

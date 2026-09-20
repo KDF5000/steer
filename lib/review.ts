@@ -14,9 +14,28 @@ export function runFileChanges(events?: RelayEvent[] | null) {
     const changes = Array.isArray(item.changes) ? item.changes : [];
     for (const change of changes) {
       if (!change || typeof change !== 'object') continue;
-      const path = typeof change.path === 'string' ? change.path : '';
-      const diff = typeof change.diff === 'string' ? change.diff : '';
-      const snapshot = looksLikeUnifiedDiff(diff) ? undefined : diff;
+      const record = change as Record<string, unknown>;
+      const path = typeof record.path === 'string' ? record.path : '';
+      const kind = typeof record.type === 'string' ? record.type : '';
+      const reportedDiff =
+        typeof record.unified_diff === 'string'
+          ? record.unified_diff
+          : typeof record.diff === 'string'
+            ? record.diff
+            : '';
+      const content = typeof record.content === 'string' ? record.content : '';
+      const reportedSnapshot =
+        reportedDiff && !looksLikeUnifiedDiff(reportedDiff)
+          ? reportedDiff
+          : undefined;
+      const snapshot =
+        kind === 'add'
+          ? content || reportedSnapshot || ''
+          : reportedSnapshot || content || undefined;
+      const diff =
+        snapshot !== undefined && !looksLikeUnifiedDiff(reportedDiff)
+          ? addedFileDiff(path, snapshot)
+          : reportedDiff;
       if (path) files.set(path, { id: path, path, diff, snapshot });
     }
     if (
@@ -31,6 +50,19 @@ export function runFileChanges(events?: RelayEvent[] | null) {
     }
   }
   return [...files.values()];
+}
+
+function addedFileDiff(path: string, content: string) {
+  const lines = content ? content.replace(/\n$/, '').split('\n') : [];
+  const body = lines.map((line) => `+${line}`).join('\n');
+  const headers = [
+    `diff --git a/${path} b/${path}`,
+    'new file mode 100644',
+    '--- /dev/null',
+    `+++ b/${path}`,
+  ];
+  if (!lines.length) return headers.join('\n');
+  return [...headers, `@@ -0,0 +1,${lines.length} @@`, body].join('\n');
 }
 
 function looksLikeUnifiedDiff(value: string) {
