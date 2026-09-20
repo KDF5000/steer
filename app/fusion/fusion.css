@@ -2175,6 +2175,9 @@
   padding: 0 4px 22px;
 }
 .ws-log-entries {
+  --ws-log-time-width: 44px;
+  --ws-log-marker-width: 9px;
+  --ws-log-entry-gap: 8px;
   position: relative;
 }
 .ws-log-entries::before {
@@ -2182,16 +2185,19 @@
   position: absolute;
   top: 9px;
   bottom: 9px;
-  left: 56px;
+  left: calc(var(--ws-log-time-width) + var(--ws-log-entry-gap) + 3.5px);
   width: 1px;
+  transform: translateX(-50%);
   background: var(--ws-border);
 }
 .ws-log-entries article {
   position: relative;
   display: grid;
-  grid-template-columns: 44px 9px minmax(0, 1fr) 56px;
+  grid-template-columns: var(--ws-log-time-width) var(
+      --ws-log-marker-width
+    ) minmax(0, 1fr) 56px;
   align-items: start;
-  gap: 8px;
+  gap: var(--ws-log-entry-gap);
   padding: 9px 0;
 }
 .ws-log-entries time {
@@ -2518,11 +2524,17 @@
     display: none;
   }
   .ws-log-entries::before {
-    left: 46px;
+    left: calc(var(--ws-log-time-width) + var(--ws-log-entry-gap) + 3.5px);
+  }
+  .ws-log-entries {
+    --ws-log-time-width: 36px;
+    --ws-log-marker-width: 7px;
+    --ws-log-entry-gap: 7px;
   }
   .ws-log-entries article {
-    grid-template-columns: 36px 7px minmax(0, 1fr) auto;
-    gap: 7px;
+    grid-template-columns: var(--ws-log-time-width) var(
+        --ws-log-marker-width
+      ) minmax(0, 1fr) auto;
   }
   .ws-log-entry-actions {
     opacity: 1;
