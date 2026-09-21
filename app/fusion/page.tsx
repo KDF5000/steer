@@ -133,6 +133,7 @@ import {
   type DocumentRecord,
   type ProjectRecord,
   type SkillRecord,
+  type WorkspaceGitStatus,
   type WorkspaceSettingsRecord,
   type WorkspaceRecord,
 } from '@/lib/steer-client';
@@ -141,6 +142,45 @@ import './fusion.css';
 
 type View = 'chat' | 'artifacts' | 'agents' | 'assets' | 'notes' | 'settings';
 const noProjectSessionGroup = '__no-project__';
+
+function gitRefLabel(ref: string | null | undefined) {
+  const value = ref?.trim() || 'HEAD';
+  const normalized = ['refs/heads/', 'refs/remotes/origin/', 'origin/'].reduce(
+    (current, prefix) =>
+      current.startsWith(prefix) ? current.slice(prefix.length) : current,
+    value,
+  );
+  return /^[0-9a-f]{7,40}$/i.test(normalized)
+    ? normalized.slice(0, 7)
+    : normalized;
+}
+
+function configuredProjectBranch(project: ProjectRecord) {
+  return project.workspaceKind === 'git'
+    ? gitRefLabel(project.workspaceRef)
+    : '';
+}
+
+function gitStatusBranch(status: WorkspaceGitStatus | undefined) {
+  if (!status?.repository) return '';
+  const ref = status.detached ? status.commit : status.branch || status.commit;
+  return ref ? gitRefLabel(ref) : '';
+}
+
+function GitBranchLabel({ branch }: { branch: string }) {
+  if (!branch) return null;
+  const detached = /^[0-9a-f]{7}$/i.test(branch);
+  return (
+    <span
+      className="ws-git-branch"
+      title={detached ? `${branch} (detached HEAD)` : branch}
+    >
+      <GitBranch aria-hidden="true" />
+      <span>{branch}</span>
+      {detached && <span className="ws-git-detached">detached</span>}
+    </span>
+  );
+}
 
 type PendingImage = { id: string; file: File; url: string };
 type RuntimeChoice = {
@@ -427,6 +467,9 @@ export default function Fusion() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [agentList, setAgentList] = useState<AgentItem[]>([]);
   const [projectList, setProjectList] = useState<ProjectRecord[]>([]);
+  const [projectGitStatuses, setProjectGitStatuses] = useState<
+    Record<string, WorkspaceGitStatus>
+  >({});
   const [artifactList, setArtifactList] = useState<Artifact[]>([]);
   const [skillList, setSkillList] = useState<SkillRecord[]>([]);
   const [documentList, setDocumentList] = useState<DocumentRecord[]>([]);
@@ -475,6 +518,7 @@ export default function Fusion() {
   }>({ executionRuntimeID: null });
   const pollingRun = useRef('');
   const mounted = useRef(true);
+  const gitStatusWorkspace = useRef('');
   const sessionLoadSequence = useRef(0);
   const routeReady = useRef(false);
   const skipRouteWrite = useRef(false);
@@ -536,11 +580,26 @@ export default function Fusion() {
   );
 
   const hydrateWorkspace = useCallback(async (id: string) => {
+    gitStatusWorkspace.current = id;
     steer.setWorkspace(id);
     const data = await steer.bootstrap();
     const agents = data.agents.map(agentFromRecord);
     setAgentList(agents);
     setProjectList(data.projects || []);
+    setProjectGitStatuses({});
+    void Promise.all(
+      (data.projects || []).map(async (project) => {
+        const result = await steer
+          .projectGitStatus(project.id)
+          .catch(() => null);
+        return result?.git ? ([project.id, result.git] as const) : null;
+      }),
+    ).then((results) => {
+      if (!mounted.current || gitStatusWorkspace.current !== id) return;
+      setProjectGitStatuses(
+        Object.fromEntries(results.filter((item) => item !== null)),
+      );
+    });
     setArtifactList(data.artifacts.map(artifactFromRecord));
     setSkillList(data.skills || []);
     setDocumentList(data.documents || []);
@@ -658,6 +717,17 @@ export default function Fusion() {
         const refreshed = await steer.bootstrap().catch(() => null);
         if (refreshed)
           setArtifactList(refreshed.artifacts.map(artifactFromRecord));
+        const projectID = activeRunContext.current.project?.id;
+        if (projectID) {
+          const gitStatus = await steer
+            .projectGitStatus(projectID)
+            .catch(() => null);
+          if (gitStatus?.git)
+            setProjectGitStatuses((current) => ({
+              ...current,
+              [projectID]: gitStatus.git!,
+            }));
+        }
         activeRun.current = '';
         setActiveRunID('');
         setChatWorking(false);
@@ -1384,6 +1454,7 @@ export default function Fusion() {
     setAuthUser(null);
     setWorkspaceList([]);
     setWorkspaceID('');
+    gitStatusWorkspace.current = '';
     setLoaded(false);
     setLoadError('');
   };
@@ -1515,6 +1586,9 @@ export default function Fusion() {
                     const sessionsExpanded = expandedSessionGroups.has(
                       project.id,
                     );
+                    const branch =
+                      gitStatusBranch(projectGitStatuses[project.id]) ||
+                      configuredProjectBranch(project);
                     return (
                       <SidebarMenuItem
                         key={project.id}
@@ -1547,7 +1621,10 @@ export default function Fusion() {
                           title={project.workspaceSource}
                         >
                           <Folder aria-hidden="true" />
-                          <span>{project.name}</span>
+                          <span className="ws-project-name">
+                            {project.name}
+                          </span>
+                          <GitBranchLabel branch={branch} />
                         </SidebarMenuButton>
                         <DropdownMenu>
                           <DropdownMenuTrigger
@@ -2307,6 +2384,9 @@ function ChatView({
     Record<string, boolean>
   >({});
   const selectedProject = projects.find((item) => item.id === project);
+  const workspaceBranch = selectedProject
+    ? configuredProjectBranch(selectedProject)
+    : '';
   const firstUserMessage = messages.find((message) => message.role === 'user');
   const conversationTitle = firstUserMessage
     ? (
@@ -3287,6 +3367,7 @@ function ChatView({
                       workspaceTabs.find((tab) => tab.id === activeWorkspaceTab)
                         ?.snapshot
                     }
+                    branch={workspaceBranch}
                     onPathChange={(path) =>
                       setWorkspaceTabs((tabs) =>
                         tabs.map((tab) =>
@@ -3304,6 +3385,7 @@ function ChatView({
                     reportedChanges={changes}
                     selectedPath={selectedChange || currentChange?.path || ''}
                     turn={reviewRounds.indexOf(reviewMessage!) + 1}
+                    branch={workspaceBranch}
                     rounds={reviewRounds}
                     onTurn={(runId) => openWorkspaceTab('changes', runId)}
                     onSelect={(path) => {
@@ -3413,11 +3495,13 @@ function WorkspaceFiles({
   runId,
   initialPath,
   fallbackSnapshot,
+  branch,
   onPathChange,
 }: {
   runId: string;
   initialPath: string;
   fallbackSnapshot?: string;
+  branch: string;
   onPathChange: (path: string) => void;
 }) {
   const [fileFilter, setFileFilter] = useState('');
@@ -3434,6 +3518,7 @@ function WorkspaceFiles({
   const [reading, setReading] = useState(false);
   const [error, setError] = useState('');
   const [snapshotNotice, setSnapshotNotice] = useState('');
+  const [gitStatus, setGitStatus] = useState<WorkspaceGitStatus>();
   const listSequence = useRef(0);
   const readSequence = useRef(0);
   const loadList = useCallback(
@@ -3500,6 +3585,13 @@ function WorkspaceFiles({
   useEffect(() => {
     if (!runId) return;
     const current = ++listSequence.current;
+    let cancelled = false;
+    void steer
+      .inspectWorkspace(runId, 'git-status')
+      .then((result) => {
+        if (!cancelled) setGitStatus(result.git);
+      })
+      .catch(() => undefined);
     void steer
       .inspectWorkspace(runId, 'list')
       .then((result) => {
@@ -3517,6 +3609,7 @@ function WorkspaceFiles({
         if (current === listSequence.current) setListing(false);
       });
     return () => {
+      cancelled = true;
       listSequence.current += 1;
       readSequence.current += 1;
     };
@@ -3578,6 +3671,7 @@ function WorkspaceFiles({
             </>
           )}
         </nav>
+        <GitBranchLabel branch={gitStatusBranch(gitStatus) || branch} />
         <Button
           variant="ghost"
           size="icon"
@@ -3585,7 +3679,13 @@ function WorkspaceFiles({
           aria-label="Refresh files"
           title="Refresh files"
           disabled={loading}
-          onClick={() => loadList(directory)}
+          onClick={() => {
+            loadList(directory);
+            void steer
+              .inspectWorkspace(runId, 'git-status')
+              .then((result) => setGitStatus(result.git))
+              .catch(() => setGitStatus(undefined));
+          }}
         >
           <RefreshCw aria-hidden="true" />
         </Button>
@@ -3884,6 +3984,7 @@ function CodeReview({
   reportedChanges,
   selectedPath,
   turn,
+  branch,
   rounds,
   onTurn,
   onSelect,
@@ -3892,6 +3993,7 @@ function CodeReview({
   reportedChanges: ReviewChange[];
   selectedPath: string;
   turn: number;
+  branch: string;
   rounds: ChatMessage[];
   onTurn: (runId: string) => void;
   onSelect: (path: string) => void;
@@ -3902,10 +4004,15 @@ function CodeReview({
   const [loading, setLoading] = useState(Boolean(runId));
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
+  const [gitStatus, setGitStatus] = useState<WorkspaceGitStatus>();
   const load = useCallback(() => {
     if (!runId) return;
     setLoading(true);
     setError('');
+    void steer
+      .inspectWorkspace(runId, 'git-status')
+      .then((result) => setGitStatus(result.git))
+      .catch(() => setGitStatus(undefined));
     void steer
       .inspectWorkspace(runId, 'diff')
       .then((result) =>
@@ -3923,6 +4030,12 @@ function CodeReview({
   useEffect(() => {
     if (!runId) return;
     let cancelled = false;
+    void steer
+      .inspectWorkspace(runId, 'git-status')
+      .then((result) => {
+        if (!cancelled) setGitStatus(result.git);
+      })
+      .catch(() => undefined);
     void steer
       .inspectWorkspace(runId, 'diff')
       .then((result) => {
@@ -3982,6 +4095,7 @@ function CodeReview({
             ))}
           </div>
         </details>
+        <GitBranchLabel branch={gitStatusBranch(gitStatus) || branch} />
         <div className="ws-code-review-summary">
           <span>{changes.length} files</span>
           <strong>+{totals.additions}</strong>

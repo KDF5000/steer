@@ -594,6 +594,19 @@ func (s *Store) RunLink(ctx context.Context, wid, runID string) (RunLink, error)
 	return x, err
 }
 
+func (s *Store) LatestProjectRunID(ctx context.Context, wid, projectID string) (string, error) {
+	var runID string
+	err := s.pool.QueryRow(ctx, `SELECT run_links.relay_run_id
+		FROM run_links
+		JOIN chat_sessions ON chat_sessions.workspace_id=run_links.workspace_id AND chat_sessions.id=run_links.session_id
+		WHERE run_links.workspace_id=$1 AND chat_sessions.project_id=$2 AND run_links.purpose='chat'
+		ORDER BY run_links.updated_at DESC LIMIT 1`, wid, projectID).Scan(&runID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return runID, err
+}
+
 func (s *Store) LatestUnacknowledgedSystemRun(ctx context.Context, wid, purpose string, from, to time.Time) (RunLink, error) {
 	var x RunLink
 	err := s.pool.QueryRow(ctx, `SELECT relay_run_id,workspace_id,purpose,session_id,agent_id,status,summary,error,acknowledged_at,created_at,updated_at

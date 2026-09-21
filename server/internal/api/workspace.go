@@ -16,7 +16,7 @@ func (s *Server) inspectWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	operation := r.URL.Query().Get("operation")
-	if operation != "read" && operation != "list" && operation != "diff" {
+	if operation != "read" && operation != "list" && operation != "diff" && operation != "git-status" {
 		writeJSON(w, 400, map[string]string{"error": "invalid workspace operation"})
 		return
 	}
@@ -38,4 +38,23 @@ func (s *Server) inspectWorkspace(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(response.StatusCode)
 	_, _ = io.Copy(w, io.LimitReader(response.Body, 4<<20))
+}
+
+func (s *Server) projectGitStatus(w http.ResponseWriter, r *http.Request) {
+	wid := s.workspace(r)
+	if _, err := s.store.Project(r.Context(), wid, r.PathValue("id")); err != nil {
+		writeError(w, err)
+		return
+	}
+	runID, err := s.store.LatestProjectRunID(r.Context(), wid, r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	r.SetPathValue("id", runID)
+	query := r.URL.Query()
+	query.Set("operation", "git-status")
+	query.Del("path")
+	r.URL.RawQuery = query.Encode()
+	s.inspectWorkspace(w, r)
 }

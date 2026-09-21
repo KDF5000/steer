@@ -83,6 +83,13 @@ export type ProjectRecord = {
   updatedAt: string;
 };
 
+export type WorkspaceGitStatus = {
+  repository: boolean;
+  branch?: string;
+  commit?: string;
+  detached?: boolean;
+};
+
 export type SkillRecord = {
   id: string;
   workspaceId: string;
@@ -334,7 +341,7 @@ export const steer = {
   bootstrap: () => request<Bootstrap>('/bootstrap'),
   inspectWorkspace: (
     runId: string,
-    operation: 'list' | 'read' | 'diff',
+    operation: 'list' | 'read' | 'diff' | 'git-status',
     path = '',
   ) =>
     request<{
@@ -342,8 +349,13 @@ export const steer = {
       path: string;
       content: string;
       entries: Array<{ name: string; directory: boolean; size: number }>;
+      git?: WorkspaceGitStatus;
     }>(
       `/runs/${encodeURIComponent(runId)}/workspace?operation=${operation}&path=${encodeURIComponent(path)}`,
+    ),
+  projectGitStatus: (projectId: string) =>
+    request<{ git?: WorkspaceGitStatus }>(
+      `/projects/${encodeURIComponent(projectId)}/git-status`,
     ),
   createAgent: (input: Partial<AgentRecord>) =>
     request<AgentRecord>('/agents', {

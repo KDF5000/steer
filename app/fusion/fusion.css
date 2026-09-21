@@ -471,6 +471,71 @@
   padding-left: 30px;
 }
 
+.ws-project-name {
+  min-width: 0;
+  flex: 1;
+}
+
+.ws-git-branch {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 92px;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 3px;
+  color: #92939b;
+  font-size: 10px;
+  font-weight: 450;
+  line-height: 1;
+}
+
+.ws-git-branch > svg {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+}
+
+.ws-git-branch > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-sidebar
+  .ws-project-nav-button[data-active]:not([data-active='false'])
+  .ws-git-branch {
+  color: #7374bb;
+}
+
+.ws-sidebar
+  .ws-project-nav-item:hover
+  .ws-git-branch,
+.ws-sidebar
+  .ws-project-nav-item:focus-within
+  .ws-git-branch {
+  opacity: 0;
+}
+
+.ws-sidebar .ws-git-branch {
+  transition: opacity 120ms ease;
+}
+
+.ws-sidebar .ws-project-nav-item > [data-slot='sidebar-menu-action'] {
+  top: 5px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: #ececef;
+  color: #777880;
+}
+
+.ws-git-detached {
+  color: #a0a1a8;
+  font-size: 9px;
+}
+
 .ws-unassigned-project-label {
   display: flex;
   height: 32px;
@@ -4015,6 +4080,11 @@ button.ws-chat-response-meta:focus-visible {
   border-radius: 7px;
   color: var(--ws-text-secondary);
 }
+.ws-workspace-toolbar > .ws-git-branch {
+  max-width: min(180px, 35%);
+  flex: 0 1 auto;
+  color: var(--ws-text-tertiary);
+}
 .ws-workspace-refresh:hover {
   background: var(--ws-surface-hover, #f0f0f3);
   color: var(--ws-text);
@@ -4545,6 +4615,11 @@ button.ws-chat-response-meta:focus-visible {
   justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid var(--ws-border);
+}
+.ws-code-review-toolbar > .ws-git-branch {
+  max-width: min(180px, 30%);
+  margin-left: auto;
+  color: var(--ws-text-tertiary);
 }
 .ws-code-review-summary,
 .ws-diff-stats {

@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Steer · Git 分支显示预览</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --sidebar: #f7f7f8;
+      --surface: #fff;
+      --subtle: #f7f7f8;
+      --hover: #ececef;
+      --border: #e5e5e7;
+      --border-strong: #d5d5d9;
+      --text: #202124;
+      --secondary: #686970;
+      --tertiary: #92939b;
+      --accent: #5556cf;
+      --accent-soft: #e8e8fa;
+      --positive: #27845a;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; }
+    body { margin: 0; overflow: hidden; background: #fff; color: var(--text); font-size: 14px; -webkit-font-smoothing: antialiased; }
+    button { color: inherit; font: inherit; cursor: pointer; }
+    svg { width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.75; }
+    button:focus-visible { outline: 2px solid #8e8fe0; outline-offset: 2px; }
+
+    .app { display: grid; grid-template-columns: 238px minmax(0, 1fr); height: 100%; }
+    .sidebar { display: flex; min-width: 0; flex-direction: column; border-right: 1px solid var(--border); background: var(--sidebar); }
+    .sidebar-head { display: grid; gap: 12px; padding: 14px 10px 8px; }
+    .workspace { display: flex; width: 100%; align-items: center; gap: 10px; border: 0; border-radius: 9px; background: transparent; padding: 3px 5px; text-align: left; }
+    .workspace:hover, .account:hover { background: #ededf0; }
+    .logo { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 9px; background: #2f3038; color: #fff; font-size: 13px; font-weight: 720; }
+    .workspace-copy, .account-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; line-height: 1.3; }
+    .workspace-copy strong { font-size: 14px; font-weight: 650; }
+    .workspace-copy small, .account-copy small { color: var(--tertiary); font-size: 11px; }
+    .workspace > svg, .account > svg { width: 14px; height: 14px; color: var(--tertiary); }
+    .search { display: flex; width: 100%; height: 34px; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 8px; background: #fff; padding: 0 9px; color: #83848c; text-align: left; box-shadow: 0 1px 2px #17181b08; }
+    .search:hover { border-color: var(--border-strong); }
+    .search kbd { margin-left: auto; color: #a0a1a8; font-family: inherit; font-size: 12px; }
+    .sidebar-scroll { min-height: 0; flex: 1; overflow: auto; padding: 1px 8px 8px; scrollbar-width: none; }
+    .menu-label { height: 30px; padding: 8px 8px 0; color: #96979e; font-size: 12px; font-weight: 620; letter-spacing: .025em; }
+    .menu { display: grid; gap: 1px; margin: 0; padding: 5px 0; list-style: none; }
+    .nav { display: flex; width: 100%; height: 36px; min-width: 0; align-items: center; gap: 9px; border: 0; border-radius: 7px; background: transparent; padding: 0 9px; color: #686970; text-align: left; }
+    .nav:hover { background: var(--hover); color: #3d3e43; }
+    .nav.active { background: var(--accent-soft); color: #4c4db5; font-weight: 560; }
+    .nav > svg { width: 15px; height: 15px; color: #81828a; }
+    .nav.active > svg { color: #595bd0; }
+    .nav-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .project { position: relative; }
+    .project .nav { padding-left: 30px; padding-right: 7px; }
+    .project-toggle { position: absolute; z-index: 2; top: 5px; left: 2px; display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: #878890; }
+    .project-toggle:hover { background: #dedee3; color: #4f5058; }
+    .project-toggle svg { width: 13px; height: 13px; transition: transform 140ms ease; }
+    .project.open .project-toggle svg { transform: rotate(90deg); }
+    .branch { display: inline-flex; min-width: 0; max-width: 75px; align-items: center; gap: 3px; color: #9a9ba2; font-size: 10px; font-weight: 450; }
+    .branch svg { width: 11px; height: 11px; }
+    .branch span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nav.active .branch { color: #7374bb; }
+    .sessions { display: none; margin: 1px 0 6px 16px; padding: 1px 0 1px 9px; border-left: 1px solid #dedee2; list-style: none; }
+    .project.open .sessions { display: block; }
+    .sessions .nav { height: 34px; padding: 0 8px; font-size: 13px; }
+    .sessions .nav::before { width: 5px; height: 5px; flex: 0 0 auto; border-radius: 50%; background: #bbbcc2; content: ""; }
+    .count { margin-left: auto; color: #9a9ba2; font-size: 12px; }
+    .sidebar-foot { border-top: 1px solid var(--border); padding: 9px 10px 12px; }
+    .account { display: flex; width: 100%; align-items: center; gap: 9px; border: 0; border-radius: 9px; background: transparent; padding: 4px 5px; text-align: left; }
+    .avatar { display: grid; width: 29px; height: 29px; place-items: center; border-radius: 8px; background: #e8e8ea; color: #5e6068; font-size: 12px; font-weight: 650; }
+    .account-copy strong { color: #52535a; font-size: 12px; font-weight: 560; }
+
+    .main { display: flex; min-width: 0; height: 100dvh; flex-direction: column; }
+    .topbar { display: flex; height: 58px; flex: 0 0 auto; align-items: center; gap: 11px; border-bottom: 1px solid var(--border); padding: 0 16px; }
+    .icon-button { display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #707179; }
+    .icon-button:hover { background: var(--subtle); }
+    .title { font-size: 13px; font-weight: 620; }
+    .prototype-note { color: var(--tertiary); font-size: 11px; }
+    .scenario-switch { display: flex; gap: 3px; margin-left: auto; border-radius: 10px; background: var(--subtle); padding: 3px; }
+    .scenario-switch button { height: 30px; border: 0; border-radius: 8px; background: transparent; padding: 0 11px; color: var(--secondary); font-size: 12px; }
+    .scenario-switch button:hover { color: var(--text); }
+    .scenario-switch button.active { background: #fff; color: var(--text); box-shadow: 0 1px 3px #18181b14; font-weight: 600; }
+
+    .content { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(370px, 1fr) minmax(420px, .95fr); }
+    .conversation { display: flex; min-width: 0; flex-direction: column; }
+    .conversation-head { display: flex; height: 49px; flex: 0 0 auto; align-items: center; border-bottom: 1px solid var(--border); padding: 0 20px; }
+    .conversation-head strong { font-size: 13px; font-weight: 620; }
+    .conversation-head span { margin-left: 7px; color: var(--tertiary); font-size: 11px; }
+    .chat { flex: 1; overflow: auto; padding: 34px max(28px, calc((100% - 660px) / 2)); }
+    .message { margin-bottom: 30px; }
+    .message-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 12px; font-weight: 620; }
+    .message-head span { color: var(--tertiary); font-size: 10px; font-weight: 450; }
+    .message p { margin: 0; color: #4b4c53; font-size: 13px; line-height: 1.72; }
+    .message.user { margin-left: 60px; border-radius: 12px; background: #f4f4f6; padding: 13px 15px; }
+    .message.user .message-head { display: none; }
+    .agent-mark { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 7px; background: #2f3038; color: #fff; font-size: 9px; }
+    .status { display: inline-flex; align-items: center; gap: 5px; margin-top: 16px; color: var(--positive); font-size: 10px; }
+    .status::before { width: 5px; height: 5px; border-radius: 50%; background: currentColor; content: ""; }
+
+    .review { display: flex; min-width: 0; flex-direction: column; border-left: 1px solid var(--border); background: #fff; }
+    .review-head { display: flex; height: 58px; flex: 0 0 auto; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 0 12px; }
+    .browser-tab { display: flex; height: 36px; align-items: center; gap: 7px; border-radius: 8px 8px 0 0; padding: 0 11px; color: #56575e; font-size: 12px; font-weight: 560; }
+    .browser-tab svg { width: 14px; height: 14px; color: #777880; }
+    .review-body { display: flex; min-height: 0; flex: 1; }
+    .file-panel { display: flex; width: 220px; min-width: 180px; flex-direction: column; border-right: 1px solid var(--border); background: #fbfbfc; }
+    .file-toolbar { display: flex; min-height: 48px; align-items: center; gap: 7px; border-bottom: 1px solid var(--border); padding: 0 11px; }
+    .file-toolbar strong { font-size: 12px; font-weight: 620; }
+    .file-toolbar button { display: grid; width: 26px; height: 26px; margin-left: auto; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--tertiary); }
+    .file-toolbar button:hover { background: var(--hover); }
+    .file-toolbar button svg { width: 13px; height: 13px; }
+    .file-root { display: flex; min-width: 0; align-items: center; gap: 6px; border-bottom: 1px solid #ededee; padding: 9px 11px; }
+    .file-root > svg { width: 14px; height: 14px; color: #85868e; }
+    .file-root-copy { min-width: 0; flex: 1; }
+    .file-root strong { display: block; overflow: hidden; font-size: 11px; font-weight: 610; text-overflow: ellipsis; white-space: nowrap; }
+    .file-root .branch { display: flex; max-width: 100%; margin-top: 3px; color: #777880; font-size: 10px; }
+    .file-tree { overflow: auto; padding: 6px; }
+    .file-row { display: flex; height: 29px; align-items: center; gap: 6px; border-radius: 6px; padding: 0 7px; color: #606169; font-size: 11px; }
+    .file-row:hover, .file-row.active { background: #eeeef1; color: #33343a; }
+    .file-row.indent { padding-left: 23px; }
+    .file-row svg { width: 13px; height: 13px; color: #8b8c94; }
+    .file-row .code { color: #3884b8; }
+    .preview { min-width: 0; flex: 1; overflow: auto; }
+    .preview-toolbar { display: flex; height: 48px; align-items: center; gap: 5px; border-bottom: 1px solid var(--border); padding: 0 13px; color: var(--secondary); font-size: 11px; }
+    .preview-toolbar svg { width: 13px; height: 13px; }
+    .preview-toolbar .branch-context { display: inline-flex; min-width: 0; align-items: center; gap: 4px; margin-left: auto; color: var(--tertiary); }
+    .preview-toolbar .branch-context svg { width: 11px; height: 11px; }
+    .preview-toolbar .branch-context span { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    pre { margin: 0; padding: 20px; color: #4f5058; font: 11px/1.75 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+    .comment { color: #92939b; }
+    .keyword { color: #6b55b4; }
+    .string { color: #28765b; }
+
+    .hint { position: fixed; z-index: 10; right: 18px; bottom: 18px; width: min(330px, calc(100% - 36px)); border: 1px solid var(--border); border-radius: 12px; background: #ffffffed; padding: 12px 14px; color: var(--secondary); box-shadow: 0 12px 32px #18181b14; backdrop-filter: blur(12px); font-size: 11px; line-height: 1.55; }
+    .hint strong { display: block; margin-bottom: 3px; color: var(--text); font-size: 11.5px; }
+
+    @media (max-width: 1050px) {
+      .content { grid-template-columns: minmax(330px, .8fr) minmax(390px, 1fr); }
+      .file-panel { width: 190px; }
+      .prototype-note { display: none; }
+    }
+    @media (max-width: 800px) {
+      body { overflow: auto; }
+      .app { grid-template-columns: 1fr; height: auto; min-height: 100%; }
+      .sidebar { min-height: 430px; border-right: 0; border-bottom: 1px solid var(--border); }
+      .sidebar-foot { display: none; }
+      .main { height: auto; min-height: 720px; }
+      .content { grid-template-columns: 1fr; }
+      .conversation { display: none; }
+      .review { min-height: 610px; border-left: 0; }
+      .scenario-switch button { padding: 0 8px; }
+      .title { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <header class="sidebar-head">
+        <button class="workspace" type="button"><span class="logo">S</span><span class="workspace-copy"><strong>Steer</strong><small>Personal workspace</small></span><svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></button>
+        <button class="search" type="button"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search <kbd>⌘ K</kbd></button>
+      </header>
+      <div class="sidebar-scroll">
+        <ul class="menu"><li><button class="nav" type="button"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span class="nav-name">New chat</span></button></li></ul>
+        <div class="menu-label">Projects</div>
+        <ul class="menu">
+          <li class="project open" data-project="steer">
+            <button class="project-toggle" type="button" aria-label="展开或折叠 Steer"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+            <button class="nav active" type="button"><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v10H3Z"/></svg><span class="nav-name">Steer</span><span class="branch" title="main"><svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10M8 17c6 0 10-3 10-8"/></svg><span data-sidebar-branch>main</span></span></button>
+            <ul class="sessions"><li><button class="nav active" type="button"><span class="nav-name">显示 Git 分支</span></button></li><li><button class="nav" type="button"><span class="nav-name">修复 Review diff</span></button></li></ul>
+          </li>
+          <li class="project">
+            <button class="project-toggle" type="button" aria-label="展开或折叠 Relay"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+            <button class="nav" type="button"><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v10H3Z"/></svg><span class="nav-name">Relay</span><span class="branch" title="feature/runtime-permissions"><svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10M8 17c6 0 10-3 10-8"/></svg><span>feature/runtime-permissions</span></span></button>
+            <ul class="sessions"><li><button class="nav" type="button"><span class="nav-name">Runtime 权限策略</span></button></li></ul>
+          </li>
+          <li><button class="nav" type="button"><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v10H3Z"/></svg><span class="nav-name">Design assets</span></button></li>
+          <li><button class="nav" type="button"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span class="nav-name">Add project</span></button></li>
+        </ul>
+        <div class="menu-label">Workspace</div>
+        <ul class="menu"><li><button class="nav" type="button"><svg viewBox="0 0 24 24"><path d="M4 19.5V5a2 2 0 0 1 2-2h11v18H6a2 2 0 0 1-2-1.5Z"/></svg><span class="nav-name">Assets</span><span class="count">8</span></button></li><li><button class="nav" type="button"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg><span class="nav-name">Work log</span></button></li></ul>
+      </div>
+      <footer class="sidebar-foot"><button class="account" type="button"><span class="avatar">K</span><span class="account-copy"><strong>Kongdefei</strong><small>kongdefei@example.com</small></span><svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></button></footer>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-button" type="button" aria-label="折叠侧栏"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+        <span class="title">Git 分支显示</span><span class="prototype-note">项目列表展示当前分支，文件目录展示 Session 实际分支</span>
+        <div class="scenario-switch" aria-label="预览场景"><button class="active" type="button" data-scenario="normal">普通分支</button><button type="button" data-scenario="worktree">Worktree</button><button type="button" data-scenario="detached">Detached</button></div>
+      </header>
+      <div class="content">
+        <section class="conversation">
+          <header class="conversation-head"><strong>显示 Git 分支</strong><span>Steer</span></header>
+          <div class="chat">
+            <article class="message user"><p>显示文件夹目录的时候，如果是一个 Git 项目，希望可以看到当前分支。</p></article>
+            <article class="message"><header class="message-head"><span class="agent-mark">S</span>Traex-5.6-Sol <span>刚刚</span></header><p>可以。项目列表会以弱化文字展示项目分支，文件目录顶部则展示当前 Session 实际使用的分支。使用独立 Worktree 时，两处信息可能不同，这能帮助你确认 Agent 实际修改的位置。</p><span class="status">Completed in 8s</span></article>
+          </div>
+        </section>
+
+        <aside class="review">
+          <header class="review-head"><span class="browser-tab"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5"/></svg>Files</span><button class="icon-button" type="button" aria-label="关闭面板"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button></header>
+          <div class="review-body">
+            <section class="file-panel">
+              <header class="file-toolbar"><strong>Explorer</strong><button type="button" aria-label="刷新"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v6h-6"/></svg></button></header>
+              <div class="file-root"><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v10H3Z"/></svg><div class="file-root-copy"><strong data-root-name>steer</strong><span class="branch" data-root-branch-wrap><svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10M8 17c6 0 10-3 10-8"/></svg><span data-root-branch>main</span></span></div></div>
+              <div class="file-tree"><div class="file-row"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v10H3Z"/></svg>app</div><div class="file-row indent"><svg class="code" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>page.tsx</div><div class="file-row"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v10H3Z"/></svg>components</div><div class="file-row"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v10H3Z"/></svg>lib</div><div class="file-row active"><svg class="code" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>package.json</div><div class="file-row"><svg class="code" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>README.md</div></div>
+            </section>
+            <section class="preview">
+              <header class="preview-toolbar"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>package.json<span class="branch-context"><svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10M8 17c6 0 10-3 10-8"/></svg><span data-toolbar-branch>main</span></span></header>
+              <pre>{
+  <span class="string">"name"</span>: <span class="string">"steer"</span>,
+  <span class="string">"version"</span>: <span class="string">"0.1.0"</span>,
+  <span class="string">"private"</span>: <span class="keyword">true</span>,
+  <span class="string">"scripts"</span>: {
+    <span class="string">"dev"</span>: <span class="string">"next dev"</span>,
+    <span class="string">"build"</span>: <span class="string">"next build"</span>,
+    <span class="string">"lint"</span>: <span class="string">"eslint"</span>
+  }
+}</pre>
+            </section>
+          </div>
+        </aside>
+      </div>
+    </main>
+  </div>
+  <aside class="hint"><strong data-hint-title>普通 Git 项目</strong><span data-hint>侧栏和文件目录都显示项目当前分支 main。非 Git 项目不显示任何占位。</span></aside>
+  <script>
+    const scenarios = {
+      normal: { sidebar: 'main', root: 'main', rootName: 'steer', title: '普通 Git 项目', hint: '侧栏和文件目录都显示项目当前分支 main。非 Git 项目不显示任何占位。' },
+      worktree: { sidebar: 'main', root: 'steer/session-git-branch', rootName: 'steer · worktree', title: '独立 Worktree Session', hint: '侧栏仍显示项目默认分支 main；文件目录显示当前 Session 实际工作的 steer/session-git-branch，避免误判修改位置。' },
+      detached: { sidebar: 'a31c9e2', root: 'a31c9e2 · detached', rootName: 'steer', title: 'Detached HEAD', hint: '无法取得分支名称时显示 7 位短提交号，并明确标注 detached；不会显示空白分支或报错占位。' }
+    };
+    document.querySelectorAll('[data-scenario]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const value = scenarios[button.dataset.scenario];
+        document.querySelectorAll('[data-scenario]').forEach((item) => item.classList.toggle('active', item === button));
+        document.querySelector('[data-sidebar-branch]').textContent = value.sidebar;
+        document.querySelector('[data-root-branch]').textContent = value.root;
+        document.querySelector('[data-toolbar-branch]').textContent = value.root;
+        document.querySelector('[data-root-name]').textContent = value.rootName;
+        document.querySelector('[data-hint-title]').textContent = value.title;
+        document.querySelector('[data-hint]').textContent = value.hint;
+      });
+    });
+    document.querySelectorAll('.project-toggle').forEach((button) => {
+      button.addEventListener('click', () => button.closest('.project').classList.toggle('open'));
+    });
+  </script>
+</body>
+</html>
