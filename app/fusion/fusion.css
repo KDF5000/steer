@@ -483,7 +483,6 @@
 .ws-git-branch {
   display: inline-flex;
   min-width: 0;
-  max-width: 96px;
   flex: 0 1 auto;
   margin-left: auto;
   align-items: center;
@@ -519,6 +518,8 @@
 }
 
 .ws-sidebar .ws-git-branch {
+  max-width: calc(100% - 72px);
+  flex-shrink: 0;
   transition: opacity 120ms ease;
 }
 
