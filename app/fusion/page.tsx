@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type SyntheticEvent,
 } from 'react';
@@ -67,7 +68,6 @@ import {
   SidebarMenuItem,
   SidebarMenuSub,
   SidebarProvider,
-  SidebarRail,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
@@ -454,6 +454,56 @@ export default function Fusion() {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authError, setAuthError] = useState('');
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    if (typeof window === 'undefined') return 260;
+    const saved = window.localStorage.getItem('steer.sidebarWidth');
+    const parsed = saved ? parseInt(saved, 10) : NaN;
+    return Number.isFinite(parsed) && parsed >= 200 && parsed <= 420
+      ? parsed
+      : 260;
+  });
+  const startSidebarResize = useCallback(
+    (event: ReactPointerEvent<HTMLHRElement>) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = sidebarWidth;
+      const previousCursor = document.body.style.cursor;
+      const previousUserSelect = document.body.style.userSelect;
+      const listeners = new AbortController();
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      const onPointerMove = (moveEvent: PointerEvent) => {
+        const next = Math.max(
+          200,
+          Math.min(420, startWidth + moveEvent.clientX - startX),
+        );
+        setSidebarWidth(next);
+      };
+      const onPointerUp = (upEvent: PointerEvent) => {
+        const next = Math.max(
+          200,
+          Math.min(420, startWidth + upEvent.clientX - startX),
+        );
+        window.localStorage.setItem('steer.sidebarWidth', String(next));
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+        listeners.abort();
+      };
+
+      window.addEventListener('pointermove', onPointerMove, {
+        signal: listeners.signal,
+      });
+      window.addEventListener('pointerup', onPointerUp, {
+        signal: listeners.signal,
+      });
+      window.addEventListener('pointercancel', onPointerUp, {
+        signal: listeners.signal,
+      });
+    },
+    [sidebarWidth],
+  );
   const [workspaceDialog, setWorkspaceDialog] = useState(false);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const [expandedSessionGroups, setExpandedSessionGroups] = useState<
@@ -1500,7 +1550,7 @@ export default function Fusion() {
   return (
     <SidebarProvider
       className="ws"
-      style={{ '--sidebar-width': '238px' } as CSSProperties}
+      style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
     >
       <Sidebar collapsible="offcanvas" className="ws-sidebar">
         <SidebarHeader className="ws-sidebar-header">
@@ -1863,7 +1913,12 @@ export default function Fusion() {
             </DropdownMenuContent>
           </DropdownMenu>
         </SidebarFooter>
-        <SidebarRail />
+        <hr
+          className="ws-sidebar-resize-handle"
+          aria-label="Resize sidebar"
+          aria-orientation="vertical"
+          onPointerDown={startSidebarResize}
+        />
       </Sidebar>
       <SidebarInset className="ws-main">
         {view !== 'chat' && (

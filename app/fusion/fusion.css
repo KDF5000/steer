@@ -112,6 +112,7 @@
 }
 
 .ws-sidebar[data-slot='sidebar-container'] {
+  position: relative;
   border-color: var(--ws-border) !important;
 }
 
@@ -473,14 +474,18 @@
 
 .ws-project-name {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ws-git-branch {
   display: inline-flex;
   min-width: 0;
-  max-width: 92px;
+  max-width: 96px;
   flex: 0 1 auto;
+  margin-left: auto;
   align-items: center;
   gap: 3px;
   color: #92939b;
@@ -508,12 +513,8 @@
   color: #7374bb;
 }
 
-.ws-sidebar
-  .ws-project-nav-item:hover
-  .ws-git-branch,
-.ws-sidebar
-  .ws-project-nav-item:focus-within
-  .ws-git-branch {
+.ws-sidebar .ws-project-nav-item:hover .ws-git-branch,
+.ws-sidebar .ws-project-nav-item:focus-within .ws-git-branch {
   opacity: 0;
 }
 
@@ -522,6 +523,7 @@
 }
 
 .ws-sidebar .ws-project-nav-item > [data-slot='sidebar-menu-action'] {
+  z-index: 3;
   top: 5px;
   right: 4px;
   width: 26px;
@@ -529,6 +531,32 @@
   border-radius: 6px;
   background: #ececef;
   color: #777880;
+}
+
+.ws-sidebar
+  .ws-project-nav-item:has(
+    .ws-project-nav-button[data-active]:not([data-active='false'])
+  )
+  > [data-slot='sidebar-menu-action'] {
+  background: #e8e8fa;
+}
+
+.ws-sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  z-index: 40;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+  user-select: none;
+}
+
+.ws-sidebar-resize-handle:hover,
+.ws-sidebar-resize-handle:active {
+  background: transparent;
 }
 
 .ws-git-detached {
