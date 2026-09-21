@@ -550,6 +550,9 @@
   z-index: 40;
   width: 8px;
   height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
   cursor: col-resize;
   background: transparent;
   touch-action: none;
@@ -4387,59 +4390,28 @@ button.ws-chat-response-meta:focus-visible {
 }
 
 .ws-review-resize {
-  width: 1px;
-  flex: 0 0 1px;
+  position: absolute;
+  z-index: 40;
+  top: 0;
+  left: -3px;
+  width: 8px;
   height: 100%;
   margin: 0;
   padding: 0;
   border: 0;
-  background: var(--ws-border);
+  background: transparent;
   cursor: col-resize;
-  opacity: 1;
-  transition:
-    width 200ms ease-linear,
-    flex-basis 200ms ease-linear,
-    opacity 200ms ease-linear,
-    background-color 120ms ease;
+  touch-action: none;
+  user-select: none;
 }
 
-.ws-review-resize.is-collapsed {
-  width: 0;
-  flex-basis: 0;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
+.ws-review-sidebar[data-slot='sidebar-container'] {
+  border-left: 1px solid var(--ws-border);
 }
 
-.ws-review-shell {
-  min-width: 0;
-  flex: 0 0 auto;
-  overflow: hidden;
-  transition: width 200ms ease-linear;
-}
-
-.ws-review-shell.is-resizing {
+.ws-review-sidebar.is-resizing[data-slot='sidebar-container'],
+.ws-review-sidebar.is-resizing + [data-slot='sidebar-gap'] {
   transition: none;
-}
-
-.ws-review-shell > .ws-review-panel {
-  width: var(--ws-review-width);
-  min-width: 320px;
-  transform: translateX(100%);
-  transition: transform 200ms ease-linear;
-}
-
-.ws-review-shell.is-open > .ws-review-panel {
-  transform: translateX(0);
-}
-
-.ws-review-shell.is-resizing > .ws-review-panel {
-  transition: none;
-}
-
-.ws-review-resize:hover,
-.ws-review-resize:focus-visible {
-  background: var(--ws-border-strong);
 }
 
 .ws-review-panel {

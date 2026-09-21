@@ -449,6 +449,7 @@ export default function Fusion() {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authError, setAuthError] = useState('');
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
     if (typeof window === 'undefined') return 260;
     const saved = window.localStorage.getItem('steer.sidebarWidth');
@@ -1545,6 +1546,8 @@ export default function Fusion() {
   return (
     <SidebarProvider
       className="ws"
+      open={sidebarOpen}
+      onOpenChange={setSidebarOpen}
       style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
     >
       <Sidebar collapsible="offcanvas" className="ws-sidebar">
@@ -2029,6 +2032,7 @@ export default function Fusion() {
               setSelectedArtifact(index < 0 ? 0 : index);
               setView('artifacts');
             }}
+            onToggleSidebar={() => setSidebarOpen((open) => !open)}
           />
         ) : view === 'artifacts' ? (
           <ArtifactsView
@@ -2366,6 +2370,7 @@ function ChatView({
   onStop,
   onNotice,
   onArtifact,
+  onToggleSidebar,
 }: {
   sessionId: string;
   agents: AgentItem[];
@@ -2392,6 +2397,7 @@ function ChatView({
   onStop: () => void;
   onNotice: (message: string) => void;
   onArtifact: (id: string) => void;
+  onToggleSidebar: () => void;
 }) {
   const hasMessages = messages.length > 0;
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -2675,13 +2681,25 @@ function ChatView({
       </section>
     );
   return (
-    <div className="ws-chat-split">
-      <div className="ws-conversation-panel">
+    <SidebarProvider
+      className="ws-chat-split"
+      open={reviewOpen}
+      onOpenChange={setReviewOpen}
+      style={{ '--sidebar-width': `${reviewWidth}px` } as CSSProperties}
+    >
+      <SidebarInset className="ws-conversation-panel">
         <section
           className={`ws-chat-page ${hasMessages || sessionLoading ? 'has-messages' : 'is-empty'}`}
         >
           <header className="ws-chat-appbar">
-            <SidebarTrigger aria-label="Toggle sidebar" />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Toggle sidebar"
+              onClick={onToggleSidebar}
+            >
+              <PanelLeft aria-hidden="true" />
+            </Button>
             <div className="ws-chat-appbar-context">
               <strong title={conversationTitle}>{conversationTitle}</strong>
               <span title={projectLabel}>
@@ -3357,21 +3375,11 @@ function ChatView({
             </p>
           </div>
         </section>
-      </div>
-      <hr
-        className={`ws-review-resize ${reviewOpen ? '' : 'is-collapsed'}`}
-        aria-label="Resize review panel"
-        aria-orientation="vertical"
-        onPointerDown={startReviewResize}
-      />
-      <div
-        className={`ws-review-shell ${reviewOpen ? 'is-open' : 'is-collapsed'} ${reviewResizing ? 'is-resizing' : ''}`}
-        style={
-          {
-            width: reviewOpen ? `${reviewWidth}px` : '0px',
-            '--ws-review-width': `${reviewWidth}px`,
-          } as CSSProperties
-        }
+      </SidebarInset>
+      <Sidebar
+        side="right"
+        collapsible="offcanvas"
+        className={`ws-review-sidebar ${reviewResizing ? 'is-resizing' : ''}`}
       >
         <aside className="ws-review-panel" aria-label="Conversation review">
           <header className="ws-review-header">
@@ -3571,8 +3579,14 @@ function ChatView({
             )}
           </div>
         </aside>
-      </div>
-    </div>
+        <hr
+          className="ws-review-resize"
+          aria-label="Resize review panel"
+          aria-orientation="vertical"
+          onPointerDown={startReviewResize}
+        />
+      </Sidebar>
+    </SidebarProvider>
   );
 }
 
