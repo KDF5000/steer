@@ -108,11 +108,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
-} from '@/components/ui/resizable';
 import { runFileChanges } from '@/lib/review';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type {
@@ -2400,6 +2395,15 @@ function ChatView({
 }) {
   const hasMessages = messages.length > 0;
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewWidth, setReviewWidth] = useState(() => {
+    if (typeof window === 'undefined') return 520;
+    const saved = Number.parseInt(
+      window.localStorage.getItem('steer.reviewWidth') || '',
+      10,
+    );
+    return Number.isFinite(saved) ? Math.max(320, saved) : 520;
+  });
+  const [reviewResizing, setReviewResizing] = useState(false);
   const [previewID, setPreviewID] = useState('');
   const [preview, setPreview] = useState('');
   const [previewError, setPreviewError] = useState('');
@@ -2438,6 +2442,51 @@ function ChatView({
   const [expandedActivity, setExpandedActivity] = useState<
     Record<string, boolean>
   >({});
+  const startReviewResize = useCallback(
+    (event: ReactPointerEvent<HTMLHRElement>) => {
+      if (event.button !== 0 || !reviewOpen) return;
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = reviewWidth;
+      const listeners = new AbortController();
+      const previousCursor = document.body.style.cursor;
+      const previousUserSelect = document.body.style.userSelect;
+      setReviewResizing(true);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      const widthAt = (clientX: number) =>
+        Math.max(
+          320,
+          Math.min(window.innerWidth * 0.7, startWidth + startX - clientX),
+        );
+      const onPointerMove = (moveEvent: PointerEvent) =>
+        setReviewWidth(widthAt(moveEvent.clientX));
+      const onPointerUp = (upEvent: PointerEvent) => {
+        const next = widthAt(upEvent.clientX);
+        setReviewWidth(next);
+        window.localStorage.setItem(
+          'steer.reviewWidth',
+          String(Math.round(next)),
+        );
+        setReviewResizing(false);
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+        listeners.abort();
+      };
+
+      window.addEventListener('pointermove', onPointerMove, {
+        signal: listeners.signal,
+      });
+      window.addEventListener('pointerup', onPointerUp, {
+        signal: listeners.signal,
+      });
+      window.addEventListener('pointercancel', onPointerUp, {
+        signal: listeners.signal,
+      });
+    },
+    [reviewOpen, reviewWidth],
+  );
   const selectedProject = projects.find((item) => item.id === project);
   const workspaceBranch = selectedProject
     ? configuredProjectBranch(selectedProject)
@@ -2626,8 +2675,8 @@ function ChatView({
       </section>
     );
   return (
-    <ResizablePanelGroup orientation="horizontal" className="ws-chat-split">
-      <ResizablePanel id="conversation" minSize="30%" defaultSize="60%">
+    <div className="ws-chat-split">
+      <div className="ws-conversation-panel">
         <section
           className={`ws-chat-page ${hasMessages || sessionLoading ? 'has-messages' : 'is-empty'}`}
         >
@@ -3308,229 +3357,222 @@ function ChatView({
             </p>
           </div>
         </section>
-      </ResizablePanel>
-      {reviewOpen && (
-        <>
-          <ResizableHandle className="ws-review-resize" />
-          <ResizablePanel
-            id="review"
-            minSize="25%"
-            maxSize="70%"
-            defaultSize="40%"
-          >
-            <aside className="ws-review-panel" aria-label="Conversation review">
-              <header className="ws-review-header">
-                <div className="ws-browser-tabs" aria-label="Workspace tabs">
-                  {workspaceTabs.map((tab) => (
-                    <div
-                      key={tab.id}
-                      className={
-                        activeWorkspaceTab === tab.id && reviewTab !== 'home'
-                          ? 'is-active'
-                          : ''
-                      }
+      </div>
+      <hr
+        className={`ws-review-resize ${reviewOpen ? '' : 'is-collapsed'}`}
+        aria-label="Resize review panel"
+        aria-orientation="vertical"
+        onPointerDown={startReviewResize}
+      />
+      <div
+        className={`ws-review-shell ${reviewOpen ? 'is-open' : 'is-collapsed'} ${reviewResizing ? 'is-resizing' : ''}`}
+        style={
+          {
+            width: reviewOpen ? `${reviewWidth}px` : '0px',
+            '--ws-review-width': `${reviewWidth}px`,
+          } as CSSProperties
+        }
+      >
+        <aside className="ws-review-panel" aria-label="Conversation review">
+          <header className="ws-review-header">
+            <div className="ws-browser-tabs" aria-label="Workspace tabs">
+              {workspaceTabs.map((tab) => (
+                <div
+                  key={tab.id}
+                  className={
+                    activeWorkspaceTab === tab.id && reviewTab !== 'home'
+                      ? 'is-active'
+                      : ''
+                  }
+                >
+                  <Button
+                    variant="ghost"
+                    aria-pressed={
+                      activeWorkspaceTab === tab.id && reviewTab !== 'home'
+                    }
+                    onClick={() => activateWorkspaceTab(tab)}
+                  >
+                    <FileText aria-hidden="true" />
+                    <span>{tab.title}</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Close ${tab.title}`}
+                    onClick={() => closeWorkspaceTab(tab.id)}
+                  >
+                    <X aria-hidden="true" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="New workspace tab"
+                onClick={() => setReviewTab('home')}
+              >
+                <Plus aria-hidden="true" />
+              </Button>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Close review panel"
+              onClick={() => setReviewOpen(false)}
+            >
+              <PanelLeft className="ws-panel-toggle-right" aria-hidden="true" />
+            </Button>
+          </header>
+          <div className="ws-review-body">
+            {reviewTab === 'home' ? (
+              <div className="ws-review-launcher">
+                <Button
+                  variant="ghost"
+                  onClick={() => openWorkspaceTab('files')}
+                >
+                  <Folder aria-hidden="true" />
+                  <span>
+                    Files
+                    <small>Browse the actual session workspace</small>
+                  </span>
+                  <ChevronRight aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => openWorkspaceTab('changes')}
+                >
+                  <FileText aria-hidden="true" />
+                  <span>
+                    Code review
+                    <small>Inspect files changed in each agent turn</small>
+                  </span>
+                  <ChevronRight aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => openWorkspaceTab('documents')}
+                >
+                  <Folder aria-hidden="true" />
+                  <span>
+                    Documents
+                    <small>Preview outputs attached to this conversation</small>
+                  </span>
+                  <ChevronRight aria-hidden="true" />
+                </Button>
+              </div>
+            ) : reviewTab === 'files' ? (
+              <WorkspaceFiles
+                key={`${reviewRunID}:${activeWorkspaceTab}`}
+                runId={reviewRunID}
+                initialPath={
+                  workspaceTabs.find((tab) => tab.id === activeWorkspaceTab)
+                    ?.path || ''
+                }
+                fallbackSnapshot={
+                  workspaceTabs.find((tab) => tab.id === activeWorkspaceTab)
+                    ?.snapshot
+                }
+                branch={workspaceBranch}
+                onPathChange={(path) =>
+                  setWorkspaceTabs((tabs) =>
+                    tabs.map((tab) =>
+                      tab.id === activeWorkspaceTab ? { ...tab, path } : tab,
+                    ),
+                  )
+                }
+              />
+            ) : reviewTab === 'changes' ? (
+              <CodeReview
+                key={reviewMessage?.runId}
+                runId={reviewMessage?.runId || ''}
+                reportedChanges={changes}
+                selectedPath={selectedChange || currentChange?.path || ''}
+                turn={reviewRounds.indexOf(reviewMessage!) + 1}
+                branch={workspaceBranch}
+                rounds={reviewRounds}
+                onTurn={(runId) => openWorkspaceTab('changes', runId)}
+                onSelect={(path) => {
+                  setSelectedChange(path);
+                  setWorkspaceTabs((tabs) =>
+                    tabs.map((tab) =>
+                      tab.id === activeWorkspaceTab ? { ...tab, path } : tab,
+                    ),
+                  );
+                }}
+              />
+            ) : (
+              <>
+                <div className="ws-chat-review-list">
+                  {artifacts.map((artifact) => (
+                    <button
+                      key={artifact.id}
+                      className={previewID === artifact.id ? 'selected' : ''}
+                      onClick={() => selectPreview(artifact.id)}
                     >
+                      <FileText aria-hidden="true" />
+                      <span>
+                        <strong>{artifact.title}</strong>
+                        <small>
+                          {artifact.type}
+                          {artifact.size
+                            ? ` · ${formatSize(artifact.size)}`
+                            : ''}
+                        </small>
+                      </span>
+                      <ChevronRight aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+                {!artifacts.length && (
+                  <p className="ws-review-empty">
+                    Documents and durable outputs will appear here.
+                  </p>
+                )}
+                {previewID && (
+                  <div className="ws-chat-artifact-preview">
+                    <div className="ws-review-document-actions">
                       <Button
                         variant="ghost"
-                        aria-pressed={
-                          activeWorkspaceTab === tab.id && reviewTab !== 'home'
-                        }
-                        onClick={() => activateWorkspaceTab(tab)}
+                        aria-pressed={!previewSource}
+                        onClick={() => setPreviewSource(false)}
                       >
-                        <FileText aria-hidden="true" />
-                        <span>{tab.title}</span>
+                        Preview
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        aria-pressed={previewSource}
+                        onClick={() => setPreviewSource(true)}
+                      >
+                        Source
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        aria-label={`Close ${tab.title}`}
-                        onClick={() => closeWorkspaceTab(tab.id)}
+                        aria-label="Open full document review"
+                        onClick={() => onArtifact(previewID)}
                       >
-                        <X aria-hidden="true" />
+                        <ExternalLink aria-hidden="true" />
                       </Button>
                     </div>
-                  ))}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="New workspace tab"
-                    onClick={() => setReviewTab('home')}
-                  >
-                    <Plus aria-hidden="true" />
-                  </Button>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Close review panel"
-                  onClick={() => setReviewOpen(false)}
-                >
-                  <PanelLeft
-                    className="ws-panel-toggle-right"
-                    aria-hidden="true"
-                  />
-                </Button>
-              </header>
-              <div className="ws-review-body">
-                {reviewTab === 'home' ? (
-                  <div className="ws-review-launcher">
-                    <Button
-                      variant="ghost"
-                      onClick={() => openWorkspaceTab('files')}
-                    >
-                      <Folder aria-hidden="true" />
-                      <span>
-                        Files
-                        <small>Browse the actual session workspace</small>
-                      </span>
-                      <ChevronRight aria-hidden="true" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={() => openWorkspaceTab('changes')}
-                    >
-                      <FileText aria-hidden="true" />
-                      <span>
-                        Code review
-                        <small>Inspect files changed in each agent turn</small>
-                      </span>
-                      <ChevronRight aria-hidden="true" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={() => openWorkspaceTab('documents')}
-                    >
-                      <Folder aria-hidden="true" />
-                      <span>
-                        Documents
-                        <small>
-                          Preview outputs attached to this conversation
-                        </small>
-                      </span>
-                      <ChevronRight aria-hidden="true" />
-                    </Button>
-                  </div>
-                ) : reviewTab === 'files' ? (
-                  <WorkspaceFiles
-                    key={`${reviewRunID}:${activeWorkspaceTab}`}
-                    runId={reviewRunID}
-                    initialPath={
-                      workspaceTabs.find((tab) => tab.id === activeWorkspaceTab)
-                        ?.path || ''
-                    }
-                    fallbackSnapshot={
-                      workspaceTabs.find((tab) => tab.id === activeWorkspaceTab)
-                        ?.snapshot
-                    }
-                    branch={workspaceBranch}
-                    onPathChange={(path) =>
-                      setWorkspaceTabs((tabs) =>
-                        tabs.map((tab) =>
-                          tab.id === activeWorkspaceTab
-                            ? { ...tab, path }
-                            : tab,
-                        ),
+                    {previewError ? (
+                      <p role="alert">{previewError}</p>
+                    ) : preview ? (
+                      previewSource ? (
+                        <pre className="ws-review-source">{preview}</pre>
+                      ) : (
+                        <Markdown>{preview}</Markdown>
                       )
-                    }
-                  />
-                ) : reviewTab === 'changes' ? (
-                  <CodeReview
-                    key={reviewMessage?.runId}
-                    runId={reviewMessage?.runId || ''}
-                    reportedChanges={changes}
-                    selectedPath={selectedChange || currentChange?.path || ''}
-                    turn={reviewRounds.indexOf(reviewMessage!) + 1}
-                    branch={workspaceBranch}
-                    rounds={reviewRounds}
-                    onTurn={(runId) => openWorkspaceTab('changes', runId)}
-                    onSelect={(path) => {
-                      setSelectedChange(path);
-                      setWorkspaceTabs((tabs) =>
-                        tabs.map((tab) =>
-                          tab.id === activeWorkspaceTab
-                            ? { ...tab, path }
-                            : tab,
-                        ),
-                      );
-                    }}
-                  />
-                ) : (
-                  <>
-                    <div className="ws-chat-review-list">
-                      {artifacts.map((artifact) => (
-                        <button
-                          key={artifact.id}
-                          className={
-                            previewID === artifact.id ? 'selected' : ''
-                          }
-                          onClick={() => selectPreview(artifact.id)}
-                        >
-                          <FileText aria-hidden="true" />
-                          <span>
-                            <strong>{artifact.title}</strong>
-                            <small>
-                              {artifact.type}
-                              {artifact.size
-                                ? ` · ${formatSize(artifact.size)}`
-                                : ''}
-                            </small>
-                          </span>
-                          <ChevronRight aria-hidden="true" />
-                        </button>
-                      ))}
-                    </div>
-                    {!artifacts.length && (
-                      <p className="ws-review-empty">
-                        Documents and durable outputs will appear here.
-                      </p>
+                    ) : (
+                      <output>Loading preview…</output>
                     )}
-                    {previewID && (
-                      <div className="ws-chat-artifact-preview">
-                        <div className="ws-review-document-actions">
-                          <Button
-                            variant="ghost"
-                            aria-pressed={!previewSource}
-                            onClick={() => setPreviewSource(false)}
-                          >
-                            Preview
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            aria-pressed={previewSource}
-                            onClick={() => setPreviewSource(true)}
-                          >
-                            Source
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label="Open full document review"
-                            onClick={() => onArtifact(previewID)}
-                          >
-                            <ExternalLink aria-hidden="true" />
-                          </Button>
-                        </div>
-                        {previewError ? (
-                          <p role="alert">{previewError}</p>
-                        ) : preview ? (
-                          previewSource ? (
-                            <pre className="ws-review-source">{preview}</pre>
-                          ) : (
-                            <Markdown>{preview}</Markdown>
-                          )
-                        ) : (
-                          <output>Loading preview…</output>
-                        )}
-                      </div>
-                    )}
-                  </>
+                  </div>
                 )}
-              </div>
-            </aside>
-          </ResizablePanel>
-        </>
-      )}
-    </ResizablePanelGroup>
+              </>
+            )}
+          </div>
+        </aside>
+      </div>
+    </div>
   );
 }
 

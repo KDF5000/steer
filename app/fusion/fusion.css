@@ -112,7 +112,6 @@
 }
 
 .ws-sidebar[data-slot='sidebar-container'] {
-  position: relative;
   border-color: var(--ws-border) !important;
 }
 
@@ -474,7 +473,8 @@
 
 .ws-project-name {
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  max-width: calc(100% - 24px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -518,8 +518,9 @@
 }
 
 .ws-sidebar .ws-git-branch {
-  max-width: calc(100% - 72px);
-  flex-shrink: 0;
+  max-width: none;
+  flex-shrink: 1;
+  overflow: hidden;
   transition: opacity 120ms ease;
 }
 
@@ -4374,14 +4375,66 @@ button.ws-chat-response-meta:focus-visible {
 }
 
 .ws-chat-split {
+  display: flex;
+  width: 100%;
   height: 100vh;
   min-width: 0;
 }
 
+.ws-conversation-panel {
+  min-width: 0;
+  flex: 1;
+}
+
 .ws-review-resize {
   width: 1px;
+  flex: 0 0 1px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
   background: var(--ws-border);
   cursor: col-resize;
+  opacity: 1;
+  transition:
+    width 200ms ease-linear,
+    flex-basis 200ms ease-linear,
+    opacity 200ms ease-linear,
+    background-color 120ms ease;
+}
+
+.ws-review-resize.is-collapsed {
+  width: 0;
+  flex-basis: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ws-review-shell {
+  min-width: 0;
+  flex: 0 0 auto;
+  overflow: hidden;
+  transition: width 200ms ease-linear;
+}
+
+.ws-review-shell.is-resizing {
+  transition: none;
+}
+
+.ws-review-shell > .ws-review-panel {
+  width: var(--ws-review-width);
+  min-width: 320px;
+  transform: translateX(100%);
+  transition: transform 200ms ease-linear;
+}
+
+.ws-review-shell.is-open > .ws-review-panel {
+  transform: translateX(0);
+}
+
+.ws-review-shell.is-resizing > .ws-review-panel {
+  transition: none;
 }
 
 .ws-review-resize:hover,
