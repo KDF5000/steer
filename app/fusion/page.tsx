@@ -137,6 +137,20 @@ import './fusion.css';
 
 type View = 'chat' | 'artifacts' | 'agents' | 'assets' | 'notes' | 'settings';
 const noProjectSessionGroup = '__no-project__';
+const recentSessionLimit = 5;
+
+function recentSessionSubset(
+  sessions: ChatSessionRecord[],
+  activeSessionID: string,
+) {
+  if (sessions.length <= recentSessionLimit) return sessions;
+  const recent = sessions.slice(0, recentSessionLimit);
+  const active = sessions.find((session) => session.id === activeSessionID);
+  if (!active || recent.some((session) => session.id === active.id)) {
+    return recent;
+  }
+  return [...recent.slice(0, recentSessionLimit - 1), active];
+}
 
 function gitRefLabel(ref: string | null | undefined) {
   const value = ref?.trim() || 'HEAD';
@@ -441,6 +455,56 @@ function SessionNavigationItem({
   );
 }
 
+function SessionNavigationList({
+  sessions,
+  activeSessionID,
+  expanded,
+  onToggleExpanded,
+  onOpen,
+  onDelete,
+}: {
+  sessions: ChatSessionRecord[];
+  activeSessionID: string;
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  onOpen: (session: ChatSessionRecord) => void;
+  onDelete: (session: ChatSessionRecord) => void;
+}) {
+  const visibleSessions = expanded
+    ? sessions
+    : recentSessionSubset(sessions, activeSessionID);
+  const hiddenCount = sessions.length - visibleSessions.length;
+  const hasMore = sessions.length > recentSessionLimit;
+  const label = expanded ? 'Show less' : `Show ${hiddenCount} more`;
+
+  return (
+    <SidebarMenuSub className="ws-session-list">
+      {visibleSessions.map((session) => (
+        <SessionNavigationItem
+          key={session.id}
+          session={session}
+          active={activeSessionID === session.id}
+          onOpen={() => onOpen(session)}
+          onDelete={() => onDelete(session)}
+        />
+      ))}
+      {hasMore && (
+        <li>
+          <button
+            type="button"
+            className={`ws-session-list-more${expanded ? ' is-expanded' : ''}`}
+            aria-expanded={expanded}
+            onClick={onToggleExpanded}
+          >
+            <ChevronDown aria-hidden="true" />
+            <span>{label}</span>
+          </button>
+        </li>
+      )}
+    </SidebarMenuSub>
+  );
+}
+
 export default function Fusion() {
   const [authReady, setAuthReady] = useState(false);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -505,6 +569,9 @@ export default function Fusion() {
   const [expandedSessionGroups, setExpandedSessionGroups] = useState<
     Set<string>
   >(new Set());
+  const [expandedSessionLists, setExpandedSessionLists] = useState<Set<string>>(
+    new Set(),
+  );
   const [view, setView] = useState<View>('chat');
   const [agentTab, setAgentTab] = useState('agents');
   const [loaded, setLoaded] = useState(false);
@@ -572,6 +639,13 @@ export default function Fusion() {
 
   const currentAgent =
     agentList.find((agent) => agent.id === chatAgent) || agentList[0];
+  const unassignedSessions = chatSessions.filter(
+    (session) =>
+      !session.projectId ||
+      !projectList.some(
+        (project) => !project.deletedAt && project.id === session.projectId,
+      ),
+  );
   const activeChatSession = chatSessions.find(
     (session) => session.id === chatSession,
   );
@@ -653,6 +727,7 @@ export default function Fusion() {
     setWorkspaceSettings(data.settings || null);
     setChatSessions(data.sessions || []);
     setExpandedSessionGroups(new Set());
+    setExpandedSessionLists(new Set());
     setRuntimeNodes(data.relay.nodes || []);
     setRelayConnected(data.relay.connected);
     setRelayError(data.relay.error || '');
@@ -1514,6 +1589,15 @@ export default function Fusion() {
     });
   };
 
+  const toggleSessionList = (group: string) => {
+    setExpandedSessionLists((current) => {
+      const next = new Set(current);
+      if (next.has(group)) next.delete(group);
+      else next.add(group);
+      return next;
+    });
+  };
+
   const conversationRunIDs = new Set(
     messages.map((message) => message.runId).filter(Boolean),
   );
@@ -1714,31 +1798,23 @@ export default function Fusion() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                         {!!projectSessions.length && sessionsExpanded && (
-                          <SidebarMenuSub className="ws-session-list">
-                            {projectSessions.map((session) => (
-                              <SessionNavigationItem
-                                key={session.id}
-                                session={session}
-                                active={
-                                  view === 'chat' && chatSession === session.id
-                                }
-                                onOpen={() => void openChatSession(session.id)}
-                                onDelete={() => setDeletingSession(session)}
-                              />
-                            ))}
-                          </SidebarMenuSub>
+                          <SessionNavigationList
+                            sessions={projectSessions}
+                            activeSessionID={view === 'chat' ? chatSession : ''}
+                            expanded={expandedSessionLists.has(project.id)}
+                            onToggleExpanded={() =>
+                              toggleSessionList(project.id)
+                            }
+                            onOpen={(session) =>
+                              void openChatSession(session.id)
+                            }
+                            onDelete={setDeletingSession}
+                          />
                         )}
                       </SidebarMenuItem>
                     );
                   })}
-                {!!chatSessions.filter(
-                  (session) =>
-                    !session.projectId ||
-                    !projectList.some(
-                      (project) =>
-                        !project.deletedAt && project.id === session.projectId,
-                    ),
-                ).length && (
+                {!!unassignedSessions.length && (
                   <SidebarMenuItem className="ws-unassigned-project">
                     <Button
                       variant="ghost"
@@ -1757,29 +1833,18 @@ export default function Fusion() {
                       <span>No project</span>
                     </div>
                     {expandedSessionGroups.has(noProjectSessionGroup) && (
-                      <SidebarMenuSub className="ws-session-list">
-                        {chatSessions
-                          .filter(
-                            (session) =>
-                              !session.projectId ||
-                              !projectList.some(
-                                (project) =>
-                                  !project.deletedAt &&
-                                  project.id === session.projectId,
-                              ),
-                          )
-                          .map((session) => (
-                            <SessionNavigationItem
-                              key={session.id}
-                              session={session}
-                              active={
-                                view === 'chat' && chatSession === session.id
-                              }
-                              onOpen={() => void openChatSession(session.id)}
-                              onDelete={() => setDeletingSession(session)}
-                            />
-                          ))}
-                      </SidebarMenuSub>
+                      <SessionNavigationList
+                        sessions={unassignedSessions}
+                        activeSessionID={view === 'chat' ? chatSession : ''}
+                        expanded={expandedSessionLists.has(
+                          noProjectSessionGroup,
+                        )}
+                        onToggleExpanded={() =>
+                          toggleSessionList(noProjectSessionGroup)
+                        }
+                        onOpen={(session) => void openChatSession(session.id)}
+                        onDelete={setDeletingSession}
+                      />
                     )}
                   </SidebarMenuItem>
                 )}
