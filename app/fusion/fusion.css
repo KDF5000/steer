@@ -1,11 +1,14 @@
 :root {
   --ws-bg: #ffffff;
-  --ws-sidebar: #f7f7f8;
+  --ws-sidebar: #f9f9f9;
   --ws-surface: #ffffff;
   --ws-surface-subtle: #f7f7f8;
   --ws-surface-hover: #f0f0f2;
   --ws-border: #e5e5e7;
   --ws-border-strong: #d5d5d9;
+  --ws-divider: #eeeeef;
+  --ws-sidebar-hover: #eeeeee;
+  --ws-sidebar-active: #e9e9e9;
   --ws-text: #202124;
   --ws-text-secondary: #686970;
   --ws-text-tertiary: #92939b;
@@ -105,14 +108,14 @@
 }
 
 .ws-sidebar[data-mobile='true'] {
-  border-color: var(--ws-border) !important;
+  border-color: var(--ws-divider) !important;
   background: var(--ws-sidebar) !important;
   background-image: none !important;
   opacity: 1;
 }
 
 .ws-sidebar[data-slot='sidebar-container'] {
-  border-color: var(--ws-border) !important;
+  border-color: var(--ws-divider) !important;
 }
 
 .ws-sidebar [data-slot='sidebar-content'] {
@@ -150,7 +153,7 @@
 }
 
 .ws-workspace-switcher:hover {
-  background: #ededf0;
+  background: var(--ws-sidebar-hover);
 }
 
 .ws-workspace-switcher > span:nth-child(2) {
@@ -262,17 +265,17 @@
   align-items: center;
   gap: 8px;
   padding: 0 9px;
-  border: 1px solid var(--ws-border);
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: #fff;
-  color: #83848c;
+  background: #f1f1f1;
+  color: #77787f;
   text-align: left;
-  box-shadow: 0 1px 2px #17181b08;
+  box-shadow: none;
 }
 
 .ws-search:hover {
-  border-color: var(--ws-border-strong);
-  color: #65666d;
+  background: #ededed;
+  color: #55565d;
 }
 
 .ws-search kbd {
@@ -322,21 +325,21 @@
 }
 
 .ws-sidebar [data-slot='sidebar-menu-button']:hover {
-  background: #ececef;
+  background: var(--ws-sidebar-hover);
   color: #3d3e43;
 }
 
 .ws-sidebar
   [data-slot='sidebar-menu-button'][data-active]:not([data-active='false']) {
-  background: #e8e8fa;
-  color: #4c4db5;
+  background: var(--ws-sidebar-active);
+  color: #34353a;
   font-weight: 560;
 }
 
 .ws-sidebar
   [data-slot='sidebar-menu-button'][data-active]:not([data-active='false'])
   svg {
-  color: #595bd0;
+  color: #5f6067;
 }
 
 .ws-sidebar [data-slot='sidebar-menu-badge'] {
@@ -352,6 +355,15 @@
   font-weight: 580;
 }
 
+.ws-sidebar .ws-new-chat-nav[data-active]:not([data-active='false']) {
+  background: transparent;
+  color: #55565d;
+}
+
+.ws-sidebar .ws-new-chat-nav[data-active]:not([data-active='false']):hover {
+  background: var(--ws-sidebar-hover);
+}
+
 .ws-sidebar .ws-session-list [data-slot='sidebar-menu-button'] {
   padding-right: 40px;
 }
@@ -364,7 +376,7 @@
   height: 30px;
   border: 0;
   border-radius: 0 6px 6px 0;
-  background: linear-gradient(to right, transparent, #f7f7f8 38%);
+  background: linear-gradient(to right, transparent, var(--ws-sidebar) 38%);
   color: #777880;
   box-shadow: none;
   opacity: 0;
@@ -383,7 +395,11 @@
 }
 
 .ws-sidebar .ws-session-nav-item:hover > [data-slot='sidebar-menu-action'] {
-  background: linear-gradient(to right, transparent, #ececef 38%);
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--ws-sidebar-hover) 38%
+  );
 }
 
 .ws-sidebar
@@ -391,7 +407,11 @@
     [data-slot='sidebar-menu-button'][data-active]:not([data-active='false'])
   )
   > [data-slot='sidebar-menu-action'] {
-  background: linear-gradient(to right, transparent, #e8e8fa 38%);
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--ws-sidebar-active) 38%
+  );
 }
 
 .ws-sidebar .ws-session-list .ws-session-delete:hover {
@@ -415,7 +435,7 @@
 .ws-sidebar .ws-session-list {
   margin: 1px 0 6px 16px;
   padding: 1px 0 1px 9px;
-  border-color: #dedee2;
+  border-color: #e3e3e3;
   transform: none;
 }
 
@@ -430,8 +450,8 @@
 .ws-sidebar
   .ws-session-list
   [data-slot='sidebar-menu-button'][data-active]:not([data-active='false']) {
-  background: #e8e8fa;
-  color: #4c4db5;
+  background: var(--ws-sidebar-active);
+  color: #34353a;
 }
 
 .ws-sidebar .ws-session-list-more {
@@ -450,7 +470,7 @@
 }
 
 .ws-sidebar .ws-session-list-more:hover {
-  background: #ededf0;
+  background: var(--ws-sidebar-hover);
   color: #4f5058;
 }
 
@@ -482,7 +502,7 @@
 }
 
 .ws-sidebar .ws-project-session-toggle:hover {
-  background: #dedee3;
+  background: #e6e6e6;
   color: #4f5058;
 }
 
@@ -539,7 +559,7 @@
 .ws-sidebar
   .ws-project-nav-button[data-active]:not([data-active='false'])
   .ws-git-branch {
-  color: #7374bb;
+  color: #74757c;
 }
 
 .ws-sidebar .ws-project-nav-item:hover .ws-git-branch,
@@ -561,7 +581,7 @@
   width: 26px;
   height: 26px;
   border-radius: 6px;
-  background: #ececef;
+  background: var(--ws-sidebar-hover);
   color: #777880;
 }
 
@@ -570,7 +590,7 @@
     .ws-project-nav-button[data-active]:not([data-active='false'])
   )
   > [data-slot='sidebar-menu-action'] {
-  background: #e8e8fa;
+  background: var(--ws-sidebar-active);
 }
 
 .ws-sidebar-resize-handle {
@@ -690,7 +710,7 @@
 
 .ws-sidebar-footer {
   padding: 9px 10px 12px !important;
-  border-top: 1px solid var(--ws-border);
+  border-top: 1px solid var(--ws-divider);
 }
 
 .ws-sidebar-footer > div {
@@ -711,7 +731,7 @@
 }
 
 .ws-sidebar-footer .ws-account-menu:hover {
-  background: #ededf0;
+  background: var(--ws-sidebar-hover);
 }
 
 .ws-account-menu > span:nth-child(2) {
@@ -2846,7 +2866,7 @@
   align-items: center;
   gap: 9px;
   padding: 0 16px;
-  border-bottom: 1px solid var(--ws-border);
+  border-bottom: 1px solid var(--ws-divider);
   background: #ffffffeb;
   color: var(--ws-text-secondary);
   font-size: 13px;
@@ -3010,7 +3030,7 @@
 }
 
 .ws-chat-page.has-messages .ws-chat-appbar {
-  border-bottom-color: #eeeeef;
+  border-bottom-color: var(--ws-divider);
 }
 
 .ws-chat-appbar-context {
@@ -3648,7 +3668,7 @@ button.ws-chat-response-meta:focus-visible {
   position: relative;
   width: min(var(--ws-reading-width), calc(100% - 40px));
   margin: 0 auto;
-  padding-bottom: 18px;
+  padding-bottom: 20px;
 }
 
 .ws-scroll-to-bottom {
@@ -3678,16 +3698,17 @@ button.ws-chat-response-meta:focus-visible {
 }
 
 .ws-chatbox {
-  padding: 12px 13px 9px;
-  border: 1px solid #dedfe3;
-  border-radius: 17px;
+  padding: 15px 16px 11px;
+  border: 1px solid #e5e5e5;
+  border-radius: 24px;
   background: #fff;
   box-shadow:
-    0 1px 2px #1a1b1e08,
-    0 12px 36px #1b1d2d10;
+    0 1px 2px rgb(0 0 0 / 4%),
+    0 8px 28px rgb(0 0 0 / 6%);
   transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease;
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
 }
 
 .ws-chatbox-images {
@@ -3766,31 +3787,38 @@ button.ws-chat-response-meta:focus-visible {
 }
 
 .ws-chatbox:focus-within {
-  border-color: #c8c9d1;
+  border-color: #dddddd;
   box-shadow:
-    0 1px 2px #1a1b1e08,
-    0 14px 42px #1b1d2d16;
+    0 1px 2px rgb(0 0 0 / 4%),
+    0 10px 32px rgb(0 0 0 / 7%);
 }
 
 .ws-chatbox.is-dragging {
-  border-color: #7773df;
-  background: #fbfaff;
+  border-color: #a7a5dc;
+  background: #fdfcff;
   box-shadow:
-    0 0 0 3px #7773df1a,
-    0 14px 42px #1b1d2d16;
+    0 0 0 3px rgb(85 86 207 / 9%),
+    0 10px 32px rgb(0 0 0 / 7%);
 }
 
 .ws-chatbox textarea {
   width: 100%;
-  min-height: 42px;
-  padding: 2px 2px;
+  min-height: 48px;
+  padding: 1px 4px 6px;
+  overflow-y: auto;
   border: 0;
   resize: none;
   outline: none;
   background: transparent;
   color: var(--ws-text);
   font-size: var(--ws-font-ui);
-  line-height: 1.55;
+  line-height: 1.6;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.ws-chatbox textarea::-webkit-scrollbar {
+  display: none;
 }
 
 .ws-chatbox textarea:focus-visible {
@@ -3798,22 +3826,22 @@ button.ws-chat-response-meta:focus-visible {
 }
 
 .ws-chatbox textarea::placeholder {
-  color: #999ba3;
+  color: #a2a3a8;
 }
 
 .ws-chatbox-footer {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 12px;
-  margin-top: 4px;
+  gap: 14px;
+  margin-top: 5px;
 }
 
 .ws-chatbox-context {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 .ws-composer-agent,
@@ -3821,27 +3849,27 @@ button.ws-chat-response-meta:focus-visible {
   display: inline-flex;
   min-width: 0;
   max-width: min(40vw, 300px);
-  height: 34px !important;
+  height: 32px !important;
   align-items: center;
   gap: 6px !important;
-  padding: 0 8px !important;
+  padding: 0 7px !important;
   border: 0 !important;
-  border-radius: 8px !important;
-  background: #f3f3f5 !important;
-  color: #585a63 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  color: #606168 !important;
   font-size: var(--ws-font-control) !important;
   box-shadow: none !important;
 }
 
 .ws-composer-agent:hover,
 .ws-composer-project:hover {
-  background: #ececef !important;
+  background: #f2f2f2 !important;
   color: #383940 !important;
 }
 
 .ws-composer-agent[data-popup-open],
 .ws-composer-project[data-popup-open] {
-  background: #e7e7eb !important;
+  background: #eeeeee !important;
   color: #303137 !important;
 }
 
@@ -3866,6 +3894,14 @@ button.ws-chat-response-meta:focus-visible {
   max-width: min(32vw, 220px);
 }
 
+.ws-composer-agent > span:not(.ws-agent-avatar) {
+  color: #292a2e;
+}
+
+.ws-composer-agent > svg {
+  color: #96979d;
+}
+
 .ws-composer-agent span,
 .ws-composer-project span {
   overflow: hidden;
@@ -3875,19 +3911,19 @@ button.ws-chat-response-meta:focus-visible {
 
 .ws-add-project {
   display: inline-flex;
-  height: 30px;
+  height: 32px;
   align-items: center;
   gap: 4px;
   padding: 0 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   color: #7d7f88;
   font-size: var(--ws-font-caption);
 }
 
 .ws-add-project:hover {
-  background: var(--ws-surface-subtle);
+  background: #f2f2f2;
   color: #414249;
 }
 
@@ -3898,14 +3934,14 @@ button.ws-chat-response-meta:focus-visible {
 
 .ws-chat-send {
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 10px;
-  background: #303137;
+  border-radius: 50%;
+  background: #292a2e;
   color: #fff;
   transition:
     background-color 140ms ease,
@@ -3913,13 +3949,13 @@ button.ws-chat-response-meta:focus-visible {
 }
 
 .ws-chat-send:hover:not(:disabled) {
-  background: #17181c;
-  transform: translateY(-1px);
+  background: #16171a;
+  transform: scale(1.03);
 }
 
 .ws-chat-send:disabled {
-  background: #efeff1;
-  color: #b9bac0;
+  background: #eeeeee;
+  color: #b7b8bd;
 }
 
 .ws-chat-send svg {
