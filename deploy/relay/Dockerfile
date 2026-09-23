@@ -2,7 +2,7 @@
 
 FROM golang:1.26-alpine AS build
 
-ARG RELAY_VERSION=v0.4.4
+ARG RELAY_VERSION=v0.4.5
 ENV GOPROXY=https://goproxy.cn|https://proxy.golang.org
 RUN CGO_ENABLED=0 go install -trimpath \
     -ldflags="-s -w -X github.com/KDF5000/relay.Version=${RELAY_VERSION}" \

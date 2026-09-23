@@ -1,0 +1,966 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Steer · Runtime 与并发设置方案</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --sidebar: #f4f4f5;
+        --surface: #fff;
+        --surface-subtle: #fafafa;
+        --hover: #eeeeef;
+        --border: #e5e5e7;
+        --border-strong: #d9d9dc;
+        --text: #25262b;
+        --secondary: #666870;
+        --tertiary: #94959d;
+        --accent: #5556c8;
+        --accent-soft: #eeeeff;
+        --green: #4d9668;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          'PingFang SC',
+          'Microsoft YaHei',
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        min-width: 980px;
+        min-height: 720px;
+        margin: 0;
+      }
+      body {
+        background: #fff;
+        color: var(--text);
+        font-size: 14px;
+        -webkit-font-smoothing: antialiased;
+      }
+      button,
+      input {
+        color: inherit;
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      svg {
+        width: 17px;
+        height: 17px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.7;
+      }
+      .app {
+        display: grid;
+        grid-template-columns: 246px minmax(0, 1fr);
+        min-height: 100vh;
+      }
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid #e3e3e5;
+        background: var(--sidebar);
+        padding: 14px 10px;
+      }
+      .workspace {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 2px 5px 14px;
+      }
+      .logo {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border-radius: 9px;
+        background: #2e2f35;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 720;
+      }
+      .workspace strong {
+        display: block;
+        font-size: 13px;
+      }
+      .workspace small {
+        color: var(--tertiary);
+        font-size: 11px;
+      }
+      .nav-label {
+        padding: 18px 9px 7px;
+        color: #a0a1a7;
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .nav-item {
+        display: flex;
+        height: 36px;
+        align-items: center;
+        gap: 10px;
+        border-radius: 8px;
+        padding: 0 10px;
+        color: #65666d;
+      }
+      .nav-item.active {
+        background: #e7e7ea;
+        color: #27282d;
+        font-weight: 590;
+      }
+      .main {
+        min-width: 0;
+      }
+      .topbar {
+        display: flex;
+        height: 54px;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid #eeeeef;
+        padding: 0 28px;
+      }
+      .topbar span {
+        color: var(--secondary);
+        font-size: 13px;
+      }
+      .avatar {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        border-radius: 50%;
+        background: #35363b;
+        color: white;
+        font-size: 11px;
+      }
+      .content {
+        width: min(1180px, calc(100% - 64px));
+        margin: 0 auto;
+        padding: 34px 0 54px;
+      }
+      .intro {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+      }
+      .eyebrow {
+        margin: 0 0 8px;
+        color: #9a9ba2;
+        font-size: 11px;
+        font-weight: 680;
+        letter-spacing: 0.08em;
+      }
+      h1 {
+        margin: 0;
+        font-size: 25px;
+        font-weight: 660;
+        letter-spacing: -0.025em;
+      }
+      .description {
+        margin: 7px 0 0;
+        color: var(--secondary);
+        font-size: 13px;
+      }
+      .primary {
+        height: 35px;
+        border: 0;
+        border-radius: 8px;
+        background: #292a30;
+        padding: 0 14px;
+        color: white;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .tabs {
+        display: flex;
+        gap: 24px;
+        margin-top: 26px;
+        border-bottom: 1px solid #ececee;
+      }
+      .tab {
+        height: 38px;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: none;
+        padding: 0 1px;
+        color: #787980;
+        font-size: 13px;
+      }
+      .tab.active {
+        border-color: #35363b;
+        color: #292a2f;
+        font-weight: 600;
+      }
+      .chooser {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin: 22px 0 18px;
+      }
+      .choice {
+        min-height: 78px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #fff;
+        padding: 12px 14px;
+        text-align: left;
+        transition: 0.15s ease;
+      }
+      .choice:hover {
+        border-color: #ccccd1;
+        background: #fcfcfc;
+      }
+      .choice.active {
+        border-color: #9a9bd7;
+        background: #f8f8ff;
+        box-shadow: 0 0 0 1px #9a9bd71c;
+      }
+      .choice-head {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-weight: 650;
+      }
+      .recommend {
+        border-radius: 10px;
+        background: var(--accent-soft);
+        padding: 2px 6px;
+        color: var(--accent);
+        font-size: 9px;
+        font-weight: 700;
+      }
+      .choice p {
+        margin: 6px 0 0;
+        color: var(--secondary);
+        font-size: 11px;
+        line-height: 1.45;
+      }
+      .demo {
+        display: none;
+      }
+      .demo.active {
+        display: block;
+      }
+      .table {
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+      }
+      .head,
+      .node-row {
+        display: grid;
+        align-items: center;
+        column-gap: 18px;
+      }
+      .head {
+        min-height: 42px;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface-subtle);
+        color: #91929a;
+        font-size: 11px;
+        font-weight: 650;
+      }
+      .node-row {
+        color: var(--secondary);
+        font-size: 12px;
+      }
+      .node-main {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 12px;
+      }
+      .server-icon {
+        display: grid;
+        width: 28px;
+        flex: 0 0 28px;
+        place-items: center;
+        color: #8d8e95;
+      }
+      .node-copy {
+        min-width: 0;
+      }
+      .node-copy strong {
+        display: block;
+        overflow: hidden;
+        color: #323339;
+        font-size: 13px;
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .node-copy small {
+        display: block;
+        margin-top: 3px;
+        color: var(--tertiary);
+        font-size: 10px;
+      }
+      .status-dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        margin-right: 5px;
+        border-radius: 50%;
+        background: var(--green);
+      }
+      .muted {
+        color: var(--tertiary);
+      }
+      .runtime-name {
+        color: #3c3d43;
+        font-weight: 610;
+      }
+      .runtime-meta {
+        color: var(--tertiary);
+        font-size: 10px;
+      }
+      .note {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-top: 14px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #fafafa;
+        padding: 12px 14px;
+        color: #81828a;
+        font-size: 11px;
+      }
+
+      /* A */
+      .a .head,
+      .a .node-row {
+        grid-template-columns: minmax(260px, 1fr) 90px 210px 74px 170px;
+        padding: 0 18px;
+      }
+      .a .node-row {
+        min-height: 72px;
+      }
+      .runtime-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .runtime-line {
+        display: grid;
+        grid-template-columns: 67px minmax(0, 1fr);
+        align-items: center;
+        gap: 8px;
+      }
+      .runtime-badge {
+        width: fit-content;
+        border: 1px solid #e3e3e6;
+        border-radius: 6px;
+        background: #fafafa;
+        padding: 3px 7px;
+        color: #414249;
+        font-size: 10px;
+        font-weight: 650;
+        text-transform: capitalize;
+      }
+      .stepper {
+        display: grid;
+        width: 132px;
+        grid-template-columns: 35px 1fr 35px;
+        align-items: center;
+        border: 1px solid var(--border-strong);
+        border-radius: 9px;
+        background: #fff;
+        overflow: hidden;
+      }
+      .stepper button {
+        height: 34px;
+        border: 0;
+        background: transparent;
+        color: #86878e;
+        font-size: 17px;
+      }
+      .stepper button:hover {
+        background: #f1f1f3;
+        color: #35363b;
+      }
+      .stepper button:disabled {
+        cursor: wait;
+        background: #fafafa;
+        color: #c2c2c7;
+      }
+      .stepper output {
+        display: grid;
+        height: 20px;
+        place-items: center;
+        border-right: 1px solid #ececee;
+        border-left: 1px solid #ececee;
+        color: #303137;
+        font-size: 12px;
+        font-weight: 650;
+      }
+      .capacity-caption {
+        margin-top: 5px;
+        color: var(--tertiary);
+        font-size: 9px;
+      }
+      .capacity-caption.pending {
+        color: #6d6eb0;
+      }
+      .capacity-caption.saving {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        color: #6869b4;
+      }
+      .capacity-caption.saving::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border: 1px solid #b9b9d7;
+        border-top-color: #5f60b8;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+      .capacity-caption.applied {
+        color: #568067;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* B */
+      .b .head,
+      .b .node-row {
+        grid-template-columns:
+          minmax(240px, 1fr) 86px minmax(300px, 1.3fr)
+          78px 150px;
+        padding: 0 18px;
+      }
+      .b .node-row {
+        min-height: 84px;
+      }
+      .runtime-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .runtime-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border: 1px solid #e2e2e5;
+        border-radius: 7px;
+        background: #fafafa;
+        padding: 6px 8px;
+      }
+      .runtime-pill b {
+        color: #3b3c42;
+        font-size: 10px;
+        font-weight: 650;
+        text-transform: capitalize;
+      }
+      .runtime-pill i {
+        width: 1px;
+        height: 11px;
+        background: #dedee1;
+      }
+      .runtime-pill span {
+        color: #8c8d94;
+        font-size: 10px;
+      }
+      .capacity-menu {
+        position: relative;
+        width: 118px;
+      }
+      .capacity-button {
+        display: flex;
+        width: 118px;
+        height: 35px;
+        align-items: center;
+        justify-content: space-between;
+        border: 1px solid var(--border-strong);
+        border-radius: 9px;
+        background: #fff;
+        padding: 0 10px;
+        color: #35363b;
+        font-size: 11px;
+      }
+      .capacity-button svg {
+        width: 13px;
+        color: #92939a;
+      }
+      .popover {
+        position: absolute;
+        z-index: 5;
+        top: 41px;
+        right: 0;
+        display: none;
+        width: 196px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #fff;
+        padding: 10px;
+        box-shadow: 0 10px 30px #20212617;
+      }
+      .capacity-menu.open .popover {
+        display: block;
+      }
+      .popover strong {
+        display: block;
+        color: #3c3d43;
+        font-size: 11px;
+      }
+      .popover p {
+        margin: 3px 0 9px;
+        color: var(--tertiary);
+        font-size: 9px;
+        line-height: 1.4;
+      }
+      .presets {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 5px;
+      }
+      .presets button {
+        height: 29px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: #fafafa;
+        color: #66676e;
+        font-size: 10px;
+      }
+      .presets button.active {
+        border-color: #9b9cd7;
+        background: #f0f0ff;
+        color: #4f50b5;
+        font-weight: 650;
+      }
+
+      /* C */
+      .node-card {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: #fff;
+        overflow: hidden;
+      }
+      .card-top {
+        display: flex;
+        min-height: 74px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px;
+      }
+      .card-capacity {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+      .load-copy {
+        text-align: right;
+      }
+      .load-copy strong {
+        display: block;
+        color: #33343a;
+        font-size: 12px;
+      }
+      .load-copy small {
+        color: var(--tertiary);
+        font-size: 9px;
+      }
+      .slider-wrap {
+        width: 230px;
+      }
+      .slider-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 7px;
+        color: #66676e;
+        font-size: 10px;
+      }
+      .slider-head output {
+        color: #34353a;
+        font-size: 13px;
+        font-weight: 680;
+      }
+      input[type='range'] {
+        width: 100%;
+        height: 4px;
+        margin: 0;
+        border-radius: 4px;
+        appearance: none;
+        background: linear-gradient(90deg, #6263c5 0 7%, #e4e4e7 7%);
+      }
+      input[type='range']::-webkit-slider-thumb {
+        width: 15px;
+        height: 15px;
+        border: 2px solid #fff;
+        border-radius: 50%;
+        appearance: none;
+        background: #5a5bc0;
+        box-shadow: 0 0 0 1px #b4b4cb;
+      }
+      .runtime-table {
+        margin: 0 18px 18px 58px;
+        border: 1px solid #e9e9eb;
+        border-radius: 9px;
+        overflow: hidden;
+      }
+      .runtime-table-head,
+      .runtime-table-row {
+        display: grid;
+        grid-template-columns: minmax(150px, 1fr) 130px minmax(200px, 1.5fr);
+        align-items: center;
+        min-height: 38px;
+        padding: 0 13px;
+      }
+      .runtime-table-head {
+        border-bottom: 1px solid #e9e9eb;
+        background: #fafafa;
+        color: #9a9ba2;
+        font-size: 9px;
+        font-weight: 650;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      .runtime-table-row {
+        border-bottom: 1px solid #eeeeef;
+        color: #717279;
+        font-size: 11px;
+      }
+      .runtime-table-row:last-child {
+        border-bottom: 0;
+      }
+      .runtime-state {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        gap: 5px;
+        color: #5b8269;
+      }
+      .runtime-state i {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #57916a;
+      }
+      .explain {
+        margin: 16px 2px 0;
+        color: #777880;
+        font-size: 12px;
+        line-height: 1.65;
+      }
+      .explain b {
+        color: #44454b;
+      }
+      @media (max-width: 1100px) {
+        .app {
+          grid-template-columns: 210px minmax(0, 1fr);
+        }
+        .content {
+          width: calc(100% - 40px);
+        }
+        .a .head,
+        .a .node-row {
+          grid-template-columns: minmax(210px, 1fr) 70px 190px 58px 140px;
+          gap: 10px;
+        }
+        .b .head,
+        .b .node-row {
+          grid-template-columns:
+            minmax(190px, 1fr) 65px minmax(245px, 1.2fr)
+            58px 125px;
+          gap: 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="workspace">
+          <div class="logo">S</div>
+          <div><strong>Steer</strong><small>Workspace</small></div>
+        </div>
+        <div class="nav-label">Workspace</div>
+        <div class="nav-item"><span>⌂</span> Home</div>
+        <div class="nav-item"><span>▱</span> Work log</div>
+        <div class="nav-label">System</div>
+        <div class="nav-item active"><span>⌘</span> Agents</div>
+        <div class="nav-item"><span>⚙</span> Settings</div>
+      </aside>
+      <main class="main">
+        <header class="topbar">
+          <span>Steer Workspace</span>
+          <div class="avatar">KD</div>
+        </header>
+        <div class="content">
+          <div class="intro">
+            <div>
+              <p class="eyebrow">SYSTEM</p>
+              <h1>Runtimes</h1>
+              <p class="description">
+                View execution nodes, Runtime versions, and capacity managed by
+                Relay.
+              </p>
+            </div>
+            <button class="primary">＋ Add Runtime</button>
+          </div>
+          <div class="tabs">
+            <button class="tab">Agents · 2</button
+            ><button class="tab active">Runtime nodes · 1</button>
+          </div>
+
+          <div class="chooser">
+            <button class="choice" data-demo="a">
+              <span class="choice-head">A · 分层列表</span>
+              <p>Runtime 一行一个，版本严格对应；并发使用紧凑步进器。</p>
+            </button>
+            <button class="choice active" data-demo="b">
+              <span class="choice-head"
+                >B · 组合标签 <span class="recommend">当前方案</span></span
+              >
+              <p>Runtime 和版本组成独立标签；并发使用紧凑步进器。</p>
+            </button>
+            <button class="choice" data-demo="c">
+              <span class="choice-head">C · 节点详情</span>
+              <p>Node 卡片内嵌 Runtime 表格；并发使用连续滑杆。</p>
+            </button>
+          </div>
+
+          <section class="demo a" data-panel="a">
+            <div class="table">
+              <div class="head">
+                <span>Node</span><span>Location</span><span>Runtimes</span
+                ><span>Load</span><span>Concurrency</span>
+              </div>
+              <div class="node-row">
+                <div class="node-main">
+                  <div class="server-icon">▤</div>
+                  <div class="node-copy">
+                    <strong>MTYX3244WT</strong
+                    ><small
+                      ><i class="status-dot"></i>Online · heartbeat just
+                      now</small
+                    >
+                  </div>
+                </div>
+                <span>Remote</span>
+                <div class="runtime-stack">
+                  <div class="runtime-line">
+                    <span class="runtime-badge">Codex</span
+                    ><span class="runtime-meta">v0.153.2</span>
+                  </div>
+                  <div class="runtime-line">
+                    <span class="runtime-badge">Trae</span
+                    ><span class="runtime-meta">v0.205.1</span>
+                  </div>
+                  <div class="runtime-line">
+                    <span class="runtime-badge">Claude</span
+                    ><span class="runtime-meta">v1.8.4</span>
+                  </div>
+                </div>
+                <span>0 / 3</span>
+                <div>
+                  <div class="stepper" data-value="3">
+                    <button aria-label="Decrease concurrency">−</button
+                    ><output>3</output
+                    ><button aria-label="Increase concurrency">+</button>
+                  </div>
+                  <div class="capacity-caption">Maximum concurrent runs</div>
+                </div>
+              </div>
+            </div>
+            <p class="explain">
+              <b>适合：</b>Runtime
+              数量可能持续增加，但仍希望保留当前表格结构。Runtime
+              与版本不会错位，并发调整直接、明确。步进器不适合一次从 2 调到
+              20，但日常小幅调整体验最好。
+            </p>
+          </section>
+
+          <section class="demo b active" data-panel="b">
+            <div class="table">
+              <div class="head">
+                <span>Node</span><span>Location</span
+                ><span>Runtime environments</span><span>Load</span
+                ><span>Concurrency</span>
+              </div>
+              <div class="node-row">
+                <div class="node-main">
+                  <div class="server-icon">▤</div>
+                  <div class="node-copy">
+                    <strong>MTYX3244WT</strong
+                    ><small
+                      ><i class="status-dot"></i>Online · heartbeat just
+                      now</small
+                    >
+                  </div>
+                </div>
+                <span>Remote</span>
+                <div class="runtime-pills">
+                  <span class="runtime-pill"
+                    ><b>Codex</b><i></i><span>v0.153.2</span></span
+                  ><span class="runtime-pill"
+                    ><b>Trae</b><i></i><span>v0.205.1</span></span
+                  ><span class="runtime-pill"
+                    ><b>Claude</b><i></i><span>v1.8.4</span></span
+                  >
+                </div>
+                <span>0 / 3</span>
+                <div>
+                  <div
+                    class="stepper async-stepper"
+                    data-value="3"
+                    data-applied="3"
+                  >
+                    <button aria-label="Decrease concurrency">−</button
+                    ><output>3</output
+                    ><button aria-label="Increase concurrency">+</button>
+                  </div>
+                  <div class="capacity-caption">Maximum concurrent runs</div>
+                </div>
+              </div>
+            </div>
+            <p class="explain">
+              <b>适合：</b>Runtime 通常不超过 4–5
+              个，希望一眼扫完所有环境。标签组合比逗号更清楚；步进器让并发值可以直接调整，无需展开包含
+              32 个选项的下拉菜单。
+            </p>
+          </section>
+
+          <section class="demo c" data-panel="c">
+            <div class="node-card">
+              <div class="card-top">
+                <div class="node-main">
+                  <div class="server-icon">▤</div>
+                  <div class="node-copy">
+                    <strong>MTYX3244WT</strong
+                    ><small
+                      ><i class="status-dot"></i>Online · Remote · heartbeat
+                      just now</small
+                    >
+                  </div>
+                </div>
+                <div class="card-capacity">
+                  <div class="load-copy">
+                    <strong>0 / 3 active</strong><small>Current load</small>
+                  </div>
+                  <div class="slider-wrap">
+                    <div class="slider-head">
+                      <span>Concurrency limit</span><output>3</output>
+                    </div>
+                    <input type="range" min="1" max="32" value="3" />
+                  </div>
+                </div>
+              </div>
+              <div class="runtime-table">
+                <div class="runtime-table-head">
+                  <span>Runtime</span><span>Version</span><span>Status</span>
+                </div>
+                <div class="runtime-table-row">
+                  <span class="runtime-name">Codex</span><span>v0.153.2</span
+                  ><span class="runtime-state"><i></i>Healthy</span>
+                </div>
+                <div class="runtime-table-row">
+                  <span class="runtime-name">Trae</span><span>v0.205.1</span
+                  ><span class="runtime-state"><i></i>Healthy</span>
+                </div>
+                <div class="runtime-table-row">
+                  <span class="runtime-name">Claude</span><span>v1.8.4</span
+                  ><span class="runtime-state"><i></i>Healthy</span>
+                </div>
+              </div>
+            </div>
+            <p class="explain">
+              <b>适合：</b>未来需要展示更多 Runtime
+              状态、模型数量或错误信息。扩展性最好；滑杆适合大范围调整，但数值精确性和误操作控制弱于步进器，整体占用空间也最大。
+            </p>
+          </section>
+
+          <div class="note">
+            ♙
+            <span
+              >Relay connected. Agents define reusable behavior; Runtimes are
+              execution processes on local or remote machines.</span
+            >
+          </div>
+        </div>
+      </main>
+    </div>
+    <script>
+      const choices = document.querySelectorAll('.choice');
+      choices.forEach((choice) =>
+        choice.addEventListener('click', () => {
+          choices.forEach((item) =>
+            item.classList.toggle('active', item === choice),
+          );
+          document
+            .querySelectorAll('.demo')
+            .forEach((panel) =>
+              panel.classList.toggle(
+                'active',
+                panel.dataset.panel === choice.dataset.demo,
+              ),
+            );
+        }),
+      );
+      const timers = new WeakMap();
+      document.querySelectorAll('.stepper').forEach((stepper) => {
+        const output = stepper.querySelector('output');
+        const buttons = stepper.querySelectorAll('button');
+        const caption = stepper.nextElementSibling;
+        const change = (delta) => {
+          output.value = Math.max(
+            1,
+            Math.min(32, Number(output.value) + delta),
+          );
+          if (!stepper.classList.contains('async-stepper')) return;
+          clearTimeout(timers.get(stepper));
+          caption.className = 'capacity-caption pending';
+          caption.textContent = 'Waiting for more changes…';
+          timers.set(
+            stepper,
+            setTimeout(() => {
+              buttons.forEach((button) => (button.disabled = true));
+              caption.className = 'capacity-caption saving';
+              caption.textContent = 'Saving concurrency…';
+              setTimeout(() => {
+                buttons.forEach((button) => (button.disabled = false));
+                const target = output.value;
+                const applied = stepper.dataset.applied;
+                caption.className = 'capacity-caption pending';
+                caption.textContent = `Applying ${applied} → ${target}`;
+                setTimeout(() => {
+                  stepper.dataset.applied = target;
+                  caption.className = 'capacity-caption applied';
+                  caption.textContent = `Applied · ${target} concurrent runs`;
+                }, 1400);
+              }, 850);
+            }, 500),
+          );
+        };
+        buttons[0].addEventListener('click', () => change(-1));
+        buttons[1].addEventListener('click', () => change(1));
+      });
+      const range = document.querySelector('input[type=range]');
+      range.addEventListener('input', () => {
+        range.previousElementSibling.querySelector('output').value =
+          range.value;
+        const fill = ((range.value - 1) / 31) * 100;
+        range.style.background = `linear-gradient(90deg, #6263c5 0 ${fill}%, #e4e4e7 ${fill}%)`;
+      });
+    </script>
+  </body>
+</html>

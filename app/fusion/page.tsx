@@ -593,6 +593,7 @@ export default function Fusion() {
     useState<WorkspaceSettingsRecord | null>(null);
   const [selectedArtifact, setSelectedArtifact] = useState(0);
   const [runtimeNodes, setRuntimeNodes] = useState<RelayNode[]>([]);
+  const runtimeCapacityPolls = useRef(new Map<string, number>());
   const [relayConnected, setRelayConnected] = useState(false);
   const [relayError, setRelayError] = useState('');
   const [relayPublicURL, setRelayPublicURL] = useState('http://localhost:8787');
@@ -685,19 +686,72 @@ export default function Fusion() {
   const selectedRuntimeChoice = allRuntimeChoices.find(
     (item) => item.value === agentRuntime,
   );
-  const runtimeRows: RuntimeSummary[] = runtimeNodes.flatMap((node) =>
-    (node.runtimes || []).map(
-      (runtime) =>
-        [
-          node.id,
-          node.labels?.location ||
-            (node.id.includes('local') ? 'Local' : 'Remote'),
-          runtime.provider,
-          runtime.version || '—',
-          `${node.active} / ${node.capacity}`,
-        ] as RuntimeSummary,
-    ),
-  );
+  const runtimeRows: RuntimeSummary[] = runtimeNodes.map((node) => [
+    node,
+    node.labels?.location || (node.id.includes('local') ? 'Local' : 'Remote'),
+  ]);
+  const updateRuntimeCapacity = async (nodeID: string, capacity: number) => {
+    const requestedWorkspace = workspaceID;
+    runtimeCapacityPolls.current.set(nodeID, capacity);
+    try {
+      const updated = await steer.updateNodeCapacity(nodeID, capacity);
+      setRuntimeNodes((current) =>
+        current.map((node) =>
+          node.id === nodeID
+            ? {
+                ...node,
+                active: updated.active,
+                capacity: updated.capacity,
+                desired_capacity: updated.desired_capacity,
+                state: updated.state,
+                last_seen: updated.last_seen,
+              }
+            : node,
+        ),
+      );
+      setNotice(`Concurrency for ${nodeID} set to ${capacity}.`);
+      void (async () => {
+        for (let attempt = 0; attempt < 30; attempt += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 2000));
+          if (
+            !mounted.current ||
+            gitStatusWorkspace.current !== requestedWorkspace ||
+            runtimeCapacityPolls.current.get(nodeID) !== capacity
+          )
+            return;
+          const data = await steer.bootstrap().catch(() => null);
+          if (
+            !data ||
+            !mounted.current ||
+            gitStatusWorkspace.current !== requestedWorkspace ||
+            runtimeCapacityPolls.current.get(nodeID) !== capacity
+          )
+            continue;
+          setRuntimeNodes(data.relay.nodes || []);
+          const refreshed = data.relay.nodes?.find(
+            (node) => node.id === nodeID,
+          );
+          if (
+            refreshed?.capacity === capacity &&
+            (refreshed.desired_capacity ?? refreshed.capacity) === capacity
+          ) {
+            runtimeCapacityPolls.current.delete(nodeID);
+            return;
+          }
+        }
+        runtimeCapacityPolls.current.delete(nodeID);
+      })();
+    } catch (error) {
+      if (runtimeCapacityPolls.current.get(nodeID) === capacity)
+        runtimeCapacityPolls.current.delete(nodeID);
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Could not update Runtime concurrency.',
+      );
+      throw error;
+    }
+  };
 
   const hydrateWorkspace = useCallback(async (id: string) => {
     gitStatusWorkspace.current = id;
@@ -2135,6 +2189,7 @@ export default function Fusion() {
             onTab={setAgentTab}
             onCreate={() => setAgentDialog(true)}
             onAddRuntime={() => setRuntimeDialog(true)}
+            onCapacity={updateRuntimeCapacity}
             onChat={(id) => {
               setChatAgent(id);
               startNewChat(chatProject);
@@ -4683,6 +4738,89 @@ function ArtifactsView({
   );
 }
 
+function RuntimeCapacityStepper({
+  node,
+  onCapacity,
+}: {
+  node: RelayNode;
+  onCapacity: (nodeID: string, capacity: number) => Promise<void>;
+}) {
+  const confirmedCapacity = node.desired_capacity ?? node.capacity;
+  const [draft, setDraft] = useState<number | null>(null);
+  const [state, setState] = useState<'idle' | 'waiting' | 'saving' | 'error'>(
+    'idle',
+  );
+  const value = draft ?? confirmedCapacity;
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    },
+    [],
+  );
+
+  const changeCapacity = (delta: number) => {
+    const next = Math.min(32, Math.max(1, value + delta));
+    if (next === value) return;
+    setDraft(next);
+    setState('waiting');
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      setState('saving');
+      void onCapacity(node.id, next)
+        .then(() => {
+          setDraft(null);
+          setState('idle');
+        })
+        .catch(() => {
+          setDraft(null);
+          setState('error');
+        });
+    }, 500);
+  };
+
+  const applying = confirmedCapacity !== node.capacity;
+  const caption =
+    state === 'waiting'
+      ? 'Waiting for more changes…'
+      : state === 'saving'
+        ? 'Saving concurrency…'
+        : state === 'error'
+          ? 'Update failed · try again'
+          : applying
+            ? `Applying ${node.capacity} → ${confirmedCapacity}`
+            : 'Maximum concurrent runs';
+
+  return (
+    <span className="ws-runtime-capacity-control">
+      <span className="ws-runtime-capacity-stepper">
+        <button
+          type="button"
+          aria-label={`Decrease concurrency for ${node.id}`}
+          disabled={state === 'saving' || value <= 1}
+          onClick={() => changeCapacity(-1)}
+        >
+          −
+        </button>
+        <output aria-live="polite">{value}</output>
+        <button
+          type="button"
+          aria-label={`Increase concurrency for ${node.id}`}
+          disabled={state === 'saving' || value >= 32}
+          onClick={() => changeCapacity(1)}
+        >
+          +
+        </button>
+      </span>
+      <small className={`is-${state}${applying ? ' is-applying' : ''}`}>
+        {caption}
+      </small>
+    </span>
+  );
+}
+
 function AgentsView({
   agents,
   runtimes,
@@ -4692,6 +4830,7 @@ function AgentsView({
   onTab,
   onCreate,
   onAddRuntime,
+  onCapacity,
   onChat,
 }: {
   agents: AgentItem[];
@@ -4702,6 +4841,7 @@ function AgentsView({
   onTab: (value: string) => void;
   onCreate: () => void;
   onAddRuntime: () => void;
+  onCapacity: (nodeID: string, capacity: number) => Promise<void>;
   onChat: (id: string) => void;
 }) {
   return (
@@ -4729,7 +4869,7 @@ function AgentsView({
         <TabsList variant="line" className="ws-system-tabs">
           <TabsTrigger value="agents">Agents · {agents.length}</TabsTrigger>
           <TabsTrigger value="runtimes">
-            Runtime instances · {runtimes.length}
+            Runtime nodes · {runtimes.length}
           </TabsTrigger>
         </TabsList>
       </Tabs>
@@ -4766,21 +4906,31 @@ function AgentsView({
           <div className="ws-table-head">
             <span>Node</span>
             <span>Location</span>
-            <span>Runtime</span>
-            <span>Version</span>
+            <span>Runtime environments</span>
             <span>Load</span>
+            <span>Concurrency</span>
           </div>
-          {runtimes.map(([node, location, runtime, version, load]) => (
-            <div key={`${node}-${runtime}`}>
+          {runtimes.map(([node, location]) => (
+            <div key={node.id}>
               <Server />
               <span>
-                <strong>{node}</strong>
+                <strong>{node.id}</strong>
                 <small>Online · heartbeat just now</small>
               </span>
               <span>{location}</span>
-              <span>{runtime}</span>
-              <span>{version}</span>
-              <span>{load}</span>
+              <span className="ws-runtime-environments">
+                {node.runtimes.map((runtime) => (
+                  <span className="ws-runtime-environment" key={runtime.id}>
+                    <strong>{runtime.provider}</strong>
+                    <i />
+                    <small>{runtime.version || 'Version unavailable'}</small>
+                  </span>
+                ))}
+              </span>
+              <span>
+                {node.active} / {node.capacity}
+              </span>
+              <RuntimeCapacityStepper node={node} onCapacity={onCapacity} />
             </div>
           ))}
         </div>

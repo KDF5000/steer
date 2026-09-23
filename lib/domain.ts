@@ -29,13 +29,7 @@ export type AgentProfile = {
   workspaceRef?: string | null;
 };
 
-export type RuntimeSummary = [
-  node: string,
-  location: string,
-  provider: string,
-  version: string,
-  load: string,
-];
+export type RuntimeSummary = [node: RelayNode, location: string];
 
 export type ActivitySummary = [
   time: string,
@@ -118,6 +112,7 @@ export type RelayNode = {
   state: string;
   active: number;
   capacity: number;
+  desired_capacity?: number;
   last_seen: string;
   labels?: Record<string, string>;
   runtimes: RelayRuntime[];

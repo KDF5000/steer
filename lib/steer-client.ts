@@ -338,6 +338,11 @@ export const steer = {
     }),
   claimAvailableRuntimes: () =>
     request<RelayNode[]>('/runtimes/claim-available', { method: 'POST' }),
+  updateNodeCapacity: (nodeId: string, capacity: number) =>
+    request<RelayNode>(`/nodes/${encodeURIComponent(nodeId)}/capacity`, {
+      method: 'PUT',
+      body: JSON.stringify({ capacity }),
+    }),
   bootstrap: () => request<Bootstrap>('/bootstrap'),
   inspectWorkspace: (
     runId: string,
