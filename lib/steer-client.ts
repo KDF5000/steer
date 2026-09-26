@@ -174,6 +174,8 @@ export type WorkLogActivityRunRecord = {
   createdAt: string;
 };
 
+export type WorkLogWeeklyRunRecord = WorkLogActivityRunRecord;
+
 export type ChatMessageRecord = {
   id: string;
   role: 'user' | 'agent';
@@ -318,6 +320,7 @@ export const steer = {
   setWorkspace: (workspaceId: string) => {
     selectedWorkspaceId = workspaceId;
   },
+  workspace: () => selectedWorkspaceId,
   me: () =>
     request<{ user: AuthUser; workspaces: WorkspaceRecord[] }>('/auth/me'),
   login: (input: { email: string; password: string }) =>
@@ -336,8 +339,12 @@ export const steer = {
       method: 'POST',
       body: JSON.stringify({ name }),
     }),
-  claimAvailableRuntimes: () =>
-    request<RelayNode[]>('/runtimes/claim-available', { method: 'POST' }),
+  availableRuntimes: () => request<RelayNode[]>('/runtimes/available'),
+  claimAvailableRuntimes: (runtimeIds: string[]) =>
+    request<RelayNode[]>('/runtimes/claim-available', {
+      method: 'POST',
+      body: JSON.stringify({ runtimeIds }),
+    }),
   updateNodeCapacity: (nodeId: string, capacity: number) =>
     request<RelayNode>(`/nodes/${encodeURIComponent(nodeId)}/capacity`, {
       method: 'PUT',
@@ -460,6 +467,7 @@ export const steer = {
     request<{
       entries: WorkLogEntryRecord[];
       summaries: WorkLogSummaryRecord[];
+      hasEarlier: boolean;
     }>(`/work-log?since=${encodeURIComponent(since)}`),
   createWorkLogEntry: (input: {
     content: string;
@@ -505,10 +513,15 @@ export const steer = {
       method: 'POST',
       body: JSON.stringify({ periodStart, from, to }),
     }),
+  weeklySummaryRun: (periodStart: string) =>
+    request<{ run: WorkLogWeeklyRunRecord | null }>(
+      `/work-log/weekly-summary-run?periodStart=${encodeURIComponent(periodStart)}`,
+    ),
   saveWorkLogSummary: (input: {
     periodKind: 'week';
     periodStart: string;
     content: string;
+    runId?: string;
   }) =>
     request<WorkLogSummaryRecord>('/work-log/summaries', {
       method: 'PUT',

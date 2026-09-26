@@ -6290,6 +6290,153 @@ button.ws-chat-response-meta:focus-visible {
   height: 12px;
 }
 
+.ws-runtime-discovery-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ws-runtime-discovery-heading > button {
+  display: inline-flex;
+  min-height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--ws-border-strong);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-caption);
+  font-weight: 580;
+}
+
+.ws-runtime-discovery-heading > button:hover:not(:disabled) {
+  background: var(--ws-surface-subtle);
+}
+
+.ws-runtime-discovery-heading > button:disabled {
+  opacity: 0.55;
+}
+
+.ws-runtime-discovery-heading svg {
+  width: 13px;
+  height: 13px;
+}
+
+.ws-runtime-discovery-heading svg.is-spinning {
+  animation: ws-runtime-capacity-spin 700ms linear infinite;
+}
+
+.ws-runtime-empty {
+  margin-top: 9px;
+  padding: 16px;
+  border: 1px dashed var(--ws-border-strong);
+  border-radius: 9px;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.ws-runtime-discovery-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  margin-top: 9px;
+  overflow-y: auto;
+}
+
+.ws-runtime-discovery-list > section {
+  overflow: hidden;
+  border: 1px solid var(--ws-border);
+  border-radius: 9px;
+  background: #fff;
+}
+
+.ws-runtime-discovery-list header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ws-border);
+  background: var(--ws-surface-subtle);
+}
+
+.ws-runtime-discovery-list header svg {
+  width: 14px;
+  height: 14px;
+  color: var(--ws-text-tertiary);
+}
+
+.ws-runtime-discovery-list header strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ws-text);
+  font: 600 11.5px var(--font-geist-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-runtime-discovery-list header small {
+  margin-left: auto;
+  color: var(--ws-text-tertiary);
+  font-size: 10.5px;
+  text-transform: capitalize;
+}
+
+.ws-runtime-discovery-list label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+
+.ws-runtime-discovery-list label:hover {
+  background: var(--ws-surface-hover);
+}
+
+.ws-runtime-discovery-list label + label {
+  border-top: 1px solid var(--ws-border);
+}
+
+.ws-runtime-discovery-list input {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  accent-color: var(--ws-accent);
+}
+
+.ws-runtime-discovery-list label > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.ws-runtime-discovery-list label strong {
+  color: var(--ws-text);
+  font-size: 12px;
+  font-weight: 620;
+  text-transform: capitalize;
+}
+
+.ws-runtime-discovery-list label small {
+  overflow: hidden;
+  color: var(--ws-text-tertiary);
+  font: 10.5px var(--font-geist-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-runtime-discovery-list label em {
+  margin-left: auto;
+  color: var(--ws-text-tertiary);
+  font: normal 10.5px var(--font-geist-mono);
+}
+
 .ws-runtime-actions button:last-child {
   display: inline-flex;
   align-items: center;

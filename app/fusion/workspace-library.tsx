@@ -44,6 +44,7 @@ import {
   type WorkLogActivityRunRecord,
   type WorkLogEntryRecord,
   type WorkLogSummaryRecord,
+  type WorkLogWeeklyRunRecord,
 } from '@/lib/steer-client';
 
 type Notice = (message: string) => void;
@@ -1243,23 +1244,6 @@ function weekNumber(date: Date) {
   );
 }
 
-async function waitForSystemRun(runId: string) {
-  for (let attempt = 0; attempt < 334; attempt += 1) {
-    const result = await steer.run(runId);
-    if (result.run.status === 'succeeded') {
-      const content = result.content.trim();
-      if (!content)
-        throw new Error('The system Agent returned an empty result.');
-      return content;
-    }
-    if (result.run.status === 'failed' || result.run.status === 'cancelled') {
-      throw new Error(result.error || `System Agent run ${result.run.status}.`);
-    }
-    await new Promise((resolve) => window.setTimeout(resolve, 900));
-  }
-  throw new Error('The system Agent is taking too long. Try again shortly.');
-}
-
 export function WorkLogView({
   onNotice,
   draftKey,
@@ -1304,11 +1288,25 @@ export function WorkLogView({
   const [workingLabel, setWorkingLabel] = useState('');
   const [weekMode, setWeekMode] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [weeklyRun, setWeeklyRun] = useState<
+    (WorkLogWeeklyRunRecord & { periodStart: string }) | null
+  >(null);
   const [visibleDays, setVisibleDays] = useState(7);
+  const [loadedHistoryDays, setLoadedHistoryDays] = useState(42);
+  const [hasEarlierHistory, setHasEarlierHistory] = useState(false);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [openDays, setOpenDays] = useState(() => new Set([dayKey(new Date())]));
   const today = dayKey(new Date());
+  const weekStart = startOfWeek(new Date());
+  weekStart.setDate(weekStart.getDate() + weekOffset * 7);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  const weekStartKey = dayKey(weekStart);
   const activityRunId = activityRun?.runId;
   const activityRunStatus = activityRun?.status;
+  const weeklyRunId = weeklyRun?.runId;
+  const weeklyRunStatus = weeklyRun?.status;
+  const weeklyRunPeriodStart = weeklyRun?.periodStart;
   useEffect(() => {
     let stored = false;
     try {
@@ -1349,6 +1347,7 @@ export function WorkLogView({
       .then((data) => {
         setEntries(data.entries);
         setSummaries(data.summaries);
+        setHasEarlierHistory(data.hasEarlier);
       })
       .catch((reason) =>
         onNotice(
@@ -1409,6 +1408,100 @@ export function WorkLogView({
     };
   }, [activityRunId, activityRunStatus]);
 
+  useEffect(() => {
+    if (!weekMode) return;
+    let cancelled = false;
+    void steer
+      .weeklySummaryRun(weekStartKey)
+      .then(({ run }) => {
+        if (!cancelled && run)
+          setWeeklyRun({ ...run, periodStart: weekStartKey });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [weekMode, weekStartKey]);
+
+  useEffect(() => {
+    if (
+      !weeklyRunId ||
+      !weeklyRunStatus ||
+      !weeklyRunPeriodStart ||
+      ['failed', 'cancelled'].includes(weeklyRunStatus)
+    )
+      return;
+    const runId = weeklyRunId;
+    const periodStart = weeklyRunPeriodStart;
+    let cancelled = false;
+    let polling = false;
+    const poll = async () => {
+      if (polling) return;
+      polling = true;
+      let finalizing = false;
+      try {
+        const result = await steer.run(runId);
+        if (cancelled) return;
+        if (result.run.status === 'succeeded') {
+          finalizing = true;
+          const content = result.content.trim();
+          if (!content)
+            throw new Error('The system Agent returned an empty result.');
+          const saved = await steer.saveWorkLogSummary({
+            periodKind: 'week',
+            periodStart,
+            content,
+            runId,
+          });
+          if (cancelled) return;
+          setSummaries((current) => [
+            saved,
+            ...current.filter(
+              (item) =>
+                !(
+                  item.periodKind === 'week' && item.periodStart === periodStart
+                ),
+            ),
+          ]);
+          setWeeklyRun((current) =>
+            current?.runId === runId ? null : current,
+          );
+          onNotice('Weekly summary updated.');
+          return;
+        }
+        setWeeklyRun((current) =>
+          current?.runId === runId
+            ? current.status === result.run.status &&
+              current.summary === (result.content || null) &&
+              current.error === (result.error || null)
+              ? current
+              : {
+                  ...current,
+                  status: result.run.status,
+                  summary: result.content || null,
+                  error: result.error || null,
+                }
+            : current,
+        );
+      } catch (reason) {
+        if (!cancelled && finalizing)
+          onNotice(
+            reason instanceof Error
+              ? reason.message
+              : 'Could not finish the weekly summary.',
+          );
+      } finally {
+        polling = false;
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [onNotice, weeklyRunId, weeklyRunPeriodStart, weeklyRunStatus]);
+
   const grouped = useMemo(() => {
     const result = new Map<string, WorkLogEntryRecord[]>();
     entries.forEach((entry) => {
@@ -1429,14 +1522,48 @@ export function WorkLogView({
     [grouped, visibleDays],
   );
 
-  const hasEarlierEntries = useMemo(() => {
-    if (visibleDays >= 42) return false;
-    const cutoff = new Date();
-    cutoff.setHours(12, 0, 0, 0);
-    cutoff.setDate(cutoff.getDate() - visibleDays);
-    const cutoffKey = dayKey(cutoff);
-    return entries.some((entry) => dayKey(entry.occurredAt) <= cutoffKey);
-  }, [entries, visibleDays]);
+  const hasEarlierEntries =
+    visibleDays < loadedHistoryDays || hasEarlierHistory;
+
+  const loadEarlierEntries = async () => {
+    if (loadingEarlier) return;
+    if (visibleDays < loadedHistoryDays) {
+      setVisibleDays((value) => Math.min(loadedHistoryDays, value + 7));
+      return;
+    }
+    if (!hasEarlierHistory) return;
+    setLoadingEarlier(true);
+    const nextHistoryDays = loadedHistoryDays + 42;
+    const since = new Date();
+    since.setDate(since.getDate() - nextHistoryDays);
+    try {
+      const data = await steer.workLog(since.toISOString());
+      setEntries((current) => [
+        ...new Map(
+          [...current, ...data.entries].map((entry) => [entry.id, entry]),
+        ).values(),
+      ]);
+      setSummaries((current) => [
+        ...new Map(
+          [...current, ...data.summaries].map((summary) => [
+            `${summary.periodKind}:${summary.periodStart}`,
+            summary,
+          ]),
+        ).values(),
+      ]);
+      setLoadedHistoryDays(nextHistoryDays);
+      setVisibleDays(nextHistoryDays);
+      setHasEarlierHistory(data.hasEarlier);
+    } catch (reason) {
+      onNotice(
+        reason instanceof Error
+          ? reason.message
+          : 'Could not load earlier work log entries.',
+      );
+    } finally {
+      setLoadingEarlier(false);
+    }
+  };
 
   const addEntry = async () => {
     if (!draft.trim() || working) return;
@@ -1600,7 +1727,7 @@ export function WorkLogView({
       return;
     }
     setWorking(true);
-    setWorkingLabel('Generating weekly summary…');
+    setWorkingLabel('Starting weekly summary…');
     try {
       const from = new Date(`${start}T00:00:00`);
       const to = new Date(from);
@@ -1610,19 +1737,15 @@ export function WorkLogView({
         from.toISOString(),
         to.toISOString(),
       );
-      const content = await waitForSystemRun(run.runId);
-      const saved = await steer.saveWorkLogSummary({
-        periodKind: 'week',
+      setWeeklyRun({
+        runId: run.runId,
+        status: run.status || 'submitted',
+        summary: null,
+        error: null,
+        createdAt: new Date().toISOString(),
         periodStart: start,
-        content,
       });
-      setSummaries((current) => [
-        saved,
-        ...current.filter(
-          (item) => !(item.periodKind === 'week' && item.periodStart === start),
-        ),
-      ]);
-      onNotice('Weekly summary updated.');
+      onNotice('Weekly summary started. You can leave and return later.');
     } catch (reason) {
       onNotice(
         reason instanceof Error ? reason.message : 'Could not save summary.',
@@ -1633,17 +1756,18 @@ export function WorkLogView({
     }
   };
 
-  const weekStart = startOfWeek(new Date());
-  weekStart.setDate(weekStart.getDate() + weekOffset * 7);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekEnd.getDate() + 6);
-  const weekStartKey = dayKey(weekStart);
   const weekEntries = entries.filter((entry) => {
     const value = dayKey(entry.occurredAt);
     return value >= weekStartKey && value <= dayKey(weekEnd);
   });
   const weekSummary = summaries.find(
     (item) => item.periodKind === 'week' && item.periodStart === weekStartKey,
+  );
+  const currentWeeklyRun =
+    weeklyRun?.periodStart === weekStartKey ? weeklyRun : null;
+  const weeklySummaryRunning = Boolean(
+    currentWeeklyRun &&
+    !['succeeded', 'failed', 'cancelled'].includes(currentWeeklyRun.status),
   );
 
   if (loading)
@@ -1719,12 +1843,29 @@ export function WorkLogView({
                 onClick={() =>
                   void saveWeeklySummary(weekStartKey, weekEntries)
                 }
-                disabled={working}
+                disabled={working || weeklySummaryRunning}
               >
                 <Sparkles />{' '}
-                {workingLabel || (weekSummary ? 'Update' : 'Generate')}
+                {workingLabel ||
+                  (weeklySummaryRunning
+                    ? 'Generating…'
+                    : currentWeeklyRun &&
+                        ['failed', 'cancelled'].includes(
+                          currentWeeklyRun.status,
+                        )
+                      ? 'Retry'
+                      : weekSummary
+                        ? 'Update'
+                        : 'Generate')}
               </Button>
             </header>
+            {currentWeeklyRun &&
+              ['failed', 'cancelled'].includes(currentWeeklyRun.status) && (
+                <p className="ws-form-error" role="alert">
+                  {currentWeeklyRun.error ||
+                    'The weekly summary did not finish. Try again.'}
+                </p>
+              )}
             {weekSummary ? (
               <div className="ws-summary-copy">
                 <WorkLogMarkdown>{weekSummary.content}</WorkLogMarkdown>
@@ -2104,9 +2245,10 @@ export function WorkLogView({
           <button
             className="ws-load-earlier"
             type="button"
-            onClick={() => setVisibleDays((value) => Math.min(42, value + 7))}
+            onClick={() => void loadEarlierEntries()}
+            disabled={loadingEarlier}
           >
-            Load earlier 7 days
+            {loadingEarlier ? 'Loading earlier entries…' : 'Load earlier'}
           </button>
         )}
       </main>

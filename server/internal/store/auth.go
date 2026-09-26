@@ -154,6 +154,26 @@ func (s *Store) AssignRuntime(ctx context.Context, workspaceID, runtimeID string
 	return nil
 }
 
+// AssignRuntimes claims a set of Runtime IDs atomically. If any Runtime already
+// belongs to another workspace, none of the requested assignments are saved.
+func (s *Store) AssignRuntimes(ctx context.Context, workspaceID string, runtimeIDs []string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	for _, runtimeID := range runtimeIDs {
+		command, err := tx.Exec(ctx, `INSERT INTO workspace_runtimes(runtime_id,workspace_id) VALUES($1,$2) ON CONFLICT(runtime_id) DO UPDATE SET workspace_id=EXCLUDED.workspace_id WHERE workspace_runtimes.workspace_id=EXCLUDED.workspace_id`, runtimeID, workspaceID)
+		if err != nil {
+			return err
+		}
+		if command.RowsAffected() == 0 {
+			return ErrConflict
+		}
+	}
+	return tx.Commit(ctx)
+}
+
 func (s *Store) WorkspaceRuntimeIDs(ctx context.Context, workspaceID string) (map[string]bool, error) {
 	rows, err := s.pool.Query(ctx, `SELECT runtime_id FROM workspace_runtimes WHERE workspace_id=$1`, workspaceID)
 	if err != nil {

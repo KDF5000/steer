@@ -289,6 +289,12 @@ func (s *Store) WorkLogEntries(ctx context.Context, workspaceID string, since ti
 	return items, rows.Err()
 }
 
+func (s *Store) HasWorkLogEntriesBefore(ctx context.Context, workspaceID string, before time.Time) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM work_log_entries WHERE workspace_id=$1 AND occurred_at < $2)`, workspaceID, before).Scan(&exists)
+	return exists, err
+}
+
 func (s *Store) CreateWorkLogEntry(ctx context.Context, workspaceID string, item WorkLogEntry) (WorkLogEntry, error) {
 	item.ID, item.WorkspaceID = uuid.NewString(), workspaceID
 	if item.OccurredAt.IsZero() {

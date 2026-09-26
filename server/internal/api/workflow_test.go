@@ -146,6 +146,24 @@ func TestConversationWorkflowHTTP(t *testing.T) {
 	if !strings.Contains(weekly.Body.String(), "runId") {
 		t.Fatalf("weekly summary did not start a system run: %s", weekly.Body.String())
 	}
+	var weeklyRun struct {
+		RunID string `json:"runId"`
+	}
+	json.Unmarshal(weekly.Body.Bytes(), &weeklyRun)
+	recoveredWeekly := call("GET", "/work-log/weekly-summary-run?periodStart=2026-09-14", "", 200)
+	if !strings.Contains(recoveredWeekly.Body.String(), weeklyRun.RunID) {
+		t.Fatalf("weekly summary run was not recoverable: %s", recoveredWeekly.Body.String())
+	}
+	duplicateWeekly := call("POST", "/work-log/weekly-summary", `{"periodStart":"2026-09-14","from":"2026-09-14T00:00:00Z","to":"2026-09-21T00:00:00Z"}`, 202)
+	if !strings.Contains(duplicateWeekly.Body.String(), weeklyRun.RunID) {
+		t.Fatalf("repeated weekly summary did not reuse the background run: %s", duplicateWeekly.Body.String())
+	}
+	call("GET", "/runs/"+weeklyRun.RunID, "", 200)
+	call("PUT", "/work-log/summaries", `{"periodKind":"week","periodStart":"2026-09-14","content":"Recovered weekly summary.","runId":"`+weeklyRun.RunID+`"}`, 200)
+	acknowledgedWeekly := call("GET", "/work-log/weekly-summary-run?periodStart=2026-09-14", "", 200)
+	if !strings.Contains(acknowledgedWeekly.Body.String(), `"run":null`) {
+		t.Fatalf("saved weekly summary run was still pending: %s", acknowledgedWeekly.Body.String())
+	}
 	stream := call("GET", "/runs/"+started.RunID+"/events/stream?after=0", "", 200)
 	if contentType := stream.Header().Get("Content-Type"); contentType != "text/event-stream" {
 		t.Fatalf("stream content type=%q", contentType)

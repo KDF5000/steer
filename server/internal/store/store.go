@@ -618,6 +618,17 @@ func (s *Store) LatestUnacknowledgedSystemRun(ctx context.Context, wid, purpose 
 	return x, err
 }
 
+func (s *Store) UnacknowledgedSystemRun(ctx context.Context, wid, purpose string) (RunLink, error) {
+	var x RunLink
+	err := s.pool.QueryRow(ctx, `SELECT relay_run_id,workspace_id,purpose,session_id,agent_id,status,summary,error,acknowledged_at,created_at,updated_at
+		FROM run_links WHERE workspace_id=$1 AND purpose=$2 AND session_id IS NULL AND acknowledged_at IS NULL
+		ORDER BY created_at DESC LIMIT 1`, wid, purpose).Scan(&x.RelayRunID, &x.WorkspaceID, &x.Purpose, &x.SessionID, &x.AgentID, &x.Status, &x.Summary, &x.Error, &x.AcknowledgedAt, &x.CreatedAt, &x.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RunLink{}, ErrNotFound
+	}
+	return x, err
+}
+
 func (s *Store) AcknowledgeSystemRun(ctx context.Context, wid, runID, purpose string) error {
 	result, err := s.pool.Exec(ctx, `UPDATE run_links SET acknowledged_at=now(),updated_at=now() WHERE workspace_id=$1 AND relay_run_id=$2 AND purpose=$3 AND session_id IS NULL`, wid, runID, purpose)
 	if err != nil {

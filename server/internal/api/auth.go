@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/KDF5000/relay/controlplane"
 	"github.com/KDF5000/steer/server/internal/store"
 	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
@@ -62,7 +63,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	user, workspace, adopted, err := s.store.CreateUser(r.Context(), input.Email, input.DisplayName, string(hash), s.defaultWorkspace)
+	user, workspace, _, err := s.store.CreateUser(r.Context(), input.Email, input.DisplayName, string(hash), s.defaultWorkspace)
 	if err != nil {
 		var postgresError *pgconn.PgError
 		if errors.As(err, &postgresError) && postgresError.Code == "23505" {
@@ -71,9 +72,6 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, err)
 		return
-	}
-	if adopted {
-		s.assignAllUnclaimedRuntimes(r.Context(), workspace.ID)
 	}
 	if err := s.startSession(w, r, user); err != nil {
 		writeError(w, err)
@@ -157,7 +155,35 @@ func (s *Server) createWorkspace(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) claimAvailableRuntimes(w http.ResponseWriter, r *http.Request) {
-	if err := s.assignAllUnclaimedRuntimes(r.Context(), s.workspace(r)); err != nil {
+	var input struct {
+		RuntimeIDs []string `json:"runtimeIds"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, err)
+		return
+	}
+	if len(input.RuntimeIDs) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Select at least one Runtime to add."})
+		return
+	}
+	available, err := s.unassignedRuntimeNodes(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	known := map[string]bool{}
+	for _, node := range available {
+		for _, runtime := range node.Runtimes {
+			known[runtime.ID] = true
+		}
+	}
+	for _, runtimeID := range input.RuntimeIDs {
+		if !known[runtimeID] {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "A selected Runtime is unavailable or already belongs to another workspace."})
+			return
+		}
+	}
+	if err := s.store.AssignRuntimes(r.Context(), s.workspace(r), input.RuntimeIDs); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -169,25 +195,38 @@ func (s *Server) claimAvailableRuntimes(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, nodes)
 }
 
-func (s *Server) assignAllUnclaimedRuntimes(ctx context.Context, workspaceID string) error {
+func (s *Server) availableRuntimes(w http.ResponseWriter, r *http.Request) {
+	nodes, err := s.unassignedRuntimeNodes(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, nodes)
+}
+
+func (s *Server) unassignedRuntimeNodes(ctx context.Context) ([]controlplane.Node, error) {
 	nodes, err := s.relay.Nodes(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	availableNodes := make([]controlplane.Node, 0, len(nodes))
 	for _, node := range nodes {
+		available := node.Runtimes[:0:0]
 		for _, runtime := range node.Runtimes {
-			available, err := s.store.UnassignedRuntime(ctx, runtime.ID)
+			unassigned, err := s.store.UnassignedRuntime(ctx, runtime.ID)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			if available {
-				if err := s.store.AssignRuntime(ctx, workspaceID, runtime.ID); err != nil && !errors.Is(err, store.ErrConflict) {
-					return err
-				}
+			if unassigned {
+				available = append(available, runtime)
 			}
 		}
+		if len(available) > 0 {
+			node.Runtimes = available
+			availableNodes = append(availableNodes, node)
+		}
 	}
-	return nil
+	return availableNodes, nil
 }
 
 func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user store.User) error {

@@ -620,6 +620,13 @@ export default function Fusion() {
   const [deleting, setDeleting] = useState(false);
   const [deletingConversation, setDeletingConversation] = useState(false);
   const [runtimeDialog, setRuntimeDialog] = useState(false);
+  const [availableRuntimeNodes, setAvailableRuntimeNodes] = useState<
+    RelayNode[]
+  >([]);
+  const [selectedRuntimeIDs, setSelectedRuntimeIDs] = useState<string[]>([]);
+  const [runtimeDiscoveryLoading, setRuntimeDiscoveryLoading] = useState(false);
+  const [runtimeClaiming, setRuntimeClaiming] = useState(false);
+  const [runtimeDiscoveryError, setRuntimeDiscoveryError] = useState('');
   const [creatingAgent, setCreatingAgent] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [formError, setFormError] = useState('');
@@ -633,6 +640,7 @@ export default function Fusion() {
   const pollingRun = useRef('');
   const mounted = useRef(true);
   const gitStatusWorkspace = useRef('');
+  const workspaceHydrationSequence = useRef(0);
   const sessionLoadSequence = useRef(0);
   const routeReady = useRef(false);
   const skipRouteWrite = useRef(false);
@@ -754,9 +762,16 @@ export default function Fusion() {
   };
 
   const hydrateWorkspace = useCallback(async (id: string) => {
+    const sequence = ++workspaceHydrationSequence.current;
     gitStatusWorkspace.current = id;
     steer.setWorkspace(id);
     const data = await steer.bootstrap();
+    if (
+      !mounted.current ||
+      sequence !== workspaceHydrationSequence.current ||
+      steer.workspace() !== id
+    )
+      return;
     const agents = data.agents.map(agentFromRecord);
     setAgentList(agents);
     setProjectList(data.projects || []);
@@ -1527,22 +1542,58 @@ export default function Fusion() {
     }
   };
 
-  const refreshRuntimes = async () => {
+  const discoverRuntimes = async () => {
+    const requestedWorkspace = workspaceID;
+    setRuntimeDiscoveryLoading(true);
+    setRuntimeDiscoveryError('');
     try {
-      await steer.claimAvailableRuntimes();
-      const data = await steer.bootstrap();
-      setRuntimeNodes(data.relay.nodes || []);
-      setRelayConnected(data.relay.connected);
-      setRelayError(data.relay.error || '');
-      setNotice(
-        data.relay.connected
-          ? 'Runtime inventory refreshed.'
-          : 'Relay is not connected.',
+      const nodes = await steer.availableRuntimes();
+      if (!mounted.current || steer.workspace() !== requestedWorkspace) return;
+      setAvailableRuntimeNodes(nodes);
+      setSelectedRuntimeIDs((current) =>
+        current.filter((id) =>
+          nodes.some((node) =>
+            node.runtimes?.some((runtime) => runtime.id === id),
+          ),
+        ),
       );
     } catch (error) {
-      setNotice(
+      if (!mounted.current || steer.workspace() !== requestedWorkspace) return;
+      setRuntimeDiscoveryError(
         error instanceof Error ? error.message : 'Could not refresh Relay.',
       );
+    } finally {
+      if (mounted.current && steer.workspace() === requestedWorkspace)
+        setRuntimeDiscoveryLoading(false);
+    }
+  };
+
+  const openRuntimeDialog = () => {
+    setRuntimeDialog(true);
+    void discoverRuntimes();
+  };
+
+  const claimSelectedRuntimes = async () => {
+    if (!selectedRuntimeIDs.length || runtimeClaiming) return;
+    const requestedWorkspace = workspaceID;
+    setRuntimeClaiming(true);
+    setRuntimeDiscoveryError('');
+    try {
+      const nodes = await steer.claimAvailableRuntimes(selectedRuntimeIDs);
+      if (!mounted.current || steer.workspace() !== requestedWorkspace) return;
+      const count = selectedRuntimeIDs.length;
+      setRuntimeNodes(nodes);
+      setSelectedRuntimeIDs([]);
+      setNotice(`${count} Runtime${count === 1 ? '' : 's'} added.`);
+      await discoverRuntimes();
+    } catch (error) {
+      if (!mounted.current || steer.workspace() !== requestedWorkspace) return;
+      setRuntimeDiscoveryError(
+        error instanceof Error ? error.message : 'Could not add Runtimes.',
+      );
+    } finally {
+      if (mounted.current && steer.workspace() === requestedWorkspace)
+        setRuntimeClaiming(false);
     }
   };
 
@@ -1584,6 +1635,7 @@ export default function Fusion() {
   const activateWorkspace = async (workspace: WorkspaceRecord) => {
     if (workspace.id === workspaceID) return;
     setLoaded(false);
+    workspaceHydrationSequence.current += 1;
     setLoadError('');
     setWorkspaceID(workspace.id);
     window.localStorage.setItem('steer.workspace', workspace.id);
@@ -1623,6 +1675,7 @@ export default function Fusion() {
   };
 
   const logout = async () => {
+    workspaceHydrationSequence.current += 1;
     await steer.logout().catch(() => undefined);
     steer.setWorkspace('');
     window.localStorage.removeItem('steer.workspace');
@@ -2193,7 +2246,7 @@ export default function Fusion() {
             tab={agentTab}
             onTab={setAgentTab}
             onCreate={() => setAgentDialog(true)}
-            onAddRuntime={() => setRuntimeDialog(true)}
+            onAddRuntime={openRuntimeDialog}
             onCapacity={updateRuntimeCapacity}
             onChat={(id) => {
               setChatAgent(id);
@@ -2351,10 +2404,17 @@ export default function Fusion() {
         open={runtimeDialog}
         connected={relayConnected}
         error={relayError}
+        discoveryError={runtimeDiscoveryError}
         publicURL={relayPublicURL}
+        nodes={availableRuntimeNodes}
+        selectedRuntimeIDs={selectedRuntimeIDs}
+        discovering={runtimeDiscoveryLoading}
+        claiming={runtimeClaiming}
         onOpen={setRuntimeDialog}
         onURL={setRelayPublicURL}
-        onRefresh={() => void refreshRuntimes()}
+        onRefresh={() => void discoverRuntimes()}
+        onSelect={setSelectedRuntimeIDs}
+        onClaim={() => void claimSelectedRuntimes()}
       />
       {notice && (
         <output className="ws-toast" aria-live="polite">
@@ -5014,8 +5074,10 @@ function SystemSettingsView({
         </div>
         <div className="ws-settings-row">
           <div className="ws-settings-copy">
-            <label htmlFor="interface-language-select">Language</label>
-            <p>Language used throughout the Steer interface.</p>
+            <label htmlFor="interface-language-select">
+              AI output language
+            </label>
+            <p>Language used by the System Agent for generated summaries.</p>
           </div>
           <Select
             value={language}
@@ -5029,7 +5091,7 @@ function SystemSettingsView({
             <SelectTrigger
               id="interface-language-select"
               className="ws-settings-select"
-              aria-label="Steer language"
+              aria-label="AI output language"
             >
               <span>
                 {language === 'zh-CN'
@@ -5539,18 +5601,32 @@ function RuntimeDialog({
   open,
   connected,
   error,
+  discoveryError,
   publicURL,
+  nodes,
+  selectedRuntimeIDs,
+  discovering,
+  claiming,
   onOpen,
   onURL,
   onRefresh,
+  onSelect,
+  onClaim,
 }: {
   open: boolean;
   connected: boolean;
   error: string;
+  discoveryError: string;
   publicURL: string;
+  nodes: RelayNode[];
+  selectedRuntimeIDs: string[];
+  discovering: boolean;
+  claiming: boolean;
   onOpen: (open: boolean) => void;
   onURL: (value: string) => void;
   onRefresh: () => void;
+  onSelect: (runtimeIDs: string[]) => void;
+  onClaim: () => void;
 }) {
   const [commandCopied, setCommandCopied] = useState(false);
   const command = `curl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh | RELAY_NODE_TOKEN='YOUR_NODE_TOKEN' sh -s -- --server ${publicURL || 'https://relay.example.com'} --install-service`;
@@ -5560,6 +5636,14 @@ function RuntimeDialog({
     if (!copied) return;
     setCommandCopied(true);
     window.setTimeout(() => setCommandCopied(false), 1600);
+  }
+
+  function toggleRuntime(runtimeID: string) {
+    onSelect(
+      selectedRuntimeIDs.includes(runtimeID)
+        ? selectedRuntimeIDs.filter((id) => id !== runtimeID)
+        : [...selectedRuntimeIDs, runtimeID],
+    );
   }
 
   return (
@@ -5629,14 +5713,80 @@ function RuntimeDialog({
               </a>
             </div>
           </section>
+          <section className="ws-runtime-step">
+            <span>3</span>
+            <div>
+              <div className="ws-runtime-discovery-heading">
+                <div>
+                  <h3>Discovered Runtimes</h3>
+                  <p>Select which Runtimes this workspace may use.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onRefresh}
+                  disabled={discovering || claiming}
+                  aria-label="Refresh discovered Runtimes"
+                >
+                  <RefreshCw className={discovering ? 'is-spinning' : ''} />
+                  {discovering ? 'Refreshing…' : 'Refresh'}
+                </button>
+              </div>
+              {discoveryError && (
+                <p className="ws-form-error" role="alert">
+                  {discoveryError}
+                </p>
+              )}
+              {!discovering && !discoveryError && nodes.length === 0 && (
+                <div className="ws-runtime-empty">
+                  No unassigned Runtimes found. Start or restart Relay Node,
+                  then refresh.
+                </div>
+              )}
+              {nodes.length > 0 && (
+                <div className="ws-runtime-discovery-list">
+                  {nodes.map((node) => (
+                    <section key={node.id}>
+                      <header>
+                        <Server aria-hidden="true" />
+                        <strong>{node.id}</strong>
+                        <small>{node.state || 'unknown'}</small>
+                      </header>
+                      <div>
+                        {node.runtimes.map((runtime) => (
+                          <label key={runtime.id}>
+                            <input
+                              type="checkbox"
+                              checked={selectedRuntimeIDs.includes(runtime.id)}
+                              disabled={claiming}
+                              onChange={() => toggleRuntime(runtime.id)}
+                            />
+                            <span>
+                              <strong>{runtime.provider}</strong>
+                              <small>{runtime.id}</small>
+                            </span>
+                            {runtime.version && <em>{runtime.version}</em>}
+                          </label>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
         </div>
         <div className="ws-form-actions ws-runtime-actions">
           <button type="button" onClick={() => onOpen(false)}>
             Close
           </button>
-          <button type="button" onClick={onRefresh}>
-            <RefreshCw />
-            Refresh Runtimes
+          <button
+            type="button"
+            onClick={onClaim}
+            disabled={!selectedRuntimeIDs.length || claiming}
+          >
+            {claiming
+              ? 'Adding…'
+              : `Add${selectedRuntimeIDs.length ? ` ${selectedRuntimeIDs.length}` : ''} to workspace`}
           </button>
         </div>
       </DialogContent>

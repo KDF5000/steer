@@ -42,6 +42,15 @@ func TestUsersWorkspacesAndRuntimeIsolation(t *testing.T) {
 	if err := s.AssignRuntime(ctx, secondWorkspace.ID, "node/runtime"); !errors.Is(err, ErrConflict) {
 		t.Fatalf("runtime was assigned to two workspaces: %v", err)
 	}
+	if err := s.AssignRuntime(ctx, secondWorkspace.ID, "node/claimed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AssignRuntimes(ctx, firstWorkspace.ID, []string{"node/new", "node/claimed"}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("batch claim should conflict: %v", err)
+	}
+	if assigned, err := s.RuntimeAssigned(ctx, firstWorkspace.ID, "node/new"); err != nil || assigned {
+		t.Fatalf("failed batch claim was not atomic: assigned=%t err=%v", assigned, err)
+	}
 	if err := s.CreateAuthSession(ctx, first.ID, "token-"+suffix, time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}

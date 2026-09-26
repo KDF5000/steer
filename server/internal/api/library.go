@@ -393,12 +393,17 @@ func (s *Server) listWorkLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	hasEarlier, err := s.store.HasWorkLogEntriesBefore(r.Context(), s.workspace(r), since)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	summaries, err := s.store.WorkLogSummaries(r.Context(), s.workspace(r), since.AddDate(0, 0, -7))
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"entries": entries, "summaries": summaries})
+	writeJSON(w, http.StatusOK, map[string]any{"entries": entries, "summaries": summaries, "hasEarlier": hasEarlier})
 }
 
 func validateWorkLogContent(w http.ResponseWriter, content *string) bool {
@@ -585,6 +590,20 @@ func (s *Server) generateWeeklySummary(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid week end timestamp"})
 		return
 	}
+	purpose := weeklySummaryPurpose(input.PeriodStart)
+	if existing, existingErr := s.store.UnacknowledgedSystemRun(r.Context(), s.workspace(r), purpose); existingErr == nil {
+		if existing.Status != "failed" && existing.Status != "cancelled" {
+			writeJSON(w, http.StatusAccepted, map[string]any{"runId": existing.RelayRunID, "status": existing.Status})
+			return
+		}
+		if err := s.store.AcknowledgeSystemRun(r.Context(), s.workspace(r), existing.RelayRunID, purpose); err != nil {
+			writeError(w, err)
+			return
+		}
+	} else if !errors.Is(existingErr, store.ErrNotFound) {
+		writeError(w, existingErr)
+		return
+	}
 	entries, err := s.store.WorkLogEntries(r.Context(), s.workspace(r), start, 1000)
 	if err != nil {
 		writeError(w, err)
@@ -601,7 +620,7 @@ func (s *Server) generateWeeklySummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prompt := "Create a concise weekly work summary from the confirmed work-log entries below. Organize it into four localized sections covering: completed work, key progress, issues and risks, and suggestions for next week. Translate the section headings into the requested output language. Do not invent details. Omit empty sections. Return only the summary in Markdown. Do not modify files or use tools.\n\n" + strings.Join(parts, "\n")
-	run, err := s.submitSystemAgentRun(r.Context(), s.workspace(r), "work_log_weekly_summary", prompt)
+	run, err := s.submitSystemAgentRun(r.Context(), s.workspace(r), purpose, prompt)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -609,11 +628,34 @@ func (s *Server) generateWeeklySummary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]any{"runId": run.ID, "status": run.Status})
 }
 
+func weeklySummaryPurpose(periodStart string) string {
+	return "work_log_weekly_summary:" + periodStart
+}
+
+func (s *Server) weeklySummaryRun(w http.ResponseWriter, r *http.Request) {
+	periodStart := r.URL.Query().Get("periodStart")
+	if _, err := time.Parse("2006-01-02", periodStart); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid period start"})
+		return
+	}
+	run, err := s.store.UnacknowledgedSystemRun(r.Context(), s.workspace(r), weeklySummaryPurpose(periodStart))
+	if errors.Is(err, store.ErrNotFound) {
+		writeJSON(w, http.StatusOK, map[string]any{"run": nil})
+		return
+	}
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"run": run})
+}
+
 func (s *Server) saveWorkLogSummary(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		PeriodKind  string `json:"periodKind"`
 		PeriodStart string `json:"periodStart"`
 		Content     string `json:"content"`
+		RunID       string `json:"runId"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, err)
@@ -634,6 +676,12 @@ func (s *Server) saveWorkLogSummary(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, err)
 		return
+	}
+	if input.RunID != "" {
+		if err := s.store.AcknowledgeSystemRun(r.Context(), s.workspace(r), input.RunID, weeklySummaryPurpose(input.PeriodStart)); err != nil {
+			writeError(w, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, item)
 }
