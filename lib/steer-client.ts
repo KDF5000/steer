@@ -158,7 +158,8 @@ export type AgentActivityRecord = {
 export type WorkspaceSettingsRecord = {
   workspaceId: string;
   systemAgentId: string | null;
-  language: 'auto' | 'zh-CN' | 'en';
+  interfaceLanguage: 'auto' | 'zh-CN' | 'en';
+  aiOutputLanguage: 'auto' | 'zh-CN' | 'en';
 };
 
 export type SystemRunRecord = {
@@ -377,7 +378,8 @@ export const steer = {
   systemSettings: () => request<WorkspaceSettingsRecord>('/system/settings'),
   updateSystemSettings: (settings: {
     systemAgentId: string | null;
-    language: WorkspaceSettingsRecord['language'];
+    interfaceLanguage: WorkspaceSettingsRecord['interfaceLanguage'];
+    aiOutputLanguage: WorkspaceSettingsRecord['aiOutputLanguage'];
   }) =>
     request<WorkspaceSettingsRecord>('/system/settings', {
       method: 'PUT',

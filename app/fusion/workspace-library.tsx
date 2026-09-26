@@ -27,6 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/lib/i18n';
 import {
   Dialog,
   DialogContent,
@@ -114,6 +115,7 @@ export function AssetsView({
   onAgentSkills: (items: Record<string, string[]>) => void;
   onNotice: Notice;
 }) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<'skills' | 'documents'>('skills');
   const [skillDialog, setSkillDialog] = useState(false);
   const [importDialog, setImportDialog] = useState(false);
@@ -282,9 +284,11 @@ export function AssetsView({
     <div className="ws-page ws-library-page">
       <header className="ws-library-header">
         <div>
-          <span className="ws-eyebrow">WORKSPACE LIBRARY</span>
-          <h1>Assets</h1>
-          <p>Reusable instructions for Agents and reference links for you.</p>
+          <span className="ws-eyebrow">{t('Workspace library')}</span>
+          <h1>{t('Assets')}</h1>
+          <p>
+            {t('Reusable instructions for Agents and reference links for you.')}
+          </p>
         </div>
         <div className="ws-library-actions">
           {tab === 'skills' ? (
@@ -296,7 +300,7 @@ export function AssetsView({
                   setImportDialog(true);
                 }}
               >
-                <Import aria-hidden="true" /> Import
+                <Import aria-hidden="true" /> {t('Import')}
               </Button>
               <Button
                 onClick={() => {
@@ -305,7 +309,7 @@ export function AssetsView({
                   setSkillDialog(true);
                 }}
               >
-                <Plus aria-hidden="true" /> New skill
+                <Plus aria-hidden="true" /> {t('New skill')}
               </Button>
             </>
           ) : (
@@ -316,7 +320,7 @@ export function AssetsView({
                 setDocumentDialog(true);
               }}
             >
-              <Plus aria-hidden="true" /> Add document
+              <Plus aria-hidden="true" /> {t('Add document')}
             </Button>
           )}
         </div>
@@ -325,10 +329,10 @@ export function AssetsView({
       <Tabs value={tab} onValueChange={(value) => setTab(value as typeof tab)}>
         <TabsList className="ws-library-tabs">
           <TabsTrigger value="skills">
-            <Wrench /> Skills <span>{skills.length}</span>
+            <Wrench /> {t('Skills')} <span>{skills.length}</span>
           </TabsTrigger>
           <TabsTrigger value="documents">
-            <BookOpen /> Documents <span>{documents.length}</span>
+            <BookOpen /> {t('Documents')} <span>{documents.length}</span>
           </TabsTrigger>
         </TabsList>
       </Tabs>
@@ -381,7 +385,7 @@ export function AssetsView({
                         setSkillDialog(true);
                       }}
                     >
-                      Configure
+                      {t('Configure')}
                     </button>
                   </footer>
                 </article>
@@ -393,13 +397,13 @@ export function AssetsView({
             <span className="ws-asset-icon skill">
               <Wrench />
             </span>
-            <h2>Create your first Skill</h2>
+            <h2>{t('Create your first Skill')}</h2>
             <p>
               Skills are reusable instructions installed into the selected
               Agent’s remote workspace by Relay.
             </p>
             <Button onClick={() => setSkillDialog(true)}>
-              <Plus /> New skill
+              <Plus /> {t('New skill')}
             </Button>
           </div>
         )
@@ -448,13 +452,13 @@ export function AssetsView({
           <span className="ws-asset-icon document">
             <BookOpen />
           </span>
-          <h2>Add a reference document</h2>
+          <h2>{t('Add a reference document')}</h2>
           <p>
             Save an external document as a simple link. Content indexing can be
             added later.
           </p>
           <Button onClick={() => setDocumentDialog(true)}>
-            <Plus /> Add document
+            <Plus /> {t('Add document')}
           </Button>
         </div>
       )}
@@ -468,7 +472,7 @@ export function AssetsView({
       >
         <DialogContent className="ws-library-dialog">
           <DialogTitle>
-            {editingSkill ? 'Configure skill' : 'Create skill'}
+            {editingSkill ? t('Configure') : t('Create skill')}
           </DialogTitle>
           <DialogDescription>
             Relay materializes assigned Skills into the native instruction file
@@ -544,10 +548,10 @@ export function AssetsView({
                 variant="outline"
                 onClick={() => setSkillDialog(false)}
               >
-                Cancel
+                {t('Cancel')}
               </Button>
               <Button type="submit" disabled={working}>
-                {working ? 'Saving…' : 'Save skill'}
+                {working ? 'Saving…' : t('Save')}
               </Button>
             </footer>
           </form>
@@ -556,7 +560,7 @@ export function AssetsView({
 
       <Dialog open={importDialog} onOpenChange={setImportDialog}>
         <DialogContent className="ws-library-dialog compact">
-          <DialogTitle>Import Skill</DialogTitle>
+          <DialogTitle>{t('Import Skill')}</DialogTitle>
           <DialogDescription>
             Import a public SKILL.md from GitHub or GitLab. Review the
             instructions before assigning it to an Agent.
@@ -581,10 +585,10 @@ export function AssetsView({
                 variant="outline"
                 onClick={() => setImportDialog(false)}
               >
-                Cancel
+                {t('Cancel')}
               </Button>
               <Button type="submit" disabled={working}>
-                {working ? 'Importing…' : 'Import'}
+                {working ? 'Importing…' : t('Import')}
               </Button>
             </footer>
           </form>
@@ -600,7 +604,7 @@ export function AssetsView({
       >
         <DialogContent className="ws-library-dialog compact">
           <DialogTitle>
-            {editingDocument ? 'Edit document' : 'Add document'}
+            {editingDocument ? 'Edit document' : t('Add document')}
           </DialogTitle>
           <DialogDescription>
             Save a link to an external document. Steer will not copy or index
@@ -644,10 +648,10 @@ export function AssetsView({
                 variant="outline"
                 onClick={() => setDocumentDialog(false)}
               >
-                Cancel
+                {t('Cancel')}
               </Button>
               <Button type="submit" disabled={working}>
-                {working ? 'Saving…' : 'Save document'}
+                {working ? 'Saving…' : t('Save')}
               </Button>
             </footer>
           </form>
@@ -1227,8 +1231,8 @@ function startOfWeek(value: Date) {
   return date;
 }
 
-const formatLogDate = (key: string) =>
-  new Date(`${key}T12:00:00`).toLocaleDateString([], {
+const formatLogDate = (key: string, locale?: string) =>
+  new Date(`${key}T12:00:00`).toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
     weekday: 'short',
@@ -1253,6 +1257,7 @@ export function WorkLogView({
   draftKey: string;
   sessions: ChatSessionRecord[];
 }) {
+  const { language, t } = useI18n();
   const [restored] = useState(() => {
     try {
       return JSON.parse(window.localStorage.getItem(draftKey) || '{}') as {
@@ -1771,19 +1776,25 @@ export function WorkLogView({
   );
 
   if (loading)
-    return <div className="ws-work-log-loading">Loading work log…</div>;
+    return <div className="ws-work-log-loading">{t('Loading work log…')}</div>;
 
   if (weekMode)
     return (
       <div className="ws-work-log ws-week-log">
         <header className="ws-work-log-header">
           <div>
-            <span className="ws-eyebrow">WEEKLY REVIEW</span>
-            <h1>Weekly summaries</h1>
-            <p>Review outcomes first, then trace them back to daily records.</p>
+            <span className="ws-eyebrow">
+              {t('Weekly summaries').toUpperCase()}
+            </span>
+            <h1>{t('Weekly summaries')}</h1>
+            <p>
+              {t(
+                'Review outcomes first, then trace them back to daily records.',
+              )}
+            </p>
           </div>
           <Button variant="outline" onClick={() => setWeekMode(false)}>
-            <ArrowLeft /> Work log
+            <ArrowLeft /> {t('Work log')}
           </Button>
         </header>
         <nav className="ws-week-switcher" aria-label="Week navigation">
@@ -1804,15 +1815,17 @@ export function WorkLogView({
                 key={key}
                 onClick={() => setWeekOffset((value) => value + delta)}
               >
-                <strong>Week {weekNumber(date)}</strong>
-                <span>{formatLogDate(key)}</span>
+                <strong>
+                  {t('Week {number}', { number: weekNumber(date) })}
+                </strong>
+                <span>{formatLogDate(key, language)}</span>
                 <small>
                   {summaries.some(
                     (item) =>
                       item.periodKind === 'week' && item.periodStart === key,
                   )
-                    ? 'Summary ready'
-                    : 'Not summarized'}
+                    ? t('Summary ready')
+                    : t('Not summarized')}
                 </small>
               </button>
             );
@@ -1832,11 +1845,15 @@ export function WorkLogView({
                 <Sparkles />
               </span>
               <div>
-                <h2>Week {weekNumber(weekStart)} summary</h2>
+                <h2>
+                  {t('Week {number} summary', {
+                    number: weekNumber(weekStart),
+                  })}
+                </h2>
                 <p>
-                  {formatLogDate(weekStartKey)} —{' '}
-                  {formatLogDate(dayKey(weekEnd))} · {weekEntries.length}{' '}
-                  records
+                  {formatLogDate(weekStartKey, language)} —{' '}
+                  {formatLogDate(dayKey(weekEnd), language)} ·{' '}
+                  {t('{count} records', { count: weekEntries.length })}
                 </p>
               </div>
               <Button
@@ -1848,15 +1865,15 @@ export function WorkLogView({
                 <Sparkles />{' '}
                 {workingLabel ||
                   (weeklySummaryRunning
-                    ? 'Generating…'
+                    ? t('Generating…')
                     : currentWeeklyRun &&
                         ['failed', 'cancelled'].includes(
                           currentWeeklyRun.status,
                         )
-                      ? 'Retry'
+                      ? t('Retry')
                       : weekSummary
-                        ? 'Update'
-                        : 'Generate')}
+                        ? t('Update')
+                        : t('Generate'))}
               </Button>
             </header>
             {currentWeeklyRun &&
@@ -1873,15 +1890,17 @@ export function WorkLogView({
             ) : (
               <div className="ws-summary-empty">
                 <Sparkles />
-                <strong>No summary yet</strong>
+                <strong>{t('No summary yet')}</strong>
                 <p>
-                  Generate a concise weekly report from these daily records.
+                  {t(
+                    'Generate a concise weekly report from these daily records.',
+                  )}
                 </p>
               </div>
             )}
           </article>
           <aside className="ws-week-days">
-            <h2>Daily records</h2>
+            <h2>{t('Daily records')}</h2>
             {Array.from({ length: 7 }, (_, index) => {
               const date = new Date(weekEnd);
               date.setDate(date.getDate() - index);
@@ -1891,8 +1910,10 @@ export function WorkLogView({
                 <details key={key} open={key === today}>
                   <summary>
                     <span>
-                      <strong>{formatLogDate(key)}</strong>
-                      <small>{items.length} records</small>
+                      <strong>{formatLogDate(key, language)}</strong>
+                      <small>
+                        {t('{count} records', { count: items.length })}
+                      </small>
                     </span>
                     <ChevronDown />
                   </summary>
@@ -1903,7 +1924,7 @@ export function WorkLogView({
                       </div>
                     ))
                   ) : (
-                    <p className="empty">No records</p>
+                    <p className="empty">{t('No records')}</p>
                   )}
                 </details>
               );
@@ -1917,15 +1938,16 @@ export function WorkLogView({
     <div className="ws-work-log">
       <header className="ws-work-log-header">
         <div>
-          <span className="ws-eyebrow">WORKSPACE</span>
-          <h1>Work log</h1>
+          <span className="ws-eyebrow">{t('Workspace').toUpperCase()}</span>
+          <h1>{t('Work log')}</h1>
           <p>
-            Keep outcomes, decisions, and next steps together with the
-            conversations behind them.
+            {t(
+              'Keep outcomes, decisions, and next steps together with the conversations behind them.',
+            )}
           </p>
         </div>
         <Button variant="outline" onClick={() => setWeekMode(true)}>
-          <CalendarDays /> Weekly summaries
+          <CalendarDays /> {t('Weekly summaries')}
         </Button>
       </header>
       <main className="ws-log-feed">
@@ -1953,7 +1975,9 @@ export function WorkLogView({
                 void addEntry();
               }
             }}
-            placeholder="What moved forward? Record an outcome, a decision, or where to pick up next…"
+            placeholder={t(
+              'What moved forward? Record an outcome, a decision, or where to pick up next…',
+            )}
             rows={4}
           />
           <footer>
@@ -1970,13 +1994,13 @@ export function WorkLogView({
               >
                 <Sparkles />{' '}
                 {activityRun?.status === 'succeeded'
-                  ? 'Summary ready to review'
+                  ? t('Summary ready to review')
                   : collecting
-                    ? 'Starting summary…'
+                    ? t('Starting summary…')
                     : activityRun &&
                         !['failed', 'cancelled'].includes(activityRun.status)
-                      ? 'Summary in progress'
-                      : 'Summarize today’s Agent activity'}
+                      ? t('Summary in progress')
+                      : t('Summarize today’s Agent activity')}
               </button>
               {draftActivities.length > 0 && (
                 <span>
@@ -1988,7 +2012,7 @@ export function WorkLogView({
               )}
             </div>
             <Button type="submit" disabled={!draft.trim() || working}>
-              Add to log
+              {t('Add to log')}
             </Button>
           </footer>
         </form>
@@ -2001,11 +2025,11 @@ export function WorkLogView({
               <div>
                 <strong>
                   {activityRun.status === 'succeeded'
-                    ? 'Review today’s draft'
+                    ? t('Review today’s draft')
                     : activityRun.status === 'failed' ||
                         activityRun.status === 'cancelled'
-                      ? 'Could not generate the summary'
-                      : 'Summarizing today’s Agent activity'}
+                      ? t('Could not generate the summary')
+                      : t('Summarizing today’s Agent activity')}
                 </strong>
                 <span>
                   {activityRun.status === 'succeeded'
@@ -2014,7 +2038,9 @@ export function WorkLogView({
                         activityRun.status === 'cancelled'
                       ? activityRun.error ||
                         'The System Agent run did not finish.'
-                      : 'Running in the background. You can keep working or return later.'}
+                      : t(
+                          'Running in the background. You can keep working or return later.',
+                        )}
                 </span>
               </div>
               {['failed', 'cancelled'].includes(activityRun.status) && (
@@ -2248,7 +2274,7 @@ export function WorkLogView({
             onClick={() => void loadEarlierEntries()}
             disabled={loadingEarlier}
           >
-            {loadingEarlier ? 'Loading earlier entries…' : 'Load earlier'}
+            {loadingEarlier ? t('Loading earlier entries…') : t('Load earlier')}
           </button>
         )}
       </main>

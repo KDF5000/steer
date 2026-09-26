@@ -243,8 +243,10 @@ func (s *Server) systemSettings(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updateSystemSettings(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		SystemAgentID *string `json:"systemAgentId"`
-		Language      string  `json:"language"`
+		SystemAgentID     *string `json:"systemAgentId"`
+		InterfaceLanguage string  `json:"interfaceLanguage"`
+		AIOutputLanguage  string  `json:"aiOutputLanguage"`
+		LegacyLanguage    string  `json:"language"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, err)
@@ -258,19 +260,29 @@ func (s *Server) updateSystemSettings(w http.ResponseWriter, r *http.Request) {
 			input.SystemAgentID = &value
 		}
 	}
-	if input.Language == "" {
-		input.Language = "auto"
+	if input.InterfaceLanguage == "" {
+		input.InterfaceLanguage = "auto"
 	}
-	if input.Language != "auto" && input.Language != "zh-CN" && input.Language != "en" {
+	if input.AIOutputLanguage == "" {
+		input.AIOutputLanguage = input.LegacyLanguage
+	}
+	if input.AIOutputLanguage == "" {
+		input.AIOutputLanguage = "auto"
+	}
+	if !supportedLanguage(input.InterfaceLanguage) || !supportedLanguage(input.AIOutputLanguage) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported language"})
 		return
 	}
-	settings, err := s.store.SetWorkspaceSettings(r.Context(), s.workspace(r), input.SystemAgentID, input.Language)
+	settings, err := s.store.SetWorkspaceSettings(r.Context(), s.workspace(r), input.SystemAgentID, input.InterfaceLanguage, input.AIOutputLanguage)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, settings)
+}
+
+func supportedLanguage(language string) bool {
+	return language == "auto" || language == "zh-CN" || language == "en"
 }
 
 func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
@@ -815,7 +827,7 @@ func (s *Server) submitSystemAgentRun(ctx context.Context, workspaceID, purpose,
 	if settings.SystemAgentID == nil {
 		return relay.Run{}, errSystemAgentNotConfigured
 	}
-	switch settings.Language {
+	switch settings.AIOutputLanguage {
 	case "zh-CN":
 		prompt += "\n\nWrite all user-visible text in Simplified Chinese, including every heading and bullet label. Do not mix in English except for proper nouns, product names, code identifiers, or source text that should remain unchanged."
 	case "en":

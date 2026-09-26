@@ -83,8 +83,8 @@ func TestConversationWorkflowHTTP(t *testing.T) {
 	json.Unmarshal(call("POST", "/agents", `{"name":"Executor","runtimeProvider":"test"}`, 201).Body.Bytes(), &agent)
 	var reviewer store.Agent
 	json.Unmarshal(call("POST", "/agents", `{"name":"Reviewer","runtimeProvider":"test"}`, 201).Body.Bytes(), &reviewer)
-	settingsResponse := call("PUT", "/system/settings", fmt.Sprintf(`{"systemAgentId":%q,"language":"zh-CN"}`, reviewer.ID), 200)
-	if !strings.Contains(settingsResponse.Body.String(), `"language":"zh-CN"`) {
+	settingsResponse := call("PUT", "/system/settings", fmt.Sprintf(`{"systemAgentId":%q,"interfaceLanguage":"en","aiOutputLanguage":"zh-CN"}`, reviewer.ID), 200)
+	if !strings.Contains(settingsResponse.Body.String(), `"interfaceLanguage":"en"`) || !strings.Contains(settingsResponse.Body.String(), `"aiOutputLanguage":"zh-CN"`) {
 		t.Fatalf("system language was not saved: %s", settingsResponse.Body.String())
 	}
 	var skill store.Skill

@@ -109,6 +109,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { runFileChanges } from '@/lib/review';
+import { setInterfaceLanguage, useI18n } from '@/lib/i18n';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type {
   AgentProfile as AgentItem,
@@ -506,6 +507,7 @@ function SessionNavigationList({
 }
 
 export default function Fusion() {
+  const { t } = useI18n();
   const [authReady, setAuthReady] = useState(false);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [workspaceList, setWorkspaceList] = useState<WorkspaceRecord[]>([]);
@@ -794,6 +796,7 @@ export default function Fusion() {
     setDocumentList(data.documents || []);
     setAgentSkillAssignments(data.agentSkills || {});
     setWorkspaceSettings(data.settings || null);
+    setInterfaceLanguage(data.settings?.interfaceLanguage || 'auto');
     setChatSessions(data.sessions || []);
     setExpandedSessionGroups(new Set());
     setExpandedSessionLists(new Set());
@@ -1713,7 +1716,7 @@ export default function Fusion() {
   );
 
   if (!authReady) {
-    return <div className="ws-auth-loading">Loading Steer…</div>;
+    return <div className="ws-auth-loading">{t('Loading Steer…')}</div>;
   }
 
   if (!authUser) {
@@ -1749,14 +1752,14 @@ export default function Fusion() {
                 <button
                   className="ws-workspace-switcher"
                   type="button"
-                  aria-label="Switch workspace"
+                  aria-label={t('Switch workspace')}
                 />
               }
             >
               <span className="ws-logo">S</span>
               <span>
                 <strong>Steer</strong>
-                <small>{currentWorkspace?.name || 'Workspace'}</small>
+                <small>{currentWorkspace?.name || t('Workspace')}</small>
               </span>
               <ChevronDown
                 className="ws-workspace-chevron"
@@ -1787,12 +1790,12 @@ export default function Fusion() {
                 }}
               >
                 <Plus aria-hidden="true" />
-                Create workspace
+                {t('Create workspace')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <button className="ws-search" onClick={() => setSearchOpen(true)}>
-            <Search aria-hidden="true" /> Search <kbd>⌘ K</kbd>
+            <Search aria-hidden="true" /> {t('Search')} <kbd>⌘ K</kbd>
           </button>
         </SidebarHeader>
         <SidebarContent>
@@ -1806,14 +1809,14 @@ export default function Fusion() {
                     onClick={() => startNewChat(projectList[0]?.id || 'none')}
                   >
                     <SquarePen aria-hidden="true" />
-                    <span>New chat</span>
+                    <span>{t('New chat')}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
           <SidebarGroup className="ws-project-navigation">
-            <SidebarGroupLabel>Projects</SidebarGroupLabel>
+            <SidebarGroupLabel>{t('Projects')}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {projectList
@@ -1892,7 +1895,7 @@ export default function Fusion() {
                               }}
                             >
                               <Pencil aria-hidden="true" />
-                              Edit project
+                              {t('Edit project')}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               variant="destructive"
@@ -1900,7 +1903,7 @@ export default function Fusion() {
                               onClick={() => setDeletingProject(project)}
                             >
                               <Trash2 aria-hidden="true" />
-                              Delete project
+                              {t('Delete project')}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -1937,7 +1940,7 @@ export default function Fusion() {
                     </Button>
                     <div className="ws-unassigned-project-label">
                       <Folder aria-hidden="true" />
-                      <span>No project</span>
+                      <span>{t('No project')}</span>
                     </div>
                     {expandedSessionGroups.has(noProjectSessionGroup) && (
                       <SessionNavigationList
@@ -1964,14 +1967,14 @@ export default function Fusion() {
                     }}
                   >
                     <Plus aria-hidden="true" />
-                    <span>Add project</span>
+                    <span>{t('Add project')}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
           <SidebarGroup>
-            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+            <SidebarGroupLabel>{t('Workspace')}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -1980,7 +1983,7 @@ export default function Fusion() {
                     onClick={() => setView('assets')}
                   >
                     <Library aria-hidden="true" />
-                    <span>Assets</span>
+                    <span>{t('Assets')}</span>
                   </SidebarMenuButton>
                   <SidebarMenuBadge>
                     {skillList.length + documentList.length}
@@ -1992,7 +1995,7 @@ export default function Fusion() {
                     onClick={() => setView('notes')}
                   >
                     <NotebookPen aria-hidden="true" />
-                    <span>Work log</span>
+                    <span>{t('Work log')}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
@@ -2001,7 +2004,7 @@ export default function Fusion() {
                     onClick={() => setView('artifacts')}
                   >
                     <FileText aria-hidden="true" />
-                    <span>Artifacts</span>
+                    <span>{t('Artifacts')}</span>
                   </SidebarMenuButton>
                   <SidebarMenuBadge>{artifactList.length}</SidebarMenuBadge>
                 </SidebarMenuItem>
@@ -2009,7 +2012,7 @@ export default function Fusion() {
             </SidebarGroupContent>
           </SidebarGroup>
           <SidebarGroup>
-            <SidebarGroupLabel>System</SidebarGroupLabel>
+            <SidebarGroupLabel>{t('System')}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -2018,7 +2021,7 @@ export default function Fusion() {
                     onClick={() => setView('settings')}
                   >
                     <Settings aria-hidden="true" />
-                    <span>Settings</span>
+                    <span>{t('Settings')}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
@@ -2030,7 +2033,7 @@ export default function Fusion() {
                     }}
                   >
                     <Bot aria-hidden="true" />
-                    <span>Agents</span>
+                    <span>{t('Agents')}</span>
                   </SidebarMenuButton>
                   <SidebarMenuBadge>{agentList.length}</SidebarMenuBadge>
                 </SidebarMenuItem>
@@ -2043,7 +2046,7 @@ export default function Fusion() {
                     }}
                   >
                     <Server aria-hidden="true" />
-                    <span>Runtimes</span>
+                    <span>{t('Runtimes')}</span>
                   </SidebarMenuButton>
                   <SidebarMenuBadge>{runtimeRows.length}</SidebarMenuBadge>
                 </SidebarMenuItem>
@@ -2058,7 +2061,7 @@ export default function Fusion() {
                 <button
                   className="ws-account-menu"
                   type="button"
-                  aria-label="Account menu"
+                  aria-label={t('Account menu')}
                 />
               }
             >
@@ -2078,7 +2081,7 @@ export default function Fusion() {
             >
               <DropdownMenuItem onClick={() => void logout()}>
                 <LogOut aria-hidden="true" />
-                Sign out
+                {t('Sign out')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -2096,16 +2099,16 @@ export default function Fusion() {
             <SidebarTrigger aria-label="Toggle sidebar" />
             <span>
               {view === 'artifacts'
-                ? 'Artifacts'
+                ? t('Artifacts')
                 : view === 'assets'
-                  ? 'Assets'
+                  ? t('Assets')
                   : view === 'notes'
-                    ? 'Work log'
+                    ? t('Work log')
                     : view === 'settings'
-                      ? 'Settings'
+                      ? t('Settings')
                       : agentTab === 'agents'
-                        ? 'Agents'
-                        : 'Runtimes'}
+                        ? t('Agents')
+                        : t('Runtimes')}
             </span>
           </header>
         )}
@@ -2114,14 +2117,16 @@ export default function Fusion() {
             {loadError ? (
               <div role="alert" className="ws-load-error">
                 <AlertCircle />
-                <h1>Workspace unavailable</h1>
+                <h1>{t('Workspace unavailable')}</h1>
                 <p>{loadError}</p>
                 <Button onClick={() => window.location.reload()}>
-                  Try again
+                  {t('Try again')}
                 </Button>
               </div>
             ) : (
-              <output className="ws-content-state">Loading workspace…</output>
+              <output className="ws-content-state">
+                {t('Loading workspace…')}
+              </output>
             )}
           </div>
         ) : view === 'chat' ? (
@@ -2258,14 +2263,15 @@ export default function Fusion() {
 
       <Dialog open={workspaceDialog} onOpenChange={setWorkspaceDialog}>
         <DialogContent className="ws-workspace-dialog">
-          <DialogTitle>Create workspace</DialogTitle>
+          <DialogTitle>{t('Create workspace')}</DialogTitle>
           <DialogDescription>
-            Projects, conversations, Agents, and Runtimes stay isolated inside
-            this workspace.
+            {t(
+              'Projects, conversations, Agents, and Runtimes stay isolated inside this workspace.',
+            )}
           </DialogDescription>
           <form onSubmit={createWorkspace}>
             <label>
-              Name
+              {t('Name')}
               <input
                 name="name"
                 autoComplete="off"
@@ -2281,10 +2287,10 @@ export default function Fusion() {
             )}
             <div className="ws-form-actions">
               <button type="button" onClick={() => setWorkspaceDialog(false)}>
-                Cancel
+                {t('Cancel')}
               </button>
               <button type="submit" disabled={creatingWorkspace}>
-                {creatingWorkspace ? 'Creating…' : 'Create workspace'}
+                {creatingWorkspace ? t('Creating…') : t('Create workspace')}
               </button>
             </div>
           </form>
@@ -2356,7 +2362,9 @@ export default function Fusion() {
       >
         <AlertDialogContent className="ws-delete-conversation-dialog">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this conversation?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('Delete this conversation?')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {deletingSession?.id === chatSession && chatWorking
                 ? 'Stop the current run before deleting this conversation.'
@@ -2365,7 +2373,7 @@ export default function Fusion() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deletingConversation}>
-              Cancel
+              {t('Cancel')}
             </AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
@@ -2378,7 +2386,7 @@ export default function Fusion() {
                 void deleteSelectedSession();
               }}
             >
-              {deletingConversation ? 'Deleting…' : 'Delete'}
+              {deletingConversation ? t('Deleting…') : t('Delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2445,6 +2453,7 @@ function AuthScreen({
   onMode: (mode: 'login' | 'register') => void;
   onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void;
 }) {
+  const { t } = useI18n();
   return (
     <main className="ws-auth-shell">
       <section className="ws-auth-card">
@@ -2452,21 +2461,23 @@ function AuthScreen({
           <span className="ws-logo">S</span>
           <div>
             <strong>Steer</strong>
-            <small>Agent workspace</small>
+            <small>{t('Agent workspace')}</small>
           </div>
         </div>
         <div className="ws-auth-heading">
-          <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
+          <h1>
+            {mode === 'login' ? t('Welcome back') : t('Create your account')}
+          </h1>
           <p>
             {mode === 'login'
-              ? 'Sign in to open your workspaces.'
-              : 'Your first private workspace will be ready immediately.'}
+              ? t('Sign in to open your workspaces.')
+              : t('Your first private workspace will be ready immediately.')}
           </p>
         </div>
         <form onSubmit={onSubmit}>
           {mode === 'register' && (
             <label>
-              Name
+              {t('Display name')}
               <input
                 name="displayName"
                 autoComplete="name"
@@ -2476,7 +2487,7 @@ function AuthScreen({
             </label>
           )}
           <label>
-            Email
+            {t('Email')}
             <input
               name="email"
               type="email"
@@ -2486,7 +2497,7 @@ function AuthScreen({
             />
           </label>
           <label>
-            Password
+            {t('Password')}
             <input
               name="password"
               type="password"
@@ -2509,19 +2520,21 @@ function AuthScreen({
             disabled={submitting}
           >
             {submitting
-              ? 'Please wait…'
+              ? t('Please wait…')
               : mode === 'login'
-                ? 'Sign in'
-                : 'Create account'}
+                ? t('Sign in')
+                : t('Create account')}
           </button>
         </form>
         <p className="ws-auth-switch">
-          {mode === 'login' ? 'New to Steer?' : 'Already have an account?'}
+          {mode === 'login'
+            ? t('New to Steer?')
+            : t('Already have an account?')}
           <button
             type="button"
             onClick={() => onMode(mode === 'login' ? 'register' : 'login')}
           >
-            {mode === 'login' ? 'Create an account' : 'Sign in'}
+            {mode === 'login' ? t('Create an account') : t('Sign in')}
           </button>
         </p>
       </section>
@@ -2584,6 +2597,7 @@ function ChatView({
   onArtifact: (id: string) => void;
   onToggleSidebar: () => void;
 }) {
+  const { t } = useI18n();
   const hasMessages = messages.length > 0;
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewWidth, setReviewWidth] = useState(() => {
@@ -2689,12 +2703,12 @@ function ChatView({
         firstUserMessage.attachments?.[0]?.name ||
         'Image'
       ).slice(0, 72)
-    : sessionTitle || 'New chat';
+    : sessionTitle || t('New chat');
   const composerPreview = images.find(
     (image) => image.id === composerPreviewID,
   );
   const projectLabel =
-    selectedProject?.workspaceSource || 'No project selected';
+    selectedProject?.workspaceSource || t('No project selected');
   const scrollArea = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const imageDragDepth = useRef(0);
@@ -2860,8 +2874,8 @@ function ChatView({
       <section className="ws-chat-page is-empty">
         <Empty
           icon={<Bot />}
-          title="Create an Agent to start"
-          text="Connect a Runtime through Relay, then create an Agent."
+          title={t('Create an Agent to start')}
+          text={t('Connect a Runtime through Relay, then create an Agent.')}
         />
       </section>
     );
@@ -2880,7 +2894,7 @@ function ChatView({
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label="Toggle sidebar"
+              aria-label={t('Toggle sidebar')}
               onClick={onToggleSidebar}
             >
               <PanelLeft aria-hidden="true" />
@@ -2922,7 +2936,7 @@ function ChatView({
               variant="ghost"
               size="icon"
               className="ws-chat-review-trigger"
-              aria-label="Open review panel"
+              aria-label={t('Open review panel')}
               aria-expanded={reviewOpen}
               onClick={() => {
                 setReviewOpen((open) => !open);
@@ -2966,12 +2980,12 @@ function ChatView({
                 <span />
                 <span />
                 <span />
-                Loading conversation…
+                {t('Loading conversation…')}
               </output>
             )}
             {!sessionLoading && !hasMessages && (
               <div className="ws-chat-welcome">
-                <h1>What would you like to work on?</h1>
+                <h1>{t('What would you like to work on?')}</h1>
                 <p>
                   {selectedProject
                     ? `Work with ${agent.name} directly in ${selectedProject.name}. Relay runs on the machine where this project path exists.`
@@ -3445,7 +3459,7 @@ function ChatView({
                     onSend();
                   }
                 }}
-                placeholder="Ask a question or describe a task…"
+                placeholder={t('Ask a question or describe a task…')}
               />
               <footer className="ws-chatbox-footer">
                 <div className="ws-chatbox-context">
@@ -3456,7 +3470,7 @@ function ChatView({
                   >
                     <SelectTrigger
                       className="ws-composer-agent"
-                      aria-label="Select Agent"
+                      aria-label={t('Select Agent')}
                       title={agent.name}
                     >
                       <span className="ws-agent-avatar" aria-hidden="true">
@@ -3483,12 +3497,16 @@ function ChatView({
                             disabled={runtimeMismatch}
                             title={
                               runtimeMismatch
-                                ? 'This conversation is pinned to another Runtime'
+                                ? t(
+                                    'This conversation is pinned to another Runtime',
+                                  )
                                 : undefined
                             }
                           >
                             {item.name}
-                            {runtimeMismatch ? ' · Different Runtime' : ''}
+                            {runtimeMismatch
+                              ? ` · ${t('Different Runtime')}`
+                              : ''}
                           </SelectItem>
                         );
                       })}
@@ -3501,21 +3519,21 @@ function ChatView({
                   >
                     <SelectTrigger
                       className="ws-composer-project"
-                      aria-label="Select Project"
+                      aria-label={t('Select Project')}
                       title={projectLabel}
                     >
                       <Folder aria-hidden="true" />
                       <span>
                         {selectedProject
                           ? `${selectedProject.name}${selectedProject.deletedAt ? ' (deleted)' : ''}`
-                          : 'Select project'}
+                          : t('Select project')}
                       </span>
                     </SelectTrigger>
                     <SelectContent
                       className="ws-select-popup"
                       alignItemWithTrigger={false}
                     >
-                      <SelectItem value="none">No project</SelectItem>
+                      <SelectItem value="none">{t('No project')}</SelectItem>
                       {projects
                         .filter((item) => !item.deletedAt)
                         .map((item) => (
@@ -3532,14 +3550,16 @@ function ChatView({
                       onClick={onAddProject}
                     >
                       <Plus aria-hidden="true" />
-                      Add project
+                      {t('Add project')}
                     </button>
                   )}
                 </div>
                 <button
                   className="ws-chat-send"
                   type={working ? 'button' : 'submit'}
-                  aria-label={working ? 'Stop generating' : 'Send message'}
+                  aria-label={
+                    working ? t('Stop generating') : t('Send message')
+                  }
                   disabled={!working && !input.trim() && images.length === 0}
                   onClick={() => working && onStop()}
                 >
@@ -4909,15 +4929,20 @@ function AgentsView({
   onCapacity: (nodeID: string, capacity: number) => Promise<void>;
   onChat: (id: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="ws-page">
       <PageIntro
-        eyebrow="SYSTEM"
-        title={tab === 'agents' ? 'Agents' : 'Runtimes'}
+        eyebrow={t('System').toUpperCase()}
+        title={tab === 'agents' ? t('Agents') : t('Runtimes')}
         description={
           tab === 'agents'
-            ? 'Configure reusable roles, models, and Runtime scheduling preferences.'
-            : 'View execution nodes, Runtime versions, and capacity managed by Relay.'
+            ? t(
+                'Configure reusable roles, models, and Runtime scheduling preferences.',
+              )
+            : t(
+                'View execution nodes, Runtime versions, and capacity managed by Relay.',
+              )
         }
         action={
           <button
@@ -4926,25 +4951,27 @@ function AgentsView({
             onClick={tab === 'agents' ? onCreate : onAddRuntime}
           >
             <Plus />
-            {tab === 'agents' ? 'New Agent' : 'Add Runtime'}
+            {tab === 'agents' ? t('New Agent') : t('Add Runtime')}
           </button>
         }
       />
       <Tabs value={tab} onValueChange={(value) => onTab(String(value))}>
         <TabsList variant="line" className="ws-system-tabs">
-          <TabsTrigger value="agents">Agents · {agents.length}</TabsTrigger>
+          <TabsTrigger value="agents">
+            {t('Agents')} · {agents.length}
+          </TabsTrigger>
           <TabsTrigger value="runtimes">
-            Runtime nodes · {runtimes.length}
+            {t('Runtime nodes')} · {runtimes.length}
           </TabsTrigger>
         </TabsList>
       </Tabs>
       {tab === 'agents' ? (
         <div className="ws-agents-table">
           <div className="ws-table-head">
-            <span>Agent</span>
-            <span>Runtime</span>
-            <span>Model</span>
-            <span>Status</span>
+            <span>{t('Agent')}</span>
+            <span>{t('Runtime')}</span>
+            <span>{t('Model')}</span>
+            <span>{t('Status')}</span>
             <span />
           </div>
           {agents.map((agent) => (
@@ -4961,7 +4988,7 @@ function AgentsView({
                 {agent.state}
               </span>
               <button type="button" onClick={() => onChat(agent.id)}>
-                Chat
+                {t('Chat')}
               </button>
             </div>
           ))}
@@ -4969,18 +4996,18 @@ function AgentsView({
       ) : runtimes.length ? (
         <div className="ws-runtime-table">
           <div className="ws-table-head">
-            <span>Node</span>
-            <span>Location</span>
-            <span>Runtime environments</span>
-            <span>Load</span>
-            <span>Concurrency</span>
+            <span>{t('Node')}</span>
+            <span>{t('Location')}</span>
+            <span>{t('Runtime environments')}</span>
+            <span>{t('Load')}</span>
+            <span>{t('Concurrency')}</span>
           </div>
           {runtimes.map(([node, location]) => (
             <div key={node.id}>
               <Server />
               <span>
                 <strong>{node.id}</strong>
-                <small>Online · heartbeat just now</small>
+                <small>{t('Online · heartbeat just now')}</small>
               </span>
               <span>{location}</span>
               <span className="ws-runtime-environments">
@@ -4988,7 +5015,7 @@ function AgentsView({
                   <span className="ws-runtime-environment" key={runtime.id}>
                     <strong>{runtime.provider}</strong>
                     <i />
-                    <small>{runtime.version || 'Version unavailable'}</small>
+                    <small>{runtime.version || t('Version unavailable')}</small>
                   </span>
                 ))}
               </span>
@@ -5002,18 +5029,19 @@ function AgentsView({
       ) : (
         <Empty
           icon={<Server />}
-          title="No Runtime instances"
+          title={t('No Runtime instances')}
           text={
             relayError ||
-            'Start Relay Server and connect at least one Relay Node.'
+            t('Start Relay Server and connect at least one Relay Node.')
           }
         />
       )}
       <p className="ws-system-note">
         <Bot />
-        Relay {relayConnected ? 'connected' : 'not connected'}. Agents define
-        reusable behavior; Runtimes are execution processes on local or remote
-        machines.
+        {relayConnected ? t('Relay connected') : t('Relay not connected')}.{' '}
+        {t(
+          'Agents define reusable behavior; Runtimes are execution processes on local or remote machines.',
+        )}
       </p>
     </div>
   );
@@ -5030,13 +5058,16 @@ function SystemSettingsView({
   onSettings: (settings: WorkspaceSettingsRecord) => void;
   onNotice: (message: string) => void;
 }) {
+  const { t } = useI18n();
   const [saving, setSaving] = useState(false);
   const selected = agents.find((agent) => agent.id === settings?.systemAgentId);
-  const language = settings?.language || 'auto';
+  const interfaceLanguage = settings?.interfaceLanguage || 'auto';
+  const aiOutputLanguage = settings?.aiOutputLanguage || 'auto';
 
   const update = async (next: {
     systemAgentId?: string | null;
-    language?: WorkspaceSettingsRecord['language'];
+    interfaceLanguage?: WorkspaceSettingsRecord['interfaceLanguage'];
+    aiOutputLanguage?: WorkspaceSettingsRecord['aiOutputLanguage'];
   }) => {
     if (saving) return;
     setSaving(true);
@@ -5046,11 +5077,15 @@ function SystemSettingsView({
           next.systemAgentId === undefined
             ? settings?.systemAgentId || null
             : next.systemAgentId,
-        language: next.language || language,
+        interfaceLanguage: next.interfaceLanguage || interfaceLanguage,
+        aiOutputLanguage: next.aiOutputLanguage || aiOutputLanguage,
       });
       onSettings(saved);
-      onNotice('Settings updated.');
+      if (next.interfaceLanguage) setInterfaceLanguage(saved.interfaceLanguage);
+      onNotice(t('Settings updated.'));
     } catch (error) {
+      if (next.interfaceLanguage)
+        setInterfaceLanguage(settings?.interfaceLanguage || 'auto');
       onNotice(
         error instanceof Error ? error.message : 'Could not update settings.',
       );
@@ -5062,62 +5097,104 @@ function SystemSettingsView({
   return (
     <div className="ws-page ws-settings-page">
       <PageIntro
-        eyebrow="SYSTEM"
-        title="Settings"
-        description="Manage how Steer works across this workspace."
+        eyebrow={t('System').toUpperCase()}
+        title={t('Settings')}
+        description={t('Manage how Steer works across this workspace.')}
         action={null}
       />
       <section className="ws-settings-group">
         <div className="ws-settings-heading">
-          <h2>General</h2>
-          <p>Basic preferences for Steer.</p>
+          <h2>{t('General')}</h2>
+          <p>{t('Basic preferences for Steer.')}</p>
         </div>
         <div className="ws-settings-row">
           <div className="ws-settings-copy">
             <label htmlFor="interface-language-select">
-              AI output language
+              {t('Interface language')}
             </label>
-            <p>Language used by the System Agent for generated summaries.</p>
+            <p>{t('Language used throughout the Steer interface.')}</p>
           </div>
           <Select
-            value={language}
-            onValueChange={(value) =>
-              void update({
-                language: String(value) as WorkspaceSettingsRecord['language'],
-              })
-            }
+            value={interfaceLanguage}
+            onValueChange={(value) => {
+              const language = String(
+                value,
+              ) as WorkspaceSettingsRecord['interfaceLanguage'];
+              setInterfaceLanguage(language);
+              void update({ interfaceLanguage: language });
+            }}
             disabled={saving}
           >
             <SelectTrigger
               id="interface-language-select"
               className="ws-settings-select"
-              aria-label="AI output language"
+              aria-label={t('Interface language')}
             >
               <span>
-                {language === 'zh-CN'
-                  ? '简体中文'
-                  : language === 'en'
-                    ? 'English'
-                    : 'System default'}
+                {interfaceLanguage === 'zh-CN'
+                  ? t('Simplified Chinese')
+                  : interfaceLanguage === 'en'
+                    ? t('English')
+                    : t('System default')}
               </span>
             </SelectTrigger>
             <SelectContent className="ws-select-popup">
-              <SelectItem value="auto">System default</SelectItem>
-              <SelectItem value="zh-CN">简体中文</SelectItem>
-              <SelectItem value="en">English</SelectItem>
+              <SelectItem value="auto">{t('System default')}</SelectItem>
+              <SelectItem value="zh-CN">{t('Simplified Chinese')}</SelectItem>
+              <SelectItem value="en">{t('English')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="ws-settings-row">
+          <div className="ws-settings-copy">
+            <label htmlFor="ai-output-language-select">
+              {t('AI output language')}
+            </label>
+            <p>
+              {t('Language used by the System Agent for generated summaries.')}
+            </p>
+          </div>
+          <Select
+            value={aiOutputLanguage}
+            onValueChange={(value) =>
+              void update({
+                aiOutputLanguage: String(
+                  value,
+                ) as WorkspaceSettingsRecord['aiOutputLanguage'],
+              })
+            }
+            disabled={saving}
+          >
+            <SelectTrigger
+              id="ai-output-language-select"
+              className="ws-settings-select"
+              aria-label={t('AI output language')}
+            >
+              <span>
+                {aiOutputLanguage === 'zh-CN'
+                  ? t('Simplified Chinese')
+                  : aiOutputLanguage === 'en'
+                    ? t('English')
+                    : t('System default')}
+              </span>
+            </SelectTrigger>
+            <SelectContent className="ws-select-popup">
+              <SelectItem value="auto">{t('System default')}</SelectItem>
+              <SelectItem value="zh-CN">{t('Simplified Chinese')}</SelectItem>
+              <SelectItem value="en">{t('English')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </section>
       <section className="ws-settings-group">
         <div className="ws-settings-heading">
-          <h2>AI &amp; automation</h2>
-          <p>Choose how Steer handles workspace AI tasks.</p>
+          <h2>{t('AI & automation')}</h2>
+          <p>{t('Choose how Steer handles workspace AI tasks.')}</p>
         </div>
         <div className="ws-settings-row">
           <div className="ws-settings-copy">
-            <label htmlFor="system-agent-select">System Agent</label>
-            <p>Used for work log summaries and future AI features.</p>
+            <label htmlFor="system-agent-select">{t('System Agent')}</label>
+            <p>{t('Used for work log summaries and future AI features.')}</p>
           </div>
           <Select
             value={settings?.systemAgentId || 'none'}
@@ -5131,15 +5208,17 @@ function SystemSettingsView({
             <SelectTrigger
               id="system-agent-select"
               className="ws-settings-select"
-              aria-label="System Agent"
+              aria-label={t('System Agent')}
             >
               <span>
                 {selected?.name ||
-                  (agents.length ? 'Not configured' : 'No agents available')}
+                  (agents.length
+                    ? t('Not configured')
+                    : t('No agents available'))}
               </span>
             </SelectTrigger>
             <SelectContent className="ws-select-popup">
-              <SelectItem value="none">Not configured</SelectItem>
+              <SelectItem value="none">{t('Not configured')}</SelectItem>
               {agents.map((agent) => (
                 <SelectItem key={agent.id} value={agent.id}>
                   {agent.name}
@@ -5628,6 +5707,7 @@ function RuntimeDialog({
   onSelect: (runtimeIDs: string[]) => void;
   onClaim: () => void;
 }) {
+  const { t } = useI18n();
   const [commandCopied, setCommandCopied] = useState(false);
   const command = `curl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh | RELAY_NODE_TOKEN='YOUR_NODE_TOKEN' sh -s -- --server ${publicURL || 'https://relay.example.com'} --install-service`;
 
@@ -5649,10 +5729,11 @@ function RuntimeDialog({
   return (
     <Dialog open={open} onOpenChange={onOpen}>
       <DialogContent className="ws-runtime-dialog">
-        <DialogTitle>Add Runtime</DialogTitle>
+        <DialogTitle>{t('Add Runtime')}</DialogTitle>
         <DialogDescription>
-          Connect a local or remote machine to Relay. Installed Runtime CLIs are
-          discovered automatically.
+          {t(
+            'Connect a local or remote machine to Relay. Installed Runtime CLIs are discovered automatically.',
+          )}
         </DialogDescription>
         <div className="ws-runtime-onboarding">
           <div
@@ -5661,15 +5742,15 @@ function RuntimeDialog({
             <span className="ws-runtime-status-dot" />
             <div>
               <strong>
-                {connected ? 'Relay connected' : 'Relay not connected'}
+                {connected ? t('Relay connected') : t('Relay not connected')}
               </strong>
-              <small>{error || 'Steer Server can reach Relay.'}</small>
+              <small>{error || t('Steer Server can reach Relay.')}</small>
             </div>
           </div>
           <section className="ws-runtime-step">
             <span>1</span>
             <div>
-              <h3>Public Relay address</h3>
+              <h3>{t('Public Relay address')}</h3>
               <input
                 value={publicURL}
                 onChange={(event) => onURL(event.target.value)}
@@ -5681,10 +5762,11 @@ function RuntimeDialog({
           <section className="ws-runtime-step">
             <span>2</span>
             <div>
-              <h3>Install Relay Node</h3>
+              <h3>{t('Install Relay Node')}</h3>
               <p>
-                Run this on the machine where Codex, Trae, or another Runtime is
-                installed.
+                {t(
+                  'Run this on the machine where Codex, Trae, or another Runtime is installed.',
+                )}
               </p>
               <div className="ws-runtime-command">
                 <pre>
@@ -5694,10 +5776,10 @@ function RuntimeDialog({
                   type="button"
                   aria-label={
                     commandCopied
-                      ? 'Relay Node install command copied'
-                      : 'Copy Relay Node install command'
+                      ? t('Relay Node install command copied')
+                      : t('Copy Relay Node install command')
                   }
-                  title={commandCopied ? 'Copied' : 'Copy command'}
+                  title={commandCopied ? t('Copied') : t('Copy command')}
                   className={commandCopied ? 'is-copied' : undefined}
                   onClick={() => void copyInstallCommand()}
                 >
@@ -5709,7 +5791,7 @@ function RuntimeDialog({
                 target="_blank"
                 rel="noreferrer"
               >
-                Relay deployment guide <ExternalLink />
+                {t('Relay deployment guide')} <ExternalLink />
               </a>
             </div>
           </section>
@@ -5718,17 +5800,17 @@ function RuntimeDialog({
             <div>
               <div className="ws-runtime-discovery-heading">
                 <div>
-                  <h3>Discovered Runtimes</h3>
-                  <p>Select which Runtimes this workspace may use.</p>
+                  <h3>{t('Discovered Runtimes')}</h3>
+                  <p>{t('Select which Runtimes this workspace may use.')}</p>
                 </div>
                 <button
                   type="button"
                   onClick={onRefresh}
                   disabled={discovering || claiming}
-                  aria-label="Refresh discovered Runtimes"
+                  aria-label={t('Refresh discovered Runtimes')}
                 >
                   <RefreshCw className={discovering ? 'is-spinning' : ''} />
-                  {discovering ? 'Refreshing…' : 'Refresh'}
+                  {discovering ? t('Refreshing…') : t('Refresh')}
                 </button>
               </div>
               {discoveryError && (
@@ -5738,8 +5820,9 @@ function RuntimeDialog({
               )}
               {!discovering && !discoveryError && nodes.length === 0 && (
                 <div className="ws-runtime-empty">
-                  No unassigned Runtimes found. Start or restart Relay Node,
-                  then refresh.
+                  {t(
+                    'No unassigned Runtimes found. Start or restart Relay Node, then refresh.',
+                  )}
                 </div>
               )}
               {nodes.length > 0 && (
@@ -5777,7 +5860,7 @@ function RuntimeDialog({
         </div>
         <div className="ws-form-actions ws-runtime-actions">
           <button type="button" onClick={() => onOpen(false)}>
-            Close
+            {t('Close')}
           </button>
           <button
             type="button"
@@ -5785,8 +5868,8 @@ function RuntimeDialog({
             disabled={!selectedRuntimeIDs.length || claiming}
           >
             {claiming
-              ? 'Adding…'
-              : `Add${selectedRuntimeIDs.length ? ` ${selectedRuntimeIDs.length}` : ''} to workspace`}
+              ? t('Adding…')
+              : `${t('Add to workspace')}${selectedRuntimeIDs.length ? ` · ${selectedRuntimeIDs.length}` : ''}`}
           </button>
         </div>
       </DialogContent>

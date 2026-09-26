@@ -42,9 +42,10 @@ type Agent struct {
 }
 
 type WorkspaceSettings struct {
-	WorkspaceID   string  `json:"workspaceId"`
-	SystemAgentID *string `json:"systemAgentId"`
-	Language      string  `json:"language"`
+	WorkspaceID       string  `json:"workspaceId"`
+	SystemAgentID     *string `json:"systemAgentId"`
+	InterfaceLanguage string  `json:"interfaceLanguage"`
+	AIOutputLanguage  string  `json:"aiOutputLanguage"`
 }
 
 type Project struct {
@@ -297,22 +298,22 @@ func (s *Store) CreateAgent(ctx context.Context, workspaceID string, a Agent) (A
 }
 
 func (s *Store) WorkspaceSettings(ctx context.Context, workspaceID string) (WorkspaceSettings, error) {
-	settings := WorkspaceSettings{WorkspaceID: workspaceID, Language: "auto"}
-	err := s.pool.QueryRow(ctx, `SELECT system_agent_id,language FROM workspace_settings WHERE workspace_id=$1`, workspaceID).Scan(&settings.SystemAgentID, &settings.Language)
+	settings := WorkspaceSettings{WorkspaceID: workspaceID, InterfaceLanguage: "auto", AIOutputLanguage: "auto"}
+	err := s.pool.QueryRow(ctx, `SELECT system_agent_id,interface_language,language FROM workspace_settings WHERE workspace_id=$1`, workspaceID).Scan(&settings.SystemAgentID, &settings.InterfaceLanguage, &settings.AIOutputLanguage)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return settings, nil
 	}
 	return settings, err
 }
 
-func (s *Store) SetWorkspaceSettings(ctx context.Context, workspaceID string, agentID *string, language string) (WorkspaceSettings, error) {
+func (s *Store) SetWorkspaceSettings(ctx context.Context, workspaceID string, agentID *string, interfaceLanguage, aiOutputLanguage string) (WorkspaceSettings, error) {
 	if agentID != nil {
 		if _, err := s.Agent(ctx, workspaceID, *agentID); err != nil {
 			return WorkspaceSettings{}, err
 		}
 	}
-	settings := WorkspaceSettings{WorkspaceID: workspaceID, SystemAgentID: agentID, Language: language}
-	err := s.pool.QueryRow(ctx, `INSERT INTO workspace_settings(workspace_id,system_agent_id,language) VALUES($1,$2,$3) ON CONFLICT(workspace_id) DO UPDATE SET system_agent_id=EXCLUDED.system_agent_id,language=EXCLUDED.language,updated_at=now() RETURNING system_agent_id,language`, workspaceID, agentID, language).Scan(&settings.SystemAgentID, &settings.Language)
+	settings := WorkspaceSettings{WorkspaceID: workspaceID, SystemAgentID: agentID, InterfaceLanguage: interfaceLanguage, AIOutputLanguage: aiOutputLanguage}
+	err := s.pool.QueryRow(ctx, `INSERT INTO workspace_settings(workspace_id,system_agent_id,interface_language,language) VALUES($1,$2,$3,$4) ON CONFLICT(workspace_id) DO UPDATE SET system_agent_id=EXCLUDED.system_agent_id,interface_language=EXCLUDED.interface_language,language=EXCLUDED.language,updated_at=now() RETURNING system_agent_id,interface_language,language`, workspaceID, agentID, interfaceLanguage, aiOutputLanguage).Scan(&settings.SystemAgentID, &settings.InterfaceLanguage, &settings.AIOutputLanguage)
 	return settings, err
 }
 
