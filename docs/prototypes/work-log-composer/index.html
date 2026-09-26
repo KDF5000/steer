@@ -1,0 +1,782 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>Steer · 工作日志输入框方案</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #fff;
+      --sidebar: #f9f9f9;
+      --surface: #fff;
+      --subtle: #f7f7f8;
+      --hover: #f0f0f2;
+      --border: #e5e5e7;
+      --border-strong: #d5d5d9;
+      --text: #202124;
+      --secondary: #686970;
+      --tertiary: #92939b;
+      --action: #2f3036;
+      --action-hover: #202126;
+      --accent: #5556cf;
+      --accent-soft: #ececfd;
+      --positive: #27845a;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-width: 320px; min-height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, textarea { color: inherit; font: inherit; }
+    button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, textarea:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+      outline-offset: 2px;
+    }
+    svg {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 auto;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.75;
+    }
+
+    .app {
+      display: grid;
+      min-height: 100dvh;
+      grid-template-columns: 260px minmax(0, 1fr);
+    }
+    .sidebar {
+      position: sticky;
+      top: 0;
+      display: flex;
+      height: 100dvh;
+      min-width: 0;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: var(--sidebar);
+    }
+    .sidebar-head { display: grid; gap: 12px; padding: 14px 10px 8px; }
+    .workspace, .account {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      gap: 10px;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      padding: 3px 5px;
+      text-align: left;
+    }
+    .workspace:hover, .account:hover { background: #ededf0; }
+    .logo {
+      display: grid;
+      width: 31px;
+      height: 31px;
+      flex: 0 0 auto;
+      place-items: center;
+      border-radius: 9px;
+      background: var(--action);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 750;
+    }
+    .workspace-copy, .account-copy {
+      display: flex;
+      min-width: 0;
+      flex: 1;
+      flex-direction: column;
+      line-height: 1.35;
+    }
+    .workspace-copy strong { font-size: 14px; font-weight: 650; }
+    .workspace-copy small, .account-copy small {
+      overflow: hidden;
+      color: var(--tertiary);
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .workspace > svg, .account > svg { width: 14px; height: 14px; color: var(--tertiary); }
+    .search {
+      display: flex;
+      width: 100%;
+      height: 34px;
+      align-items: center;
+      gap: 8px;
+      border: 0;
+      border-radius: 8px;
+      background: #f0f0f0;
+      padding: 0 9px;
+      color: #83848c;
+      text-align: left;
+    }
+    .search:hover { background: #ebebec; }
+    .search kbd { margin-left: auto; color: #a0a1a8; font: 11px inherit; }
+    .sidebar-scroll {
+      min-height: 0;
+      flex: 1;
+      overflow: auto;
+      padding: 3px 8px 8px;
+      scrollbar-width: none;
+    }
+    .sidebar-scroll::-webkit-scrollbar { display: none; }
+    .menu-label {
+      height: 29px;
+      padding: 8px 8px 0;
+      color: #96979e;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .menu { display: grid; gap: 1px; margin: 0; padding: 4px 0; list-style: none; }
+    .nav {
+      display: flex;
+      width: 100%;
+      height: 36px;
+      min-width: 0;
+      align-items: center;
+      gap: 9px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      padding: 0 9px;
+      color: var(--secondary);
+      text-align: left;
+      transition: background-color 120ms ease, color 120ms ease;
+    }
+    .nav:hover { background: #ececec; color: #3d3e43; }
+    .nav.active { background: #e9e9e9; color: var(--text); font-weight: 600; }
+    .nav svg { width: 15px; height: 15px; color: #81828a; }
+    .nav span:first-of-type { min-width: 0; flex: 1; }
+    .count { flex: 0 0 auto !important; color: #9a9ba2; font-size: 12px; }
+    .project {
+      display: flex;
+      align-items: center;
+      padding: 0 9px 0 5px;
+    }
+    .project .chevron {
+      display: grid;
+      width: 26px;
+      height: 26px;
+      place-items: center;
+      border: 0;
+      background: transparent;
+      color: #8d8e95;
+    }
+    .project .chevron svg { width: 13px; height: 13px; }
+    .project .nav { padding-left: 3px; }
+    .sidebar-foot { border-top: 1px solid var(--border); padding: 9px 10px 12px; }
+    .avatar {
+      display: grid;
+      width: 29px;
+      height: 29px;
+      flex: 0 0 auto;
+      place-items: center;
+      border-radius: 8px;
+      background: #e8e8ea;
+      color: #5e6068;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .account-copy strong { color: #52535a; font-size: 12px; font-weight: 600; }
+
+    .main { min-width: 0; padding: 28px 32px 72px; }
+    .page { width: min(100%, 1040px); margin: 0 auto; }
+    .page-header { display: flex; align-items: flex-start; gap: 20px; margin-bottom: 22px; }
+    .page-header > div { flex: 1; }
+    .eyebrow {
+      color: var(--tertiary);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .09em;
+    }
+    h1 { margin: 3px 0 0; font-size: 30px; font-weight: 690; letter-spacing: -.035em; }
+    .page-header p { margin: 4px 0 0; color: var(--secondary); font-size: 12px; }
+    .outline-button, .primary-button, .ai-button, .icon-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border-radius: 8px;
+      transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+    }
+    .outline-button {
+      height: 34px;
+      border: 1px solid var(--border);
+      background: #fff;
+      padding: 0 11px;
+      color: #4f5057;
+      font-size: 12px;
+      font-weight: 570;
+    }
+    .outline-button:hover { border-color: var(--border-strong); background: var(--subtle); }
+    .outline-button svg { width: 14px; height: 14px; }
+    .primary-button {
+      height: 32px;
+      border: 1px solid var(--action);
+      background: var(--action);
+      padding: 0 12px;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 620;
+      box-shadow: 0 1px 2px #0002;
+    }
+    .primary-button:hover { border-color: var(--action-hover); background: var(--action-hover); }
+    .primary-button:disabled { cursor: default; opacity: .45; }
+    .primary-button svg { width: 13px; height: 13px; }
+
+    .chooser {
+      display: flex;
+      width: min(100%, 760px);
+      gap: 4px;
+      margin: 0 auto 18px;
+      border-radius: 11px;
+      background: var(--subtle);
+      padding: 4px;
+    }
+    .chooser button {
+      display: flex;
+      min-width: 0;
+      flex: 1;
+      align-items: center;
+      gap: 9px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      padding: 8px 10px;
+      color: var(--secondary);
+      text-align: left;
+    }
+    .chooser button:hover { color: var(--text); }
+    .chooser button.active {
+      background: #fff;
+      color: var(--text);
+      box-shadow: 0 1px 3px #18181b14;
+    }
+    .choice-id {
+      display: grid;
+      width: 22px;
+      height: 22px;
+      flex: 0 0 auto;
+      place-items: center;
+      border-radius: 7px;
+      background: #ececee;
+      color: #676870;
+      font-size: 10px;
+      font-weight: 720;
+    }
+    .active .choice-id { background: var(--action); color: #fff; }
+    .choice-copy { min-width: 0; }
+    .choice-copy strong, .choice-copy small { display: block; }
+    .choice-copy strong { font-size: 11.5px; font-weight: 640; }
+    .choice-copy small {
+      overflow: hidden;
+      color: var(--tertiary);
+      font-size: 9.5px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .recommended {
+      margin-left: auto;
+      border-radius: 10px;
+      background: #eef5f1;
+      padding: 2px 6px;
+      color: var(--positive);
+      font-size: 9px;
+      font-weight: 650;
+    }
+
+    .feed { width: min(100%, 760px); margin: 0 auto; }
+    .concept { display: none; }
+    .concept.active { display: block; }
+    .concept-note {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin: 0 2px 10px;
+      color: var(--tertiary);
+      font-size: 10px;
+    }
+    .concept-note strong { color: var(--secondary); font-weight: 620; }
+    .concept-note span { margin-left: auto; }
+
+    .composer textarea {
+      display: block;
+      width: 100%;
+      overflow: hidden;
+      resize: none;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .composer textarea::placeholder { color: #9d9ea5; }
+    .composer textarea:focus-visible { outline: none; }
+    .composer-footer { display: flex; min-width: 0; align-items: center; gap: 8px; }
+    .composer-footer > span {
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      color: var(--tertiary);
+      font-size: 9.5px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ai-button {
+      height: 30px;
+      flex: 0 0 auto;
+      border: 0;
+      background: var(--subtle);
+      padding: 0 9px;
+      color: var(--secondary);
+      font-size: 10px;
+      font-weight: 620;
+    }
+    .ai-button:hover { background: var(--hover); color: var(--text); }
+    .ai-button svg { width: 12px; height: 12px; color: var(--accent); }
+
+    /* A — balanced card */
+    .composer-a {
+      overflow: hidden;
+      border: 1px solid var(--border-strong);
+      border-radius: 13px;
+      background: #fff;
+      box-shadow: 0 1px 3px rgb(24 24 27 / 4%);
+      transition: border-color 140ms ease, box-shadow 140ms ease;
+    }
+    .composer-a:focus-within {
+      border-color: #bfc0c8;
+      box-shadow: 0 1px 2px #1a1b1e08, 0 8px 24px #1b1d2d0d;
+    }
+    .composer-a textarea { min-height: 78px; padding: 14px 16px 8px; }
+    .composer-a .composer-footer { padding: 8px 10px 10px; }
+
+    /* B — document canvas */
+    .composer-b {
+      border-bottom: 1px solid var(--border);
+      padding: 4px 2px 12px;
+    }
+    .composer-b .writing-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 10px;
+      color: var(--tertiary);
+      font-size: 10px;
+      font-weight: 620;
+    }
+    .composer-b .writing-label::before {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+      content: "";
+    }
+    .composer-b textarea {
+      min-height: 94px;
+      padding: 0 2px 12px;
+      font-size: 14px;
+      line-height: 1.75;
+    }
+    .composer-b .composer-footer {
+      padding-top: 10px;
+      border-top: 1px solid #f1f1f2;
+    }
+
+    /* C — a true quick-capture row that turns into an editor on intent */
+    .composer-c {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      align-items: start;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--subtle);
+      padding: 0 8px;
+      transition:
+        background-color 140ms ease,
+        border-color 140ms ease,
+        border-radius 140ms ease,
+        box-shadow 140ms ease,
+        padding 140ms ease;
+    }
+    .composer-c .quick-icon {
+      display: grid;
+      width: 26px;
+      height: 46px;
+      place-items: center;
+      color: #85868e;
+      transition: height 160ms ease, color 140ms ease;
+    }
+    .composer-c .quick-icon svg {
+      width: 14px;
+      height: 14px;
+    }
+    .composer-c:focus-within {
+      border-color: var(--border-strong);
+      border-radius: 13px;
+      background: #fff;
+      padding: 0 10px;
+      box-shadow: 0 8px 26px rgb(24 24 27 / 7%);
+    }
+    .composer-c:focus-within .quick-icon, .composer-c.has-content .quick-icon {
+      height: 54px;
+      color: var(--accent);
+    }
+    .composer-c textarea {
+      min-height: 46px;
+      padding: 12px 6px 7px;
+      transition: min-height 160ms ease;
+    }
+    .composer-c:focus-within textarea, .composer-c.has-content textarea {
+      min-height: 96px;
+      padding-top: 15px;
+    }
+    .composer-c .composer-footer {
+      grid-column: 1 / -1;
+      max-height: 0;
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(5px);
+      transition: max-height 160ms ease, opacity 120ms ease, transform 160ms ease, padding 160ms ease;
+    }
+    .composer-c:focus-within .composer-footer, .composer-c.has-content .composer-footer {
+      max-height: 48px;
+      border-top: 1px solid #f0f0f2;
+      padding: 9px 0 10px;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .timeline { margin-top: 34px; }
+    .day-head {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+    .day-head strong { font-size: 14px; font-weight: 650; }
+    .day-head span { color: var(--tertiary); font-size: 11px; }
+    .entries { position: relative; padding-top: 12px; }
+    .entries::before {
+      position: absolute;
+      top: 17px;
+      bottom: 15px;
+      left: 57px;
+      width: 1px;
+      background: #eeeeef;
+      content: "";
+    }
+    .entry {
+      position: relative;
+      display: grid;
+      grid-template-columns: 45px 8px minmax(0, 1fr);
+      align-items: start;
+      gap: 8px;
+      padding: 7px 0;
+    }
+    .entry time { padding-top: 2px; color: var(--tertiary); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .dot {
+      z-index: 1;
+      width: 7px;
+      height: 7px;
+      margin-top: 6px;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, var(--border));
+    }
+    .entry p { margin: 0; color: #38393f; font-size: 13px; font-weight: 500; line-height: 1.65; }
+    .new-entry { animation: enter 180ms ease-out; }
+    @keyframes enter {
+      from { opacity: 0; transform: translateY(-5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .toast {
+      position: fixed;
+      right: 22px;
+      bottom: 22px;
+      transform: translateY(12px);
+      border-radius: 10px;
+      background: var(--action);
+      padding: 9px 12px;
+      color: #fff;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 150ms ease, transform 150ms ease;
+      font-size: 11px;
+      box-shadow: 0 12px 32px #1e203028;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
+    @media (max-width: 860px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .main { padding: 24px 18px 64px; }
+      .chooser { overflow-x: auto; scrollbar-width: none; }
+      .chooser button { min-width: 190px; }
+    }
+    @media (max-width: 600px) {
+      .page-header { align-items: center; }
+      h1 { font-size: 26px; }
+      .page-header p, .eyebrow { display: none; }
+      .concept-note span, .composer-footer > span { display: none; }
+      .ai-button span { display: none; }
+      .ai-button { width: 30px; padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <header class="sidebar-head">
+        <button class="workspace" type="button">
+          <span class="logo">S</span>
+          <span class="workspace-copy"><strong>Steer</strong><small>Personal workspace</small></span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
+        </button>
+        <button class="search" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <span>搜索</span><kbd>⌘ K</kbd>
+        </button>
+      </header>
+
+      <div class="sidebar-scroll">
+        <ul class="menu">
+          <li><button class="nav" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span>新对话</span></button></li>
+        </ul>
+        <div class="menu-label">项目</div>
+        <div class="project">
+          <button class="chevron" type="button" aria-label="展开 Relay"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+          <button class="nav" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h5l2 2h11v10H3Z"/></svg><span>Relay</span><span class="count">main</span></button>
+        </div>
+        <div class="project">
+          <button class="chevron" type="button" aria-label="展开 Steer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+          <button class="nav" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h5l2 2h11v10H3Z"/></svg><span>Steer</span><span class="count">main</span></button>
+        </div>
+        <div class="menu-label">工作区</div>
+        <ul class="menu">
+          <li><button class="nav" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5h16v14Z"/><path d="M8 8h8M8 12h5"/></svg><span>资产</span><span class="count">0</span></button></li>
+          <li><button class="nav active" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h12l2 2v14H5Z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg><span>工作日志</span></button></li>
+          <li><button class="nav" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h10l4 4v14H5Z"/><path d="M15 3v5h5"/></svg><span>产物</span><span class="count">0</span></button></li>
+        </ul>
+        <div class="menu-label">系统</div>
+        <ul class="menu">
+          <li><button class="nav" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1-2-4-2.2 1A7 7 0 0 0 15 6l-.2-2h-5.6L9 6a7 7 0 0 0-1.7 1L5 6l-2 4 2 1a7 7 0 0 0 0 2l-2 1 2 4 2.3-1A7 7 0 0 0 9 18l.2 2h5.6l.2-2a7 7 0 0 0 1.7-1l2.3 1 2-4-2.1-1a7 7 0 0 0 .1-1Z"/></svg><span>设置</span></button></li>
+          <li><button class="nav" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="11" rx="2"/><path d="M9 3h6v4M8 12h.01M16 12h.01"/></svg><span>智能体</span><span class="count">2</span></button></li>
+          <li><button class="nav" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/></svg><span>运行环境</span><span class="count">1</span></button></li>
+        </ul>
+      </div>
+
+      <footer class="sidebar-foot">
+        <button class="account" type="button">
+          <span class="avatar">K</span>
+          <span class="account-copy"><strong>kongdefei</strong><small>kongdefei@example.com</small></span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
+        </button>
+      </footer>
+    </aside>
+
+    <main class="main">
+      <div class="page">
+        <header class="page-header">
+          <div>
+            <span class="eyebrow">工作区</span>
+            <h1>工作日志</h1>
+            <p>将成果、决策、后续行动及其相关对话集中记录。</p>
+          </div>
+          <button class="outline-button" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg>
+            周报
+          </button>
+        </header>
+
+        <nav class="chooser" aria-label="输入框方案">
+          <button class="active" type="button" data-option="a">
+            <span class="choice-id">A</span>
+            <span class="choice-copy"><strong>紧凑卡片</strong><small>平衡、稳定、接近当前</small></span>
+            <span class="recommended">推荐</span>
+          </button>
+          <button type="button" data-option="b">
+            <span class="choice-id">B</span>
+            <span class="choice-copy"><strong>文档式</strong><small>更轻、更像持续书写</small></span>
+          </button>
+          <button type="button" data-option="c">
+            <span class="choice-id">C</span>
+            <span class="choice-copy"><strong>快速记录条</strong><small>单行待命，点击后变编辑器</small></span>
+          </button>
+        </nav>
+
+        <section class="feed">
+          <div class="concept active" data-concept="a">
+            <div class="concept-note"><strong>A · 紧凑自动增高卡片</strong><span>适合高频记录，改动成本最低</span></div>
+            <form class="composer composer-a">
+              <textarea name="work-log-a" autocomplete="off" aria-label="工作日志草稿" rows="3" placeholder="今天推进了什么？记录成果、决策或下一步从哪里继续…"></textarea>
+              <footer class="composer-footer">
+                <button class="ai-button" type="button" data-summary>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.4 4.6L18 9l-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4Z"/><path d="m18 15 .8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8Z"/></svg>
+                  <span>整理今天的智能体活动</span>
+                </button>
+                <span>⌘ Enter 快速添加</span>
+                <button class="primary-button" type="submit">添加到日志</button>
+              </footer>
+            </form>
+          </div>
+
+          <div class="concept" data-concept="b">
+            <div class="concept-note"><strong>B · 无边界文档式</strong><span>弱化“表单感”，突出持续书写</span></div>
+            <form class="composer composer-b">
+              <div class="writing-label">记录今天</div>
+              <textarea name="work-log-b" autocomplete="off" aria-label="工作日志草稿" rows="3" placeholder="从一个结果、一项决定或下一步开始写…"></textarea>
+              <footer class="composer-footer">
+                <button class="ai-button" type="button" data-summary>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.4 4.6L18 9l-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4Z"/><path d="m18 15 .8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8Z"/></svg>
+                  <span>整理智能体活动</span>
+                </button>
+                <span>内容随输入自然向下延展</span>
+                <button class="primary-button" type="submit">记录</button>
+              </footer>
+            </form>
+          </div>
+
+          <div class="concept" data-concept="c">
+            <div class="concept-note"><strong>C · 单行快速记录条</strong><span>点击输入框，观察它变成完整编辑器</span></div>
+            <form class="composer composer-c">
+              <span class="quick-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              </span>
+              <textarea name="work-log-c" autocomplete="off" aria-label="工作日志草稿" rows="1" placeholder="快速记录一项进展…"></textarea>
+              <footer class="composer-footer">
+                <button class="ai-button" type="button" data-summary>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.4 4.6L18 9l-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4Z"/><path d="m18 15 .8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8Z"/></svg>
+                  <span>整理智能体活动</span>
+                </button>
+                <span>点击后展开 · ⌘ Enter 添加</span>
+                <button class="primary-button" type="submit">添加</button>
+              </footer>
+            </form>
+          </div>
+
+          <section class="timeline">
+            <header class="day-head"><strong>Today</strong><span>9 月 26 日周六 · <span data-count>3</span> records</span></header>
+            <div class="entries" data-entries>
+              <article class="entry"><time>10:34</time><span class="dot"></span><p>统一全站按钮语义与颜色体系，普通主操作使用深灰色，紫色仅用于 AI、焦点和选中状态。</p></article>
+              <article class="entry"><time>09:48</time><span class="dot"></span><p>完成工作日志交互巡检，确认输入区应由内容驱动高度，避免内部滚动造成书写割裂。</p></article>
+              <article class="entry"><time>09:15</time><span class="dot"></span><p>整理今天的优先事项，并确认工作日志继续采用高信息密度的时间流布局。</p></article>
+            </div>
+          </section>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const sample =
+      "完成工作日志输入体验优化：输入框根据内容自动增高，不再出现内部滚动条；同时收敛 AI 整理与提交操作的视觉层级。";
+    const toast = document.querySelector(".toast");
+    let toastTimer;
+
+    function notify(message) {
+      toast.textContent = message;
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("show"), 1600);
+    }
+
+    function resizeTextarea(textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = `${textarea.scrollHeight}px`;
+      textarea.closest(".composer")?.classList.toggle("has-content", Boolean(textarea.value.trim()));
+    }
+
+    document.querySelectorAll("textarea").forEach((textarea) => {
+      resizeTextarea(textarea);
+      textarea.addEventListener("input", () => resizeTextarea(textarea));
+      textarea.addEventListener("keydown", (event) => {
+        if (!event.isComposing && (event.metaKey || event.ctrlKey) && event.key === "Enter") {
+          event.preventDefault();
+          textarea.closest("form")?.requestSubmit();
+        }
+      });
+    });
+
+    document.querySelectorAll("[data-option]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const option = button.dataset.option;
+        document.querySelectorAll("[data-option]").forEach((item) => item.classList.toggle("active", item === button));
+        document.querySelectorAll("[data-concept]").forEach((panel) => panel.classList.toggle("active", panel.dataset.concept === option));
+        if (option !== "c") {
+          document.querySelector(`[data-concept="${option}"] textarea`)?.focus();
+        }
+      });
+    });
+
+    document.querySelectorAll("[data-summary]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const textarea = button.closest("form").querySelector("textarea");
+        textarea.value = sample;
+        resizeTextarea(textarea);
+        textarea.focus();
+        notify("已整理今天的智能体活动");
+      });
+    });
+
+    document.querySelectorAll(".composer").forEach((form) => {
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const textarea = form.querySelector("textarea");
+        const value = textarea.value.trim();
+        if (!value) {
+          textarea.focus();
+          return;
+        }
+        const now = new Date();
+        const time = new Intl.DateTimeFormat("zh-CN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).format(now);
+        const article = document.createElement("article");
+        article.className = "entry new-entry";
+        const timeElement = document.createElement("time");
+        timeElement.textContent = time;
+        const dot = document.createElement("span");
+        dot.className = "dot";
+        const content = document.createElement("p");
+        content.textContent = value;
+        article.append(timeElement, dot, content);
+        document.querySelector("[data-entries]").prepend(article);
+        const count = document.querySelector("[data-count]");
+        count.textContent = String(Number(count.textContent) + 1);
+        textarea.value = "";
+        textarea.style.height = "";
+        resizeTextarea(textarea);
+        notify("已添加到今天的工作日志");
+      });
+    });
+  </script>
+</body>
+</html>

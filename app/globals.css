@@ -1,5 +1,10 @@
 @import 'tailwindcss';
 
+:root {
+  --steer-action: #2f3036;
+  --steer-action-hover: #202126;
+}
+
 /* Base UI portals render outside .ws. Define semantic colors globally so
    every menu/dialog gets an opaque surface and a visible keyboard focus. */
 @theme inline {
@@ -9,6 +14,8 @@
   --color-card-foreground: #202124;
   --color-popover: #ffffff;
   --color-popover-foreground: #202124;
+  --color-action: var(--steer-action);
+  --color-action-hover: var(--steer-action-hover);
   --color-primary: #5556cf;
   --color-primary-foreground: #ffffff;
   --color-secondary: #f0f0f2;
@@ -68,7 +75,7 @@
   --muted: #687386;
   --line: #e4e8ef;
   --canvas: #f4f6f9;
-  --blue: #3157d5;
+  --blue: var(--steer-action);
   --blue-soft: #edf2ff;
   --navy: #111827;
 }
@@ -652,10 +659,10 @@ button {
   background: #fff;
 }
 .panel-actions .primary {
-  border: 1px solid #284dc0;
+  border: 1px solid var(--steer-action);
   color: #fff;
   background: var(--blue);
-  box-shadow: 0 5px 14px #3157d52a;
+  box-shadow: 0 2px 6px #0000001a;
 }
 .action-note {
   display: flex;
@@ -775,7 +782,7 @@ button {
 .view-intro > button:not(.ghost-control),
 .open-stream {
   padding: 10px 14px;
-  border: 1px solid #284dc0;
+  border: 1px solid var(--steer-action);
   border-radius: 9px;
   color: #fff;
   background: var(--blue);

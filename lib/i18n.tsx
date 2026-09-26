@@ -23,6 +23,7 @@ const zhCN: Record<string, string> = {
   'Add Runtime': '添加运行环境',
   'Add project': '添加项目',
   'Add to log': '添加到日志',
+  '⌘ / Ctrl + Enter to add': '⌘ / Ctrl + Enter 快速添加',
   'Add to workspace': '添加到工作区',
   'AI & automation': 'AI 与自动化',
   'Agent workspace': '智能体工作台',

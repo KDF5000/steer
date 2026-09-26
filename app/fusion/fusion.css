@@ -12,6 +12,8 @@
   --ws-text: #202124;
   --ws-text-secondary: #686970;
   --ws-text-tertiary: #92939b;
+  --ws-action: var(--steer-action);
+  --ws-action-hover: var(--steer-action-hover);
   --ws-accent: #5556cf;
   --ws-accent-hover: #4849bb;
   --ws-accent-soft: #ececfd;
@@ -1009,11 +1011,18 @@
 }
 
 .ws-skill-card > footer > button {
+  padding: 4px 6px;
   border: 0;
+  border-radius: 6px;
   background: transparent;
-  color: var(--ws-accent);
+  color: var(--ws-text-secondary);
   font-size: 11px;
   font-weight: 620;
+}
+
+.ws-skill-card > footer > button:hover {
+  background: var(--ws-surface-hover);
+  color: var(--ws-text);
 }
 
 .ws-document-links {
@@ -1621,8 +1630,15 @@
 .ws-note-list-empty button {
   border: 0;
   background: transparent;
-  color: var(--ws-accent);
+  color: var(--ws-text-secondary);
   font-size: 11px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ws-note-list-empty button:hover {
+  color: var(--ws-text);
 }
 
 .ws-note-editor {
@@ -2040,12 +2056,15 @@
   margin-bottom: 30px;
   overflow: hidden;
   border: 1px solid var(--ws-border-strong);
-  border-radius: 12px;
+  border-radius: 13px;
   background: var(--ws-surface);
   box-shadow: 0 1px 3px rgb(24 24 27 / 4%);
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 }
 .ws-log-composer:focus-within {
-  border-color: #c8c9d1;
+  border-color: #bfc0c8;
   box-shadow:
     0 1px 2px #1a1b1e08,
     0 8px 24px #1b1d2d0d;
@@ -2053,14 +2072,16 @@
 .ws-log-composer textarea {
   display: block;
   width: 100%;
-  min-height: 104px;
-  resize: vertical;
+  min-height: 78px;
+  overflow: hidden;
+  resize: none;
   border: 0;
   outline: 0;
-  padding: 16px 17px 10px;
+  background: transparent;
+  padding: 14px 16px 8px;
   color: var(--ws-text);
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 .ws-log-composer textarea:focus-visible {
   outline: none;
@@ -2069,7 +2090,7 @@
   display: flex;
   align-items: flex-end;
   gap: 12px;
-  padding: 9px 11px 11px;
+  padding: 8px 10px 10px;
 }
 .ws-log-composer > footer > div {
   display: flex;
@@ -2092,18 +2113,19 @@
   gap: 6px;
   border: 0;
   border-radius: 7px;
-  background: var(--ws-accent-soft);
+  background: var(--ws-surface-subtle);
   padding: 7px 9px;
-  color: #4c4db5;
+  color: var(--ws-text-secondary);
   font-size: 10px;
   font-weight: 620;
 }
 .ws-ai-action:hover {
-  background: #e2e2fb;
+  background: var(--ws-surface-hover);
 }
 .ws-ai-action svg {
   width: 12px;
   height: 12px;
+  color: var(--ws-accent);
 }
 .ws-ai-action:disabled {
   cursor: default;
@@ -2475,8 +2497,11 @@
   font-size: 11px;
 }
 .ws-log-entry-edit button:last-child {
-  background: var(--ws-accent);
+  background: var(--ws-action);
   color: #fff;
+}
+.ws-log-entry-edit button:last-child:hover {
+  background: var(--ws-action-hover);
 }
 .ws-log-empty-day {
   padding: 5px 0 11px 69px;
@@ -2866,14 +2891,15 @@
 .ws-auth-submit {
   height: 42px;
   border-radius: 10px;
-  background: #5753d8;
+  background: var(--ws-action);
   color: #fff;
   font-size: 13px;
   font-weight: 650;
+  box-shadow: 0 1px 2px #0002;
 }
 
 .ws-auth-submit:hover {
-  background: #4945c7;
+  background: var(--ws-action-hover);
 }
 
 .ws-auth-submit:disabled {
@@ -2889,8 +2915,10 @@
 
 .ws-auth-switch button {
   margin-left: 5px;
-  color: #514dd0;
+  color: var(--ws-text);
   font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .ws-main {
@@ -2966,9 +2994,9 @@
   align-items: center;
   gap: 7px;
   padding: 0 14px;
-  border: 1px solid #2f3036;
+  border: 1px solid var(--ws-action);
   border-radius: 9px;
-  background: #2f3036;
+  background: var(--ws-action);
   color: #fff;
   font-size: var(--ws-font-control);
   font-weight: 600;
@@ -2976,7 +3004,7 @@
 }
 
 .ws-primary-button:hover {
-  background: #202126;
+  background: var(--ws-action-hover);
 }
 
 .ws-primary-button svg {
@@ -5653,12 +5681,13 @@ button.ws-chat-response-meta:focus-visible {
   padding: 4px;
   border: 0;
   background: none;
-  color: #595ab7;
+  color: var(--ws-text-secondary);
   font-size: var(--ws-font-caption);
+  font-weight: 600;
 }
 
 .ws-agents-table > div > button:hover {
-  color: #363794;
+  color: var(--ws-text);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -6110,14 +6139,14 @@ button.ws-chat-response-meta:focus-visible {
 
 .ws-form-actions button[type='submit'],
 .ws-runtime-actions button:last-child {
-  border-color: var(--ws-accent);
-  background: var(--ws-accent);
+  border-color: var(--ws-action);
+  background: var(--ws-action);
   color: #fff;
 }
 
 .ws-form-actions button[type='submit']:hover:not(:disabled),
 .ws-runtime-actions button:last-child:hover:not(:disabled) {
-  background: var(--ws-accent-hover);
+  background: var(--ws-action-hover);
 }
 
 .ws-form-actions button:disabled {

@@ -1,6 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState, type SyntheticEvent } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type SyntheticEvent,
+} from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -1300,6 +1307,7 @@ export function WorkLogView({
   const [loadedHistoryDays, setLoadedHistoryDays] = useState(42);
   const [hasEarlierHistory, setHasEarlierHistory] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const draftRef = useRef<HTMLTextAreaElement>(null);
   const [openDays, setOpenDays] = useState(() => new Set([dayKey(new Date())]));
   const today = dayKey(new Date());
   const weekStart = startOfWeek(new Date());
@@ -1312,6 +1320,17 @@ export function WorkLogView({
   const weeklyRunId = weeklyRun?.runId;
   const weeklyRunStatus = weeklyRun?.status;
   const weeklyRunPeriodStart = weeklyRun?.periodStart;
+  useLayoutEffect(() => {
+    const textarea = draftRef.current;
+    if (!textarea) return;
+    if (!draft) {
+      textarea.style.height = '';
+      return;
+    }
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [draft]);
+
   useEffect(() => {
     let stored = false;
     try {
@@ -1959,8 +1978,11 @@ export function WorkLogView({
           }}
         >
           <textarea
+            ref={draftRef}
             aria-label="Work log draft"
+            autoComplete="off"
             disabled={working}
+            name="work-log-draft"
             value={draft}
             onChange={(event) => {
               setDraft(event.target.value);
@@ -1978,7 +2000,7 @@ export function WorkLogView({
             placeholder={t(
               'What moved forward? Record an outcome, a decision, or where to pick up next…',
             )}
-            rows={4}
+            rows={3}
           />
           <footer>
             <div>
@@ -2002,13 +2024,15 @@ export function WorkLogView({
                       ? t('Summary in progress')
                       : t('Summarize today’s Agent activity')}
               </button>
-              {draftActivities.length > 0 && (
+              {draftActivities.length > 0 ? (
                 <span>
                   Based on {draftActivities.length} active{' '}
                   {draftActivities.length === 1
                     ? 'conversation'
                     : 'conversations'}
                 </span>
+              ) : (
+                <span>{t('⌘ / Ctrl + Enter to add')}</span>
               )}
             </div>
             <Button type="submit" disabled={!draft.trim() || working}>
