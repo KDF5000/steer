@@ -5107,83 +5107,87 @@ function SystemSettingsView({
           <h2>{t('General')}</h2>
           <p>{t('Basic preferences for Steer.')}</p>
         </div>
-        <div className="ws-settings-row">
-          <div className="ws-settings-copy">
-            <label htmlFor="interface-language-select">
-              {t('Interface language')}
-            </label>
-            <p>{t('Language used throughout the Steer interface.')}</p>
-          </div>
-          <Select
-            value={interfaceLanguage}
-            onValueChange={(value) => {
-              const language = String(
-                value,
-              ) as WorkspaceSettingsRecord['interfaceLanguage'];
-              setInterfaceLanguage(language);
-              void update({ interfaceLanguage: language });
-            }}
-            disabled={saving}
-          >
-            <SelectTrigger
-              id="interface-language-select"
-              className="ws-settings-select"
-              aria-label={t('Interface language')}
-            >
-              <span>
-                {interfaceLanguage === 'zh-CN'
-                  ? t('Simplified Chinese')
-                  : interfaceLanguage === 'en'
-                    ? t('English')
-                    : t('System default')}
-              </span>
-            </SelectTrigger>
-            <SelectContent className="ws-select-popup">
-              <SelectItem value="auto">{t('System default')}</SelectItem>
-              <SelectItem value="zh-CN">{t('Simplified Chinese')}</SelectItem>
-              <SelectItem value="en">{t('English')}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="ws-settings-row">
-          <div className="ws-settings-copy">
-            <label htmlFor="ai-output-language-select">
-              {t('AI output language')}
-            </label>
-            <p>
-              {t('Language used by the System Agent for generated summaries.')}
-            </p>
-          </div>
-          <Select
-            value={aiOutputLanguage}
-            onValueChange={(value) =>
-              void update({
-                aiOutputLanguage: String(
+        <div className="ws-settings-list">
+          <div className="ws-settings-row">
+            <div className="ws-settings-copy">
+              <label htmlFor="interface-language-select">
+                {t('Interface language')}
+              </label>
+              <p>{t('Language used throughout the Steer interface.')}</p>
+            </div>
+            <Select
+              value={interfaceLanguage}
+              onValueChange={(value) => {
+                const language = String(
                   value,
-                ) as WorkspaceSettingsRecord['aiOutputLanguage'],
-              })
-            }
-            disabled={saving}
-          >
-            <SelectTrigger
-              id="ai-output-language-select"
-              className="ws-settings-select"
-              aria-label={t('AI output language')}
+                ) as WorkspaceSettingsRecord['interfaceLanguage'];
+                setInterfaceLanguage(language);
+                void update({ interfaceLanguage: language });
+              }}
+              disabled={saving}
             >
-              <span>
-                {aiOutputLanguage === 'zh-CN'
-                  ? t('Simplified Chinese')
-                  : aiOutputLanguage === 'en'
-                    ? t('English')
-                    : t('System default')}
-              </span>
-            </SelectTrigger>
-            <SelectContent className="ws-select-popup">
-              <SelectItem value="auto">{t('System default')}</SelectItem>
-              <SelectItem value="zh-CN">{t('Simplified Chinese')}</SelectItem>
-              <SelectItem value="en">{t('English')}</SelectItem>
-            </SelectContent>
-          </Select>
+              <SelectTrigger
+                id="interface-language-select"
+                className="ws-settings-select"
+                aria-label={t('Interface language')}
+              >
+                <span>
+                  {interfaceLanguage === 'zh-CN'
+                    ? t('Simplified Chinese')
+                    : interfaceLanguage === 'en'
+                      ? t('English')
+                      : t('System default')}
+                </span>
+              </SelectTrigger>
+              <SelectContent className="ws-select-popup">
+                <SelectItem value="auto">{t('System default')}</SelectItem>
+                <SelectItem value="zh-CN">{t('Simplified Chinese')}</SelectItem>
+                <SelectItem value="en">{t('English')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="ws-settings-row">
+            <div className="ws-settings-copy">
+              <label htmlFor="ai-output-language-select">
+                {t('AI output language')}
+              </label>
+              <p>
+                {t(
+                  'Language used by the System Agent for generated summaries.',
+                )}
+              </p>
+            </div>
+            <Select
+              value={aiOutputLanguage}
+              onValueChange={(value) =>
+                void update({
+                  aiOutputLanguage: String(
+                    value,
+                  ) as WorkspaceSettingsRecord['aiOutputLanguage'],
+                })
+              }
+              disabled={saving}
+            >
+              <SelectTrigger
+                id="ai-output-language-select"
+                className="ws-settings-select"
+                aria-label={t('AI output language')}
+              >
+                <span>
+                  {aiOutputLanguage === 'zh-CN'
+                    ? t('Simplified Chinese')
+                    : aiOutputLanguage === 'en'
+                      ? t('English')
+                      : t('System default')}
+                </span>
+              </SelectTrigger>
+              <SelectContent className="ws-select-popup">
+                <SelectItem value="auto">{t('System default')}</SelectItem>
+                <SelectItem value="zh-CN">{t('Simplified Chinese')}</SelectItem>
+                <SelectItem value="en">{t('English')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </section>
       <section className="ws-settings-group">
@@ -5191,41 +5195,44 @@ function SystemSettingsView({
           <h2>{t('AI & automation')}</h2>
           <p>{t('Choose how Steer handles workspace AI tasks.')}</p>
         </div>
-        <div className="ws-settings-row">
-          <div className="ws-settings-copy">
-            <label htmlFor="system-agent-select">{t('System Agent')}</label>
-            <p>{t('Used for work log summaries and future AI features.')}</p>
-          </div>
-          <Select
-            value={settings?.systemAgentId || 'none'}
-            onValueChange={(value) =>
-              void update({
-                systemAgentId: String(value) === 'none' ? null : String(value),
-              })
-            }
-            disabled={saving || agents.length === 0}
-          >
-            <SelectTrigger
-              id="system-agent-select"
-              className="ws-settings-select"
-              aria-label={t('System Agent')}
+        <div className="ws-settings-list">
+          <div className="ws-settings-row">
+            <div className="ws-settings-copy">
+              <label htmlFor="system-agent-select">{t('System Agent')}</label>
+              <p>{t('Used for work log summaries and future AI features.')}</p>
+            </div>
+            <Select
+              value={settings?.systemAgentId || 'none'}
+              onValueChange={(value) =>
+                void update({
+                  systemAgentId:
+                    String(value) === 'none' ? null : String(value),
+                })
+              }
+              disabled={saving || agents.length === 0}
             >
-              <span>
-                {selected?.name ||
-                  (agents.length
-                    ? t('Not configured')
-                    : t('No agents available'))}
-              </span>
-            </SelectTrigger>
-            <SelectContent className="ws-select-popup">
-              <SelectItem value="none">{t('Not configured')}</SelectItem>
-              {agents.map((agent) => (
-                <SelectItem key={agent.id} value={agent.id}>
-                  {agent.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              <SelectTrigger
+                id="system-agent-select"
+                className="ws-settings-select"
+                aria-label={t('System Agent')}
+              >
+                <span>
+                  {selected?.name ||
+                    (agents.length
+                      ? t('Not configured')
+                      : t('No agents available'))}
+                </span>
+              </SelectTrigger>
+              <SelectContent className="ws-select-popup">
+                <SelectItem value="none">{t('Not configured')}</SelectItem>
+                {agents.map((agent) => (
+                  <SelectItem key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </section>
     </div>
