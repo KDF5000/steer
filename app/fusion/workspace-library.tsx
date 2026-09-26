@@ -37,6 +37,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   steer,
   type AgentActivityRecord,
+  type ChatSessionRecord,
   type DocumentRecord,
   type NoteRecord,
   type SkillRecord,
@@ -1259,19 +1260,45 @@ async function waitForSystemRun(runId: string) {
   throw new Error('The system Agent is taking too long. Try again shortly.');
 }
 
-export function WorkLogView({ onNotice }: { onNotice: Notice }) {
+export function WorkLogView({
+  onNotice,
+  draftKey,
+  sessions,
+}: {
+  onNotice: Notice;
+  draftKey: string;
+  sessions: ChatSessionRecord[];
+}) {
+  const [restored] = useState(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem(draftKey) || '{}') as {
+        draft?: string;
+        activities?: AgentActivityRecord[];
+        editingID?: string;
+        editingContent?: string;
+      };
+    } catch {
+      return {};
+    }
+  });
   const [entries, setEntries] = useState<WorkLogEntryRecord[]>([]);
   const [summaries, setSummaries] = useState<WorkLogSummaryRecord[]>([]);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(restored.draft || '');
   const [activities, setActivities] = useState<AgentActivityRecord[]>([]);
   const [draftActivities, setDraftActivities] = useState<AgentActivityRecord[]>(
-    [],
+    restored.activities || [],
   );
   const [activityRun, setActivityRun] =
     useState<WorkLogActivityRunRecord | null>(null);
   const [activityResult, setActivityResult] = useState('');
-  const [editingID, setEditingID] = useState('');
-  const [editingContent, setEditingContent] = useState('');
+  const [editingID, setEditingID] = useState(restored.editingID || '');
+  const [editingContent, setEditingContent] = useState(
+    restored.editingContent || '',
+  );
+  const [deleteTarget, setDeleteTarget] = useState<WorkLogEntryRecord | null>(
+    null,
+  );
+  const [collecting, setCollecting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [workingLabel, setWorkingLabel] = useState('');
@@ -1282,6 +1309,30 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
   const today = dayKey(new Date());
   const activityRunId = activityRun?.runId;
   const activityRunStatus = activityRun?.status;
+  useEffect(() => {
+    let stored = false;
+    try {
+      if (draft || editingID)
+        window.localStorage.setItem(
+          draftKey,
+          JSON.stringify({
+            draft,
+            activities: draftActivities,
+            editingID,
+            editingContent,
+          }),
+        );
+      else window.localStorage.removeItem(draftKey);
+      stored = true;
+    } catch {
+      /* Browser storage may be unavailable. Keep the in-memory draft. */
+    }
+    const guard = (event: BeforeUnloadEvent) => {
+      if (!stored && (draft || editingID)) event.preventDefault();
+    };
+    window.addEventListener('beforeunload', guard);
+    return () => window.removeEventListener('beforeunload', guard);
+  }, [draft, draftActivities, draftKey, editingID, editingContent]);
   const activityRange = () => {
     const from = new Date();
     from.setHours(0, 0, 0, 0);
@@ -1399,6 +1450,9 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
       setEntries((current) => [saved, ...current]);
       setDraft('');
       setDraftActivities([]);
+      if (draftActivities.length && activityRun?.status === 'succeeded') {
+        await dismissActivityRun();
+      }
       onNotice('Added to today’s work log.');
     } catch (reason) {
       onNotice(
@@ -1412,9 +1466,11 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
   };
 
   const collectActivity = async () => {
+    if (collecting) return;
     if (activityRun && !['failed', 'cancelled'].includes(activityRun.status))
       return;
     const range = activityRange();
+    setCollecting(true);
     try {
       if (activityRun) {
         await steer.dismissWorkLogActivityRun(activityRun.runId);
@@ -1444,6 +1500,8 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
           ? reason.message
           : 'Could not summarize Agent activity.',
       );
+    } finally {
+      setCollecting(false);
     }
   };
 
@@ -1460,9 +1518,20 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
   };
 
   const editActivityResult = async () => {
-    setDraft(activityResult);
-    setDraftActivities(activities);
-    await dismissActivityRun();
+    setDraft((current) =>
+      current.trim()
+        ? `${current.trim()}\n\n${activityResult}`
+        : activityResult,
+    );
+    setDraftActivities([
+      ...new Map(
+        [...draftActivities, ...activities].map((item) => [
+          item.sessionId,
+          item,
+        ]),
+      ).values(),
+    ]);
+    onNotice('Summary inserted into your draft. Review it before saving.');
   };
 
   const addActivityResult = async () => {
@@ -1487,15 +1556,19 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
   };
 
   const removeEntry = async (entry: WorkLogEntryRecord) => {
-    if (!window.confirm('Delete this work log entry?')) return;
+    if (working) return;
+    setWorking(true);
     try {
       await steer.deleteWorkLogEntry(entry.id);
       setEntries((current) => current.filter((item) => item.id !== entry.id));
+      setDeleteTarget(null);
       onNotice('Work log entry deleted.');
     } catch (reason) {
       onNotice(
         reason instanceof Error ? reason.message : 'Could not delete entry.',
       );
+    } finally {
+      setWorking(false);
     }
   };
 
@@ -1706,8 +1779,8 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
           <span className="ws-eyebrow">WORKSPACE</span>
           <h1>Work log</h1>
           <p>
-            Capture progress as it happens, or draft it from today’s Agent
-            activity.
+            Keep outcomes, decisions, and next steps together with the
+            conversations behind them.
           </p>
         </div>
         <Button variant="outline" onClick={() => setWeekMode(true)}>
@@ -1723,18 +1796,23 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
           }}
         >
           <textarea
+            aria-label="Work log draft"
+            disabled={working}
             value={draft}
             onChange={(event) => {
               setDraft(event.target.value);
-              if (draftActivities.length) setDraftActivities([]);
             }}
             onKeyDown={(event) => {
-              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+              if (
+                !event.nativeEvent.isComposing &&
+                (event.metaKey || event.ctrlKey) &&
+                event.key === 'Enter'
+              ) {
                 event.preventDefault();
                 void addEntry();
               }
             }}
-            placeholder="What did you complete? Add a quick update, or let AI draft one from Agent activity…"
+            placeholder="What moved forward? Record an outcome, a decision, or where to pick up next…"
             rows={4}
           />
           <footer>
@@ -1744,15 +1822,20 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
                 className="ws-ai-action"
                 onClick={() => void collectActivity()}
                 disabled={
-                  !!activityRun &&
-                  !['failed', 'cancelled'].includes(activityRun.status)
+                  collecting ||
+                  (!!activityRun &&
+                    !['failed', 'cancelled'].includes(activityRun.status))
                 }
               >
                 <Sparkles />{' '}
-                {activityRun &&
-                !['failed', 'cancelled'].includes(activityRun.status)
-                  ? 'Summary in progress'
-                  : 'Summarize today’s Agent activity'}
+                {activityRun?.status === 'succeeded'
+                  ? 'Summary ready to review'
+                  : collecting
+                    ? 'Starting summary…'
+                    : activityRun &&
+                        !['failed', 'cancelled'].includes(activityRun.status)
+                      ? 'Summary in progress'
+                      : 'Summarize today’s Agent activity'}
               </button>
               {draftActivities.length > 0 && (
                 <span>
@@ -1777,7 +1860,7 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
               <div>
                 <strong>
                   {activityRun.status === 'succeeded'
-                    ? 'Today’s activity summary is ready'
+                    ? 'Review today’s draft'
                     : activityRun.status === 'failed' ||
                         activityRun.status === 'cancelled'
                       ? 'Could not generate the summary'
@@ -1816,7 +1899,11 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
                           {item.agentName.slice(0, 1)}
                         </span>
                         <p>
-                          <strong>{item.title}</strong>
+                          <a
+                            href={`#chat/${encodeURIComponent(item.sessionId)}`}
+                          >
+                            <strong>{item.title}</strong>
+                          </a>
                           <small>
                             {item.agentName} · {item.messageCount}
                             {item.totalMessageCount > item.messageCount
@@ -1839,13 +1926,13 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
                       variant="outline"
                       onClick={() => void editActivityResult()}
                     >
-                      Edit first
+                      Insert into draft
                     </Button>
                     <Button
                       onClick={() => void addActivityResult()}
                       disabled={working}
                     >
-                      Add to log
+                      Confirm and save
                     </Button>
                   </div>
                 </footer>
@@ -1853,7 +1940,13 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
             )}
           </section>
         )}
-        {days.map((key, index) => {
+        {!days.length && (
+          <p className="ws-log-empty-day">
+            No saved records yet. Add a quick update or review today’s Agent
+            activity above.
+          </p>
+        )}
+        {days.map((key) => {
           const items = grouped.get(key) || [];
           const open = key === today || openDays.has(key);
           return (
@@ -1879,7 +1972,12 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
                   <strong>
                     {key === today
                       ? 'Today'
-                      : index === 1
+                      : key ===
+                          dayKey(
+                            new Date(
+                              new Date().setDate(new Date().getDate() - 1),
+                            ),
+                          )
                         ? 'Yesterday'
                         : formatLogDate(key)}
                   </strong>
@@ -1911,6 +2009,8 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
                           {editingID === item.id ? (
                             <div className="ws-log-entry-edit">
                               <textarea
+                                aria-label="Edit work log entry"
+                                disabled={working}
                                 value={editingContent}
                                 onChange={(event) =>
                                   setEditingContent(event.target.value)
@@ -1936,6 +2036,35 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
                           ) : (
                             <div className="ws-log-entry-content">
                               <WorkLogMarkdown>{item.content}</WorkLogMarkdown>
+                              {!!item.sourceSessionIds?.length && (
+                                <details className="ws-log-source-links">
+                                  <summary>
+                                    Source conversations ·{' '}
+                                    {item.sourceSessionIds.length}
+                                  </summary>
+                                  {item.sourceSessionIds.map((id) => {
+                                    const session = sessions.find(
+                                      (candidate) => candidate.id === id,
+                                    );
+                                    return session ? (
+                                      <a
+                                        key={id}
+                                        href={`#chat/${encodeURIComponent(id)}`}
+                                      >
+                                        <span>{session.title}</span>
+                                        <span>
+                                          Continue{' '}
+                                          <ChevronRight aria-hidden="true" />
+                                        </span>
+                                      </a>
+                                    ) : (
+                                      <span key={id}>
+                                        Conversation no longer available
+                                      </span>
+                                    );
+                                  })}
+                                </details>
+                              )}
                             </div>
                           )}
                           {editingID !== item.id && (
@@ -1952,7 +2081,7 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
                               <button
                                 type="button"
                                 aria-label="Delete entry"
-                                onClick={() => void removeEntry(item)}
+                                onClick={() => setDeleteTarget(item)}
                               >
                                 <Trash2 />
                               </button>
@@ -1981,6 +2110,38 @@ export function WorkLogView({ onNotice }: { onNotice: Notice }) {
           </button>
         )}
       </main>
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open && !working) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogTitle>Delete work log entry?</DialogTitle>
+          <DialogDescription>
+            This removes the saved record. Source conversations remain
+            available.
+          </DialogDescription>
+          <div className="ws-log-delete-actions">
+            <Button
+              variant="outline"
+              disabled={working}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={working}
+              onClick={() => {
+                if (deleteTarget) void removeEntry(deleteTarget);
+              }}
+            >
+              {working ? 'Deleting…' : 'Delete'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

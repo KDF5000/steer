@@ -2171,7 +2171,12 @@ export default function Fusion() {
             onNotice={setNotice}
           />
         ) : view === 'notes' ? (
-          <WorkLogView onNotice={setNotice} />
+          <WorkLogView
+            key={`${authUser.id}:${workspaceID}`}
+            draftKey={`steer.work-log.v1:${authUser.id}:${workspaceID}`}
+            sessions={chatSessions}
+            onNotice={setNotice}
+          />
         ) : view === 'settings' ? (
           <SystemSettingsView
             agents={agentList}
