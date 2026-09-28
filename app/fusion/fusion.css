@@ -4143,6 +4143,17 @@ button.ws-chat-response-meta:focus-visible {
   color: inherit;
 }
 
+.ws-chat-message.agent .ws-markdown pre {
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ws-chat-message.agent .ws-markdown pre code {
+  white-space: inherit;
+}
+
 .ws-markdown blockquote {
   padding: 2px 0 2px 13px;
   border-left: 3px solid #d3d4da;
