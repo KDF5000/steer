@@ -3,7 +3,14 @@ import type { RelayEvent } from './domain';
 export function runFileChanges(events?: RelayEvent[] | null) {
   const files = new Map<
     string,
-    { id: string; path: string; diff: string; snapshot?: string }
+    {
+      id: string;
+      path: string;
+      diff: string;
+      snapshot?: string;
+      operation?: string;
+      patches?: string[];
+    }
   >();
   for (const event of events || []) {
     const data = event.data || {};
@@ -16,7 +23,18 @@ export function runFileChanges(events?: RelayEvent[] | null) {
       if (!change || typeof change !== 'object') continue;
       const record = change as Record<string, unknown>;
       const path = typeof record.path === 'string' ? record.path : '';
-      const kind = typeof record.type === 'string' ? record.type : '';
+      const kindRecord =
+        record.kind && typeof record.kind === 'object'
+          ? (record.kind as Record<string, unknown>)
+          : undefined;
+      const kind =
+        typeof record.type === 'string'
+          ? record.type
+          : typeof record.kind === 'string'
+            ? record.kind
+            : typeof kindRecord?.type === 'string'
+              ? kindRecord.type
+              : '';
       const reportedDiff =
         typeof record.unified_diff === 'string'
           ? record.unified_diff
@@ -25,7 +43,7 @@ export function runFileChanges(events?: RelayEvent[] | null) {
             : '';
       const content = typeof record.content === 'string' ? record.content : '';
       const reportedSnapshot =
-        reportedDiff && !looksLikeUnifiedDiff(reportedDiff)
+        reportedDiff && !looksLikePatch(reportedDiff)
           ? reportedDiff
           : undefined;
       const snapshot =
@@ -33,10 +51,45 @@ export function runFileChanges(events?: RelayEvent[] | null) {
           ? content || reportedSnapshot || ''
           : reportedSnapshot || content || undefined;
       const diff =
-        snapshot !== undefined && !looksLikeUnifiedDiff(reportedDiff)
+        kind === 'add' &&
+        snapshot !== undefined &&
+        !looksLikePatch(reportedDiff)
           ? addedFileDiff(path, snapshot)
           : reportedDiff;
-      if (path) files.set(path, { id: path, path, diff, snapshot });
+      if (path) {
+        const previous = files.get(path);
+        if (!previous) {
+          files.set(path, {
+            id: path,
+            path,
+            diff,
+            snapshot,
+            operation: kind,
+            patches: diff ? [diff] : [],
+          });
+          continue;
+        }
+        if (previous.patches?.includes(diff)) continue;
+        if ((kind === 'update' || looksLikePatch(diff)) && diff) {
+          const patches = [...(previous.patches || []), diff];
+          files.set(path, {
+            ...previous,
+            diff: patches.join('\n'),
+            snapshot: snapshot ?? previous.snapshot,
+            operation: kind || previous.operation,
+            patches,
+          });
+          continue;
+        }
+        files.set(path, {
+          id: path,
+          path,
+          diff,
+          snapshot,
+          operation: kind,
+          patches: diff ? [diff] : [],
+        });
+      }
     }
     if (
       event.type.toLowerCase().includes('diff.updated') &&
@@ -49,7 +102,12 @@ export function runFileChanges(events?: RelayEvent[] | null) {
       });
     }
   }
-  return [...files.values()];
+  return [...files.values()].map(({ id, path, diff, snapshot }) => ({
+    id,
+    path,
+    diff,
+    snapshot,
+  }));
 }
 
 function addedFileDiff(path: string, content: string) {
@@ -65,9 +123,10 @@ function addedFileDiff(path: string, content: string) {
   return [...headers, `@@ -0,0 +1,${lines.length} @@`, body].join('\n');
 }
 
-function looksLikeUnifiedDiff(value: string) {
+function looksLikePatch(value: string) {
   return (
     value.startsWith('diff --git ') ||
+    value.startsWith('@@ ') ||
     (/^--- .+\n\+\+\+ .+\n/m.test(value) && /^@@ .+ @@/m.test(value))
   );
 }
