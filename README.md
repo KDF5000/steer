@@ -18,7 +18,7 @@ Steer Web → Steer Server → PostgreSQL
 - PostgreSQL stores Workspace-scoped Projects, Agents, conversations, Run projections, and artifact metadata.
 - Relay remains separately deployed infrastructure. Steer Server uses Relay's public Go SDK; the browser never receives a Relay token.
 
-See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), and [Chat-first product design](docs/chat-first-product.md).
+See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), [Conversation Task API](docs/task-api.md), and [Chat-first product design](docs/chat-first-product.md).
 
 ## Verified MVP flow
 

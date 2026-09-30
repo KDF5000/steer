@@ -9,6 +9,19 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+type WorkspaceAPIKey struct {
+	ID              string     `json:"id"`
+	WorkspaceID     string     `json:"workspaceId"`
+	Name            string     `json:"name"`
+	TokenHash       string     `json:"-"`
+	TokenPrefix     string     `json:"prefix"`
+	Scopes          []string   `json:"scopes"`
+	CreatedByUserID string     `json:"-"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	LastUsedAt      *time.Time `json:"lastUsedAt"`
+	RevokedAt       *time.Time `json:"revokedAt"`
+}
+
 type User struct {
 	ID           string    `json:"id"`
 	Email        string    `json:"email"`
@@ -195,6 +208,55 @@ func (s *Store) RuntimeAssigned(ctx context.Context, workspaceID, runtimeID stri
 	var assigned bool
 	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM workspace_runtimes WHERE workspace_id=$1 AND runtime_id=$2)`, workspaceID, runtimeID).Scan(&assigned)
 	return assigned, err
+}
+
+func scanWorkspaceAPIKey(row pgx.Row) (WorkspaceAPIKey, error) {
+	var key WorkspaceAPIKey
+	err := row.Scan(&key.ID, &key.WorkspaceID, &key.Name, &key.TokenHash, &key.TokenPrefix, &key.Scopes, &key.CreatedByUserID, &key.CreatedAt, &key.LastUsedAt, &key.RevokedAt)
+	return key, err
+}
+
+const workspaceAPIKeyColumns = `id,workspace_id,name,token_hash,token_prefix,scopes,created_by_user_id,created_at,last_used_at,revoked_at`
+
+func (s *Store) CreateWorkspaceAPIKey(ctx context.Context, key WorkspaceAPIKey) (WorkspaceAPIKey, error) {
+	if key.ID == "" {
+		key.ID = uuid.NewString()
+	}
+	return scanWorkspaceAPIKey(s.pool.QueryRow(ctx, `INSERT INTO workspace_api_keys(id,workspace_id,name,token_hash,token_prefix,scopes,created_by_user_id) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING `+workspaceAPIKeyColumns,
+		key.ID, key.WorkspaceID, key.Name, key.TokenHash, key.TokenPrefix, key.Scopes, key.CreatedByUserID))
+}
+
+func (s *Store) WorkspaceAPIKeys(ctx context.Context, workspaceID string) ([]WorkspaceAPIKey, error) {
+	rows, err := s.pool.Query(ctx, `SELECT `+workspaceAPIKeyColumns+` FROM workspace_api_keys WHERE workspace_id=$1 ORDER BY created_at DESC`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	keys := []WorkspaceAPIKey{}
+	for rows.Next() {
+		key, err := scanWorkspaceAPIKey(rows)
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	return keys, rows.Err()
+}
+
+func (s *Store) WorkspaceAPIKeyByToken(ctx context.Context, hash string) (WorkspaceAPIKey, error) {
+	key, err := scanWorkspaceAPIKey(s.pool.QueryRow(ctx, `UPDATE workspace_api_keys SET last_used_at=now() WHERE token_hash=$1 AND revoked_at IS NULL RETURNING `+workspaceAPIKeyColumns, hash))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return WorkspaceAPIKey{}, ErrNotFound
+	}
+	return key, err
+}
+
+func (s *Store) RevokeWorkspaceAPIKey(ctx context.Context, workspaceID, id string) (WorkspaceAPIKey, error) {
+	key, err := scanWorkspaceAPIKey(s.pool.QueryRow(ctx, `UPDATE workspace_api_keys SET revoked_at=COALESCE(revoked_at,now()) WHERE workspace_id=$1 AND id=$2 RETURNING `+workspaceAPIKeyColumns, workspaceID, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return WorkspaceAPIKey{}, ErrNotFound
+	}
+	return key, err
 }
 
 func (s *Store) UnassignedRuntime(ctx context.Context, runtimeID string) (bool, error) {

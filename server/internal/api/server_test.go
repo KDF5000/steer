@@ -115,6 +115,59 @@ func TestDecodeChatRequestAcceptsImageUpload(t *testing.T) {
 	}
 }
 
+func TestDecodeTaskRequestAcceptsConversationAndMetadata(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/tasks", strings.NewReader(`{
+		"prompt":"Continue", "agentId":"agent-1", "conversationId":"conversation-1",
+		"idempotencyKey":"request-1", "metadata":{"origin":"automation"}
+	}`))
+	request.Header.Set("Content-Type", "application/json")
+	in, attachments, err := decodeChatRequest(httptest.NewRecorder(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(attachments) != 0 || in.ConversationID == nil || *in.ConversationID != "conversation-1" || in.IdempotencyKey != "request-1" || string(in.Metadata) != `{"origin":"automation"}` {
+		t.Fatalf("unexpected task input: %+v attachments=%+v", in, attachments)
+	}
+}
+
+func TestTaskAPIScope(t *testing.T) {
+	cases := []struct {
+		method string
+		path   string
+		want   string
+		ok     bool
+	}{
+		{http.MethodPost, "/api/v1/tasks", "tasks:write", true},
+		{http.MethodPost, "/api/v1/conversations/session-1/tasks", "tasks:write", true},
+		{http.MethodGet, "/api/v1/tasks/task-1", "tasks:read", true},
+		{http.MethodGet, "/api/v1/tasks/task-1/events", "tasks:read", true},
+		{http.MethodPost, "/api/v1/tasks/task-1/cancel", "tasks:cancel", true},
+		{http.MethodGet, "/api/v1/bootstrap", "", false},
+	}
+	for _, test := range cases {
+		request := httptest.NewRequest(test.method, test.path, nil)
+		got, ok := taskAPIScope(request)
+		if got != test.want || ok != test.ok {
+			t.Errorf("%s %s: got (%q,%t), want (%q,%t)", test.method, test.path, got, ok, test.want, test.ok)
+		}
+	}
+}
+
+func TestTaskSubmissionResponseKeepsChatCompatibilityFields(t *testing.T) {
+	result := submittedTask{
+		Task: store.Task{ID: "task-1", ConversationID: "conversation-1", RelayRunID: "run-1", Status: "queued"},
+		User: store.Message{ID: "message-user"}, Assistant: store.Message{ID: "message-agent"},
+	}
+	response := taskSubmissionResponse(result)
+	for key, want := range map[string]string{
+		"taskId": "task-1", "conversationId": "conversation-1", "sessionId": "conversation-1", "runId": "run-1", "status": "queued",
+	} {
+		if got, _ := response[key].(string); got != want {
+			t.Errorf("%s=%q, want %q", key, got, want)
+		}
+	}
+}
+
 func TestConversationPrompt(t *testing.T) {
 	items := []store.Message{
 		{Role: "user", Content: "first", Status: "complete"},

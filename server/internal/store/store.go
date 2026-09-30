@@ -189,6 +189,28 @@ type RunLink struct {
 	UpdatedAt      time.Time  `json:"updatedAt"`
 }
 
+type Task struct {
+	ID                 string          `json:"id"`
+	WorkspaceID        string          `json:"-"`
+	ConversationID     string          `json:"conversationId"`
+	RelayRunID         string          `json:"runId"`
+	AgentID            string          `json:"agentId"`
+	UserMessageID      string          `json:"userMessageId"`
+	AssistantMessageID string          `json:"assistantMessageId"`
+	Source             string          `json:"source"`
+	IdempotencyKey     *string         `json:"-"`
+	Status             string          `json:"status"`
+	Result             *string         `json:"result"`
+	Error              *string         `json:"error"`
+	Metadata           json.RawMessage `json:"metadata"`
+	CreatedAt          time.Time       `json:"createdAt"`
+	UpdatedAt          time.Time       `json:"updatedAt"`
+	StartedAt          *time.Time      `json:"startedAt"`
+	CompletedAt        *time.Time      `json:"completedAt"`
+}
+
+var ErrConversationBusy = errors.New("conversation already has an active task")
+
 type SharedConversation struct {
 	ID              string          `json:"id"`
 	WorkspaceID     string          `json:"-"`
@@ -353,6 +375,9 @@ func (s *Store) DeleteSession(ctx context.Context, wid, id string) (Session, err
 	if _, err = tx.Exec(ctx, `DELETE FROM artifacts WHERE workspace_id=$1 AND relay_run_id IN (SELECT relay_run_id FROM run_links WHERE workspace_id=$1 AND session_id=$2)`, wid, id); err != nil {
 		return Session{}, err
 	}
+	if _, err = tx.Exec(ctx, `DELETE FROM tasks WHERE workspace_id=$1 AND conversation_id=$2`, wid, id); err != nil {
+		return Session{}, err
+	}
 	if _, err = tx.Exec(ctx, `DELETE FROM message_attachments WHERE workspace_id=$1 AND session_id=$2`, wid, id); err != nil {
 		return Session{}, err
 	}
@@ -499,6 +524,27 @@ func (s *Store) UpdateSessionAgent(ctx context.Context, wid, sessionID, agentID 
 }
 
 func (s *Store) SaveChatRun(ctx context.Context, wid, sessionID, agentID, prompt, runID, status string, attachments ...MessageAttachment) (Message, Message, error) {
+	return s.saveChatRun(ctx, wid, sessionID, agentID, prompt, runID, status, nil, attachments...)
+}
+
+// SaveTaskRun atomically links the Relay run, chat messages, and API task so
+// every execution has one durable projection regardless of its caller.
+func (s *Store) SaveTaskRun(ctx context.Context, wid, sessionID, agentID, prompt, runID, status string, task Task, attachments ...MessageAttachment) (Message, Message, Task, error) {
+	if task.ID == "" {
+		task.ID = uuid.NewString()
+	}
+	user, assistant, err := s.saveChatRun(ctx, wid, sessionID, agentID, prompt, runID, status, &task, attachments...)
+	if err != nil {
+		return Message{}, Message{}, Task{}, err
+	}
+	created, err := s.Task(ctx, wid, task.ID)
+	if err != nil {
+		return Message{}, Message{}, Task{}, err
+	}
+	return user, assistant, created, nil
+}
+
+func (s *Store) saveChatRun(ctx context.Context, wid, sessionID, agentID, prompt, runID, status string, task *Task, attachments ...MessageAttachment) (Message, Message, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return Message{}, Message{}, err
@@ -530,6 +576,19 @@ func (s *Store) SaveChatRun(ctx context.Context, wid, sessionID, agentID, prompt
 	if err != nil {
 		return Message{}, Message{}, err
 	}
+	if task != nil {
+		if task.ID == "" {
+			task.ID = uuid.NewString()
+		}
+		if len(task.Metadata) == 0 {
+			task.Metadata = json.RawMessage(`{}`)
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO tasks(id,workspace_id,conversation_id,relay_run_id,agent_id,user_message_id,assistant_message_id,source,idempotency_key,status,metadata,started_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now())`,
+			task.ID, wid, sessionID, runID, agentID, user.ID, assistant.ID, task.Source, task.IdempotencyKey, status, task.Metadata)
+		if err != nil {
+			return Message{}, Message{}, err
+		}
+	}
 	_, err = tx.Exec(ctx, `UPDATE chat_sessions SET agent_id=$3,updated_at=$4 WHERE workspace_id=$1 AND id=$2`, wid, sessionID, agentID, now)
 	if err != nil {
 		return Message{}, Message{}, err
@@ -538,6 +597,70 @@ func (s *Store) SaveChatRun(ctx context.Context, wid, sessionID, agentID, prompt
 		return Message{}, Message{}, err
 	}
 	return user, assistant, nil
+}
+
+const taskColumns = `id,workspace_id,conversation_id,relay_run_id,agent_id,user_message_id,assistant_message_id,source,idempotency_key,status,result,error,metadata,created_at,updated_at,started_at,completed_at`
+
+func scanTask(row pgx.Row) (Task, error) {
+	var task Task
+	err := row.Scan(&task.ID, &task.WorkspaceID, &task.ConversationID, &task.RelayRunID, &task.AgentID, &task.UserMessageID, &task.AssistantMessageID, &task.Source, &task.IdempotencyKey, &task.Status, &task.Result, &task.Error, &task.Metadata, &task.CreatedAt, &task.UpdatedAt, &task.StartedAt, &task.CompletedAt)
+	return task, err
+}
+
+func (s *Store) Task(ctx context.Context, wid, id string) (Task, error) {
+	task, err := scanTask(s.pool.QueryRow(ctx, `SELECT `+taskColumns+` FROM tasks WHERE workspace_id=$1 AND id=$2`, wid, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Task{}, ErrNotFound
+	}
+	return task, err
+}
+
+func (s *Store) TaskByIdempotencyKey(ctx context.Context, wid, key string) (Task, error) {
+	task, err := scanTask(s.pool.QueryRow(ctx, `SELECT `+taskColumns+` FROM tasks WHERE workspace_id=$1 AND idempotency_key=$2`, wid, key))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Task{}, ErrNotFound
+	}
+	return task, err
+}
+
+func (s *Store) ActiveConversationTask(ctx context.Context, wid, conversationID string) (Task, error) {
+	task, err := scanTask(s.pool.QueryRow(ctx, `SELECT `+taskColumns+` FROM tasks WHERE workspace_id=$1 AND conversation_id=$2 AND status NOT IN ('succeeded','failed','cancelled') ORDER BY created_at DESC LIMIT 1`, wid, conversationID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Task{}, ErrNotFound
+	}
+	return task, err
+}
+
+func (s *Store) TaskMessages(ctx context.Context, wid string, task Task) (Message, Message, error) {
+	user, err := s.Message(ctx, wid, task.UserMessageID)
+	if err != nil {
+		return Message{}, Message{}, err
+	}
+	assistant, err := s.Message(ctx, wid, task.AssistantMessageID)
+	return user, assistant, err
+}
+
+// TryConversationLock serializes the short submission critical section across
+// all Steer Server replicas. The lock is released by the returned function.
+func (s *Store) TryConversationLock(ctx context.Context, wid, conversationID string) (func(), error) {
+	connection, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var locked bool
+	err = connection.QueryRow(ctx, `SELECT pg_try_advisory_lock(hashtextextended($1, 0))`, wid+":"+conversationID).Scan(&locked)
+	if err != nil {
+		connection.Release()
+		return nil, err
+	}
+	if !locked {
+		connection.Release()
+		return nil, ErrConversationBusy
+	}
+	return func() {
+		_, _ = connection.Exec(context.Background(), `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, wid+":"+conversationID)
+		connection.Release()
+	}, nil
 }
 
 func (s *Store) SaveSystemRun(ctx context.Context, wid, agentID, purpose, runID, status string) error {
@@ -578,6 +701,10 @@ func (s *Store) UpdateRun(ctx context.Context, wid, runID, status, content strin
 		return err
 	}
 	_, err = tx.Exec(ctx, `UPDATE run_links SET status=$3,summary=$4,error=$5,last_event_sequence=$6,updated_at=now() WHERE workspace_id=$1 AND relay_run_id=$2`, wid, runID, status, content, runErr, lastSeq)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `UPDATE tasks SET status=$3,result=$4,error=$5,updated_at=now(),completed_at=CASE WHEN $3 IN ('succeeded','failed','cancelled') THEN COALESCE(completed_at,now()) ELSE completed_at END WHERE workspace_id=$1 AND relay_run_id=$2`, wid, runID, status, content, runErr)
 	if err != nil {
 		return err
 	}
@@ -656,6 +783,23 @@ func (s *Store) Artifacts(ctx context.Context, wid string) ([]Artifact, error) {
 		out = append(out, x)
 	}
 	return out, rows.Err()
+}
+
+func (s *Store) RunArtifacts(ctx context.Context, wid, runID string) ([]Artifact, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id,workspace_id,relay_artifact_id,relay_run_id,name,type,ref,content_type,size,state,created_at FROM artifacts WHERE workspace_id=$1 AND relay_run_id=$2 AND type NOT ILIKE '%instruction%' AND type NOT ILIKE '%final_message%' AND name NOT ILIKE '%-last-message.%' ORDER BY created_at`, wid, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Artifact{}
+	for rows.Next() {
+		var item Artifact
+		if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.RelayArtifactID, &item.RelayRunID, &item.Name, &item.Type, &item.Ref, &item.ContentType, &item.Size, &item.State, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 func (s *Store) Artifact(ctx context.Context, wid, id string) (Artifact, error) {

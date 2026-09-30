@@ -61,6 +61,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/auth/me", s.me)
 	mux.HandleFunc("GET /api/v1/workspaces", s.listWorkspaces)
 	mux.HandleFunc("POST /api/v1/workspaces", s.createWorkspace)
+	mux.HandleFunc("GET /api/v1/api-keys", s.listAPIKeys)
+	mux.HandleFunc("POST /api/v1/api-keys", s.createAPIKey)
+	mux.HandleFunc("DELETE /api/v1/api-keys/{id}", s.revokeAPIKey)
 	mux.HandleFunc("GET /api/v1/runtimes/available", s.availableRuntimes)
 	mux.HandleFunc("POST /api/v1/runtimes/claim-available", s.claimAvailableRuntimes)
 	mux.HandleFunc("PUT /api/v1/nodes/{id}/capacity", s.updateNodeCapacity)
@@ -107,7 +110,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/messages/{id}/share", s.shareMessage)
 	mux.HandleFunc("GET /api/v1/messages/{messageId}/attachments/{attachmentId}", s.messageAttachment)
 	mux.HandleFunc("GET /api/v1/shares/{token}", s.sharedConversation)
-	mux.HandleFunc("POST /api/v1/chat", s.chat)
+	mux.HandleFunc("POST /api/v1/chat", s.chatTask)
+	mux.HandleFunc("POST /api/v1/tasks", s.createTask)
+	mux.HandleFunc("POST /api/v1/conversations/{id}/tasks", s.createTask)
+	mux.HandleFunc("GET /api/v1/tasks/{id}", s.getTask)
+	mux.HandleFunc("GET /api/v1/tasks/{id}/events", s.streamTaskEvents)
+	mux.HandleFunc("GET /api/v1/tasks/{id}/artifacts", s.taskArtifacts)
+	mux.HandleFunc("POST /api/v1/tasks/{id}/cancel", s.cancelTask)
 	mux.HandleFunc("GET /api/v1/runs/{id}", s.run)
 	mux.HandleFunc("GET /api/v1/runs/{id}/workspace", s.inspectWorkspace)
 	mux.HandleFunc("GET /api/v1/runs/{id}/events/stream", s.streamRunEvents)
@@ -487,10 +496,13 @@ func (s *Server) artifactContent(w http.ResponseWriter, r *http.Request) {
 }
 
 type chatRequest struct {
-	Prompt    string  `json:"prompt"`
-	AgentID   string  `json:"agentId"`
-	SessionID *string `json:"sessionId"`
-	ProjectID *string `json:"projectId"`
+	Prompt         string          `json:"prompt"`
+	AgentID        string          `json:"agentId"`
+	SessionID      *string         `json:"sessionId"`
+	ConversationID *string         `json:"conversationId"`
+	ProjectID      *string         `json:"projectId"`
+	IdempotencyKey string          `json:"idempotencyKey"`
+	Metadata       json.RawMessage `json:"metadata"`
 }
 
 const (
@@ -526,6 +538,16 @@ func decodeChatRequest(w http.ResponseWriter, r *http.Request) (chatRequest, []s
 	if value := strings.TrimSpace(r.FormValue("projectId")); value != "" {
 		in.ProjectID = &value
 	}
+	if value := strings.TrimSpace(r.FormValue("conversationId")); value != "" {
+		in.ConversationID = &value
+	}
+	in.IdempotencyKey = strings.TrimSpace(r.FormValue("idempotencyKey"))
+	if value := strings.TrimSpace(r.FormValue("metadata")); value != "" {
+		if !json.Valid([]byte(value)) {
+			return chatRequest{}, nil, errors.New("metadata must be valid JSON")
+		}
+		in.Metadata = json.RawMessage(value)
+	}
 	files := r.MultipartForm.File["images"]
 	if len(files) > maxChatImages {
 		return chatRequest{}, nil, fmt.Errorf("at most %d images are allowed", maxChatImages)
@@ -559,175 +581,6 @@ func decodeChatRequest(w http.ResponseWriter, r *http.Request) (chatRequest, []s
 		attachments = append(attachments, store.MessageAttachment{Name: filepath.Base(header.Filename), ContentType: detected, Size: int64(len(content)), Content: content})
 	}
 	return in, attachments, nil
-}
-
-func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
-	in, attachments, err := decodeChatRequest(w, r)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	in.Prompt = strings.TrimSpace(in.Prompt)
-	if (in.Prompt == "" && len(attachments) == 0) || in.AgentID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "a prompt or image, and agentId are required"})
-		return
-	}
-	wid := s.workspace(r)
-	agent, err := s.store.Agent(r.Context(), wid, in.AgentID)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	sessionID := uuid.NewString()
-	if in.SessionID != nil && *in.SessionID != "" {
-		sessionID = *in.SessionID
-	}
-	var project *store.Project
-	if in.ProjectID != nil && *in.ProjectID != "" {
-		selected, projectErr := s.store.Project(r.Context(), wid, *in.ProjectID)
-		if projectErr != nil {
-			writeError(w, projectErr)
-			return
-		}
-		project = &selected
-	}
-	title := in.Prompt
-	if title == "" {
-		title = attachments[0].Name
-	}
-	executionRuntimeID := agent.RuntimeID
-	var workspaceKey *string
-	if project != nil {
-		if project.WorkspaceKind == "local" {
-			if project.RuntimeID != nil && strings.TrimSpace(*project.RuntimeID) != "" {
-				executionRuntimeID = project.RuntimeID
-			}
-			if executionRuntimeID == nil || strings.TrimSpace(*executionRuntimeID) == "" {
-				writeJSON(w, http.StatusConflict, map[string]string{"error": "Directory projects require a fixed Runtime. Edit or recreate this Project with a Runtime location."})
-				return
-			}
-		} else if project.WorkspaceKind == "git" {
-			key := "steer/" + wid + "/" + sessionID
-			workspaceKey = &key
-		}
-	}
-	if executionRuntimeID == nil || strings.TrimSpace(*executionRuntimeID) == "" {
-		resolvedRuntimeID, resolveErr := s.firstWorkspaceRuntime(r.Context(), wid, agent.RuntimeProvider)
-		if resolveErr != nil {
-			writeError(w, resolveErr)
-			return
-		}
-		executionRuntimeID = &resolvedRuntimeID
-	}
-	session, err := s.store.EnsureSession(r.Context(), wid, sessionID, truncate(title, 72), agent.ID, in.ProjectID, executionRuntimeID, workspaceKey, project)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	if in.ProjectID != nil && (session.ProjectID == nil || *in.ProjectID != *session.ProjectID) {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "session is already linked to another project"})
-		return
-	}
-	if project == nil && session.ProjectID != nil {
-		selected, projectErr := s.store.Project(r.Context(), wid, *session.ProjectID)
-		if projectErr != nil {
-			writeError(w, projectErr)
-			return
-		}
-		project = &selected
-	}
-	if session.ExecutionRuntimeID != nil && strings.TrimSpace(*session.ExecutionRuntimeID) != "" {
-		executionRuntimeID = session.ExecutionRuntimeID
-	}
-	if agent.RuntimeID != nil && executionRuntimeID != nil && *agent.RuntimeID != *executionRuntimeID {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "The selected Agent is fixed to a different Runtime. Fork the conversation to change execution location."})
-		return
-	}
-	if executionRuntimeID != nil {
-		provider, providerErr := s.runtimeProvider(r.Context(), wid, *executionRuntimeID)
-		if providerErr != nil {
-			writeError(w, providerErr)
-			return
-		}
-		if provider != agent.RuntimeProvider {
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "The selected Agent uses a provider that is unavailable on this conversation's Runtime."})
-			return
-		}
-	}
-	if err := s.store.UpdateSessionAgent(r.Context(), wid, sessionID, agent.ID); err != nil {
-		writeError(w, err)
-		return
-	}
-	previous, err := s.store.Messages(r.Context(), wid, sessionID)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	runPrompt := in.Prompt
-	if runPrompt == "" {
-		runPrompt = "Please inspect the attached image and respond to it."
-	}
-	prompt := conversationPrompt(previous, runPrompt)
-	runtimeID := value(executionRuntimeID)
-	model := value(agent.Model)
-	input := relay.Input{Type: "text", Version: "1", Prompt: prompt, ContinuationPrompt: runPrompt}
-	if len(attachments) > 0 {
-		images := make([]relayInputImage, 0, len(attachments))
-		for _, item := range attachments {
-			images = append(images, relayInputImage{Name: item.Name, ContentType: item.ContentType, Data: item.Content})
-		}
-		input.Data, err = json.Marshal(map[string]any{"images": images})
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-	}
-	request := relay.Request{TenantID: wid, ProjectID: value(session.ProjectID), SessionID: sessionID, AgentID: agent.ID, IdempotencyKey: uuid.NewString(), Runtime: relay.RuntimeRequirement{ID: runtimeID, Provider: agent.RuntimeProvider, Model: model}, Source: relay.Source{Kind: "steer.chat", ExternalID: sessionID}, Input: input, Principal: relay.Principal{Type: "user", ID: "workspace:" + wid}}
-	if agent.Instructions != "" {
-		request.Instructions.Agent = []relay.InstructionFragment{{ID: agent.ID, Version: "1", Title: agent.Name, Content: agent.Instructions}}
-	}
-	assignedSkills, err := s.store.AgentSkills(r.Context(), wid, agent.ID)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	request.Instructions.Agent = append(request.Instructions.Agent, skillInstructionFragments(assignedSkills)...)
-	if session.WorkspaceKind != nil && session.WorkspaceSource != nil {
-		request.Workspace = relay.WorkspaceSpec{Kind: *session.WorkspaceKind, Source: *session.WorkspaceSource, Ref: value(session.WorkspaceRef), Subdir: value(session.WorkspaceSubdir)}
-	} else if project != nil {
-		request.Workspace = relay.WorkspaceSpec{Kind: project.WorkspaceKind, Source: project.WorkspaceSource, Ref: value(project.WorkspaceRef), Subdir: value(project.WorkspaceSubdir)}
-	} else {
-		request.Workspace = relay.WorkspaceSpec{Kind: value(agent.WorkspaceKind), Source: value(agent.WorkspaceSource), Ref: value(agent.WorkspaceRef)}
-	}
-	if request.Workspace.Kind == "git" {
-		request.Instructions.Turn = append(request.Instructions.Turn, gitProjectWorkspaceInstruction())
-	}
-	var run relay.Run
-	workspaceKind := request.Workspace.Kind
-	executionMode := value(session.ExecutionMode)
-	if executionMode == "" && project != nil {
-		executionMode = project.ExecutionMode
-	}
-	if workspaceKind == "git" && executionMode == "session_worktree" {
-		key := value(session.WorkspaceKey)
-		if key == "" {
-			key = "steer/" + wid + "/" + sessionID
-		}
-		request.Workspace.Lifecycle = "reusable"
-		request.Workspace.ReuseKey = key
-		request.Workspace.Branch = "steer/" + sessionID
-	}
-	run, err = s.submitRelayRun(r.Context(), request)
-	if err != nil {
-		writeError(w, fmt.Errorf("submit Relay run: %w", err))
-		return
-	}
-	user, assistant, err := s.store.SaveChatRun(r.Context(), wid, sessionID, agent.ID, in.Prompt, run.ID, string(run.Status), attachments...)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusAccepted, map[string]any{"sessionId": sessionID, "runId": run.ID, "status": run.Status, "userMessage": user, "assistantMessage": assistant})
 }
 
 func gitProjectWorkspaceInstruction() relay.InstructionFragment {
@@ -894,54 +747,12 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	run, err := s.relay.GetRun(r.Context(), runID)
+	projection, err := s.syncRelayRun(r.Context(), wid, runID)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	events, err := s.relay.Events(r.Context(), runID)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	content, lastSeq := visibleAssistantContent(run.Status, events, run.Result)
-	var runErr *string
-	if run.Status == relay.RunFailed || run.Status == relay.RunCancelled {
-		message := run.Error
-		if message == "" {
-			message = "Run " + string(run.Status)
-		}
-		runErr = &message
-	}
-	deliverableArtifacts := []relay.Artifact{}
-	if terminal(run.Status) {
-		relayArtifacts, listErr := s.relay.Artifacts(r.Context(), runID)
-		err = listErr
-		if err != nil {
-			writeError(w, fmt.Errorf("sync deliverables: %w", err))
-			return
-		}
-		link, err := s.store.RunLink(r.Context(), wid, runID)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		for _, artifact := range relayArtifacts {
-			if !isDeliverableArtifact(artifact) {
-				continue
-			}
-			deliverableArtifacts = append(deliverableArtifacts, artifact)
-			if err := s.store.UpsertArtifact(r.Context(), wid, link, artifact.ID, firstNonEmpty(artifact.Name, artifact.Ref, artifact.Type), artifact.Type, artifact.Ref, artifact.ContentType, artifact.Size); err != nil {
-				writeError(w, err)
-				return
-			}
-		}
-	}
-	if err := s.store.UpdateRun(r.Context(), wid, runID, string(run.Status), content, runErr, lastSeq); err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"run": run, "content": content, "error": runErr, "events": events, "artifacts": deliverableArtifacts})
+	writeJSON(w, http.StatusOK, map[string]any{"run": projection.Run, "content": projection.Content, "error": projection.Error, "events": projection.Events, "artifacts": projection.Artifacts})
 }
 
 func (s *Server) streamRunEvents(w http.ResponseWriter, r *http.Request) {
@@ -950,6 +761,10 @@ func (s *Server) streamRunEvents(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	s.streamRunEventsForID(w, r, runID)
+}
+
+func (s *Server) streamRunEventsForID(w http.ResponseWriter, r *http.Request, runID string) {
 	after := 0
 	if value := r.URL.Query().Get("after"); value != "" {
 		parsed, err := strconv.Atoi(value)
@@ -996,11 +811,16 @@ func (s *Server) streamRunEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) cancelRun(w http.ResponseWriter, r *http.Request) {
-	if _, err := s.store.RunLink(r.Context(), s.workspace(r), r.PathValue("id")); err != nil {
+	runID := r.PathValue("id")
+	if _, err := s.store.RunLink(r.Context(), s.workspace(r), runID); err != nil {
 		writeError(w, err)
 		return
 	}
-	run, err := s.relay.CancelRun(r.Context(), r.PathValue("id"), controlplane.CancelRequest{Reason: "Cancelled from Steer", RequestedBy: "steer"})
+	s.cancelRunForID(w, r, runID)
+}
+
+func (s *Server) cancelRunForID(w http.ResponseWriter, r *http.Request, runID string) {
+	run, err := s.relay.CancelRun(r.Context(), runID, controlplane.CancelRequest{Reason: "Cancelled from Steer", RequestedBy: "steer"})
 	if err != nil {
 		writeError(w, err)
 		return
@@ -1222,7 +1042,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Steer-Workspace")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-Steer-Workspace")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		}
 		if r.Method == http.MethodOptions {

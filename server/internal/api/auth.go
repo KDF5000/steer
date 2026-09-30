@@ -24,6 +24,7 @@ type contextKey string
 const (
 	userContextKey      contextKey = "steer-user"
 	workspaceContextKey contextKey = "steer-workspace"
+	apiKeyContextKey    contextKey = "steer-api-key"
 )
 
 type Option func(*Server)
@@ -154,6 +155,89 @@ func (s *Server) createWorkspace(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, workspace)
 }
 
+var allowedAPIKeyScopes = map[string]bool{
+	"tasks:read":   true,
+	"tasks:write":  true,
+	"tasks:cancel": true,
+}
+
+func (s *Server) listAPIKeys(w http.ResponseWriter, r *http.Request) {
+	if _, ok := r.Context().Value(apiKeyContextKey).(store.WorkspaceAPIKey); ok {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "API keys cannot manage API keys."})
+		return
+	}
+	keys, err := s.store.WorkspaceAPIKeys(r.Context(), s.workspace(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, keys)
+}
+
+func (s *Server) createAPIKey(w http.ResponseWriter, r *http.Request) {
+	if _, ok := r.Context().Value(apiKeyContextKey).(store.WorkspaceAPIKey); ok {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "API keys cannot manage API keys."})
+		return
+	}
+	var input struct {
+		Name   string   `json:"name"`
+		Scopes []string `json:"scopes"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	if input.Name == "" || len(input.Name) > 80 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "API key name must contain 1–80 characters."})
+		return
+	}
+	if len(input.Scopes) == 0 {
+		input.Scopes = []string{"tasks:read", "tasks:write", "tasks:cancel"}
+	}
+	seen := map[string]bool{}
+	scopes := make([]string, 0, len(input.Scopes))
+	for _, scope := range input.Scopes {
+		scope = strings.TrimSpace(scope)
+		if !allowedAPIKeyScopes[scope] {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Unsupported API key scope: " + scope})
+			return
+		}
+		if !seen[scope] {
+			seen[scope] = true
+			scopes = append(scopes, scope)
+		}
+	}
+	random := make([]byte, 32)
+	if _, err := rand.Read(random); err != nil {
+		writeError(w, err)
+		return
+	}
+	rawToken := "steer_sk_" + base64.RawURLEncoding.EncodeToString(random)
+	key, err := s.store.CreateWorkspaceAPIKey(r.Context(), store.WorkspaceAPIKey{
+		WorkspaceID: s.workspace(r), Name: input.Name, TokenHash: tokenHash(rawToken),
+		TokenPrefix: rawToken[:16], Scopes: scopes, CreatedByUserID: userFromContext(r.Context()).ID,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"apiKey": key, "token": rawToken})
+}
+
+func (s *Server) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
+	if _, ok := r.Context().Value(apiKeyContextKey).(store.WorkspaceAPIKey); ok {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "API keys cannot manage API keys."})
+		return
+	}
+	key, err := s.store.RevokeWorkspaceAPIKey(r.Context(), s.workspace(r), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, key)
+}
+
 func (s *Server) claimAvailableRuntimes(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		RuntimeIDs []string `json:"runtimeIds"`
@@ -271,6 +355,27 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if authorization := strings.TrimSpace(r.Header.Get("Authorization")); authorization != "" {
+			parts := strings.Fields(authorization)
+			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || !strings.HasPrefix(parts[1], "steer_sk_") {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Invalid bearer token."})
+				return
+			}
+			key, err := s.store.WorkspaceAPIKeyByToken(r.Context(), tokenHash(parts[1]))
+			if err != nil {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "API key is invalid or revoked."})
+				return
+			}
+			requiredScope, allowed := taskAPIScope(r)
+			if !allowed || !hasScope(key.Scopes, requiredScope) {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "API key does not have permission for this operation."})
+				return
+			}
+			ctx := context.WithValue(r.Context(), workspaceContextKey, key.WorkspaceID)
+			ctx = context.WithValue(ctx, apiKeyContextKey, key)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
 		cookie, err := r.Cookie(authCookieName)
 		if err != nil || cookie.Value == "" {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Sign in to continue."})
@@ -306,4 +411,27 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, workspaceContextKey, workspaceID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func taskAPIScope(r *http.Request) (string, bool) {
+	path := r.URL.Path
+	if r.Method == http.MethodPost && strings.HasSuffix(path, "/cancel") && strings.HasPrefix(path, "/api/v1/tasks/") {
+		return "tasks:cancel", true
+	}
+	if r.Method == http.MethodPost && (path == "/api/v1/tasks" || (strings.HasPrefix(path, "/api/v1/conversations/") && strings.HasSuffix(path, "/tasks"))) {
+		return "tasks:write", true
+	}
+	if r.Method == http.MethodGet && strings.HasPrefix(path, "/api/v1/tasks/") {
+		return "tasks:read", true
+	}
+	return "", false
+}
+
+func hasScope(scopes []string, required string) bool {
+	for _, scope := range scopes {
+		if scope == required {
+			return true
+		}
+	}
+	return false
 }

@@ -130,3 +130,55 @@ func TestConversationRunAndArtifact(t *testing.T) {
 		t.Fatalf("invalid share: %+v, %v", shared, err)
 	}
 }
+
+func TestTaskAndWorkspaceAPIKeyLifecycle(t *testing.T) {
+	s, wid := testStore(t)
+	ctx := context.Background()
+	agent, err := s.CreateAgent(ctx, wid, Agent{Name: "Task Agent", RuntimeProvider: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessionID, runID := uuid.NewString(), uuid.NewString()
+	if _, err := s.EnsureSession(ctx, wid, sessionID, "API task", agent.ID, nil, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	idempotencyKey := "request-" + uuid.NewString()
+	user, assistant, task, err := s.SaveTaskRun(ctx, wid, sessionID, agent.ID, "Continue", runID, "running", Task{
+		ID: uuid.NewString(), Source: "api", IdempotencyKey: &idempotencyKey, Metadata: json.RawMessage(`{"source":"test"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.ConversationID != sessionID || task.RelayRunID != runID || task.UserMessageID != user.ID || task.AssistantMessageID != assistant.ID {
+		t.Fatalf("task was not linked to conversation messages: %+v", task)
+	}
+	resolved, err := s.TaskByIdempotencyKey(ctx, wid, idempotencyKey)
+	if err != nil || resolved.ID != task.ID {
+		t.Fatalf("idempotency lookup returned %+v: %v", resolved, err)
+	}
+	if err := s.UpdateRun(ctx, wid, runID, "succeeded", "Complete", nil, 3); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err = s.Task(ctx, wid, task.ID)
+	if err != nil || resolved.Status != "succeeded" || resolved.Result == nil || *resolved.Result != "Complete" || resolved.CompletedAt == nil {
+		t.Fatalf("task completion was not projected: %+v: %v", resolved, err)
+	}
+
+	ownerID := "owner-" + uuid.NewString()
+	key, err := s.CreateWorkspaceAPIKey(ctx, WorkspaceAPIKey{
+		WorkspaceID: wid, Name: "Automation", TokenHash: "hash-" + uuid.NewString(), TokenPrefix: "steer_sk_example", Scopes: []string{"tasks:read"}, CreatedByUserID: ownerID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolvedKey, err := s.WorkspaceAPIKeyByToken(ctx, key.TokenHash)
+	if err != nil || resolvedKey.ID != key.ID || resolvedKey.LastUsedAt == nil {
+		t.Fatalf("API key lookup returned %+v: %v", resolvedKey, err)
+	}
+	if _, err := s.RevokeWorkspaceAPIKey(ctx, wid, key.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.WorkspaceAPIKeyByToken(ctx, key.TokenHash); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("revoked API key still resolved: %v", err)
+	}
+}

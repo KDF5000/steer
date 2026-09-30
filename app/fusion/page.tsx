@@ -40,6 +40,8 @@ import {
   Share2,
   LogOut,
   Library,
+  KeyRound,
+  MessageSquare,
   NotebookPen,
   Square,
   SquarePen,
@@ -130,6 +132,7 @@ import {
   type ProjectRecord,
   type SkillRecord,
   type WorkspaceGitStatus,
+  type WorkspaceAPIKeyRecord,
   type WorkspaceSettingsRecord,
   type WorkspaceRecord,
 } from '@/lib/steer-client';
@@ -635,6 +638,7 @@ export default function Fusion() {
   const [agentRuntime, setAgentRuntime] = useState('');
   const [agentModel, setAgentModel] = useState('Runtime default');
   const activeRun = useRef('');
+  const activeTask = useRef('');
   const activeRunContext = useRef<{
     project?: ProjectRecord;
     executionRuntimeID: string | null;
@@ -871,7 +875,8 @@ export default function Fusion() {
       return null;
     pollingRun.current = runID;
     try {
-      const result = await steer.run(runID);
+      const taskID = activeTask.current;
+      const result = taskID ? await steer.task(taskID) : await steer.run(runID);
       if (activeRun.current !== runID || !mounted.current) return;
       const terminal = isTerminalStatus(result.run.status);
       const finalDraft = terminal
@@ -922,6 +927,7 @@ export default function Fusion() {
             }));
         }
         activeRun.current = '';
+        activeTask.current = '';
         setActiveRunID('');
         setChatWorking(false);
         return result;
@@ -979,17 +985,26 @@ export default function Fusion() {
 
     const connect = async () => {
       try {
-        await steer.streamRunEvents(
-          activeRunID,
-          lastSequence,
-          controller.signal,
-          (event) => {
-            if (event.sequence <= lastSequence) return;
-            lastSequence = event.sequence;
-            events.push(event);
-            scheduleRender();
-          },
-        );
+        const receiveEvent = (event: RelayEvent) => {
+          if (event.sequence <= lastSequence) return;
+          lastSequence = event.sequence;
+          events.push(event);
+          scheduleRender();
+        };
+        if (activeTask.current)
+          await steer.streamTaskEvents(
+            activeTask.current,
+            lastSequence,
+            controller.signal,
+            receiveEvent,
+          );
+        else
+          await steer.streamRunEvents(
+            activeRunID,
+            lastSequence,
+            controller.signal,
+            receiveEvent,
+          );
         if (!stopped) await pollRun(activeRunID);
       } catch {
         if (stopped || controller.signal.aborted) return;
@@ -1037,6 +1052,7 @@ export default function Fusion() {
       }
 
       activeRun.current = '';
+      activeTask.current = '';
       pollingRun.current = '';
       setActiveRunID('');
       setChatWorking(false);
@@ -1248,6 +1264,7 @@ export default function Fusion() {
   const startNewChat = (projectID = 'none') => {
     sessionLoadSequence.current += 1;
     activeRun.current = '';
+    activeTask.current = '';
     pollingRun.current = '';
     activeRunContext.current = { executionRuntimeID: null };
     setActiveRunID('');
@@ -1287,11 +1304,11 @@ export default function Fusion() {
     setChatInput('');
     setChatWorking(true);
     try {
-      const result = await steer.chat({
+      const result = await steer.createTask({
         prompt: text,
         agentId: currentAgent.id,
         ...(chatProject !== 'none' ? { projectId: chatProject } : {}),
-        ...(chatSession ? { sessionId: chatSession } : {}),
+        ...(chatSession ? { conversationId: chatSession } : {}),
         images: images.map((image) => image.file),
       });
       const persistedAttachments = result.userMessage.attachments?.map(
@@ -1330,6 +1347,7 @@ export default function Fusion() {
         return [session, ...current.filter((item) => item.id !== session.id)];
       });
       activeRun.current = result.runId;
+      activeTask.current = result.taskId;
       activeRunContext.current = {
         project: selectedProject,
         executionRuntimeID: composerExecutionRuntimeId,
@@ -1371,7 +1389,8 @@ export default function Fusion() {
   const stop = async () => {
     if (!activeRun.current) return;
     try {
-      await steer.cancelRun(activeRun.current);
+      if (activeTask.current) await steer.cancelTask(activeTask.current);
+      else await steer.cancelRun(activeRun.current);
       setNotice('Stopping the current run…');
     } catch (error) {
       setNotice(
@@ -1646,6 +1665,7 @@ export default function Fusion() {
     setChatSession('');
     setMessages([]);
     activeRun.current = '';
+    activeTask.current = '';
     setActiveRunID('');
     setChatWorking(false);
     try {
@@ -1896,6 +1916,16 @@ export default function Fusion() {
                             >
                               <Pencil aria-hidden="true" />
                               {t('Edit project')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="h-9 gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2 font-medium transition-colors hover:bg-[#f1f1f3]"
+                              onClick={() => {
+                                void navigator.clipboard.writeText(project.id);
+                                setNotice(t('Project ID copied.'));
+                              }}
+                            >
+                              <Copy aria-hidden="true" />
+                              {t('Copy Project ID')}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               variant="destructive"
@@ -2253,6 +2283,7 @@ export default function Fusion() {
             onCreate={() => setAgentDialog(true)}
             onAddRuntime={openRuntimeDialog}
             onCapacity={updateRuntimeCapacity}
+            onNotice={setNotice}
             onChat={(id) => {
               setChatAgent(id);
               startNewChat(chatProject);
@@ -4916,6 +4947,7 @@ function AgentsView({
   onCreate,
   onAddRuntime,
   onCapacity,
+  onNotice,
   onChat,
 }: {
   agents: AgentItem[];
@@ -4927,6 +4959,7 @@ function AgentsView({
   onCreate: () => void;
   onAddRuntime: () => void;
   onCapacity: (nodeID: string, capacity: number) => Promise<void>;
+  onNotice: (message: string) => void;
   onChat: (id: string) => void;
 }) {
   const { t } = useI18n();
@@ -4987,9 +5020,28 @@ function AgentsView({
                 <i />
                 {agent.state}
               </span>
-              <button type="button" onClick={() => onChat(agent.id)}>
-                {t('Chat')}
-              </button>
+              <span className="ws-agent-actions">
+                <button
+                  type="button"
+                  className="ws-agent-copy-id"
+                  aria-label={t('Copy Agent ID')}
+                  title={`${t('Copy Agent ID')} · ${agent.id}`}
+                  onClick={() => {
+                    void navigator.clipboard.writeText(agent.id);
+                    onNotice(t('Agent ID copied.'));
+                  }}
+                >
+                  <Copy aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={t('Chat')}
+                  title={t('Chat')}
+                  onClick={() => onChat(agent.id)}
+                >
+                  <MessageSquare aria-hidden="true" />
+                </button>
+              </span>
             </div>
           ))}
         </div>
@@ -5060,9 +5112,79 @@ function SystemSettingsView({
 }) {
   const { t } = useI18n();
   const [saving, setSaving] = useState(false);
+  const [apiKeys, setAPIKeys] = useState<WorkspaceAPIKeyRecord[]>([]);
+  const [apiKeysLoading, setAPIKeysLoading] = useState(true);
+  const [apiKeyDialog, setAPIKeyDialog] = useState(false);
+  const [apiKeyName, setAPIKeyName] = useState('');
+  const [generatedToken, setGeneratedToken] = useState('');
+  const [creatingAPIKey, setCreatingAPIKey] = useState(false);
+  const [revokingAPIKey, setRevokingAPIKey] =
+    useState<WorkspaceAPIKeyRecord | null>(null);
+  const [apiKeyActionPending, setAPIKeyActionPending] = useState(false);
   const selected = agents.find((agent) => agent.id === settings?.systemAgentId);
   const interfaceLanguage = settings?.interfaceLanguage || 'auto';
   const aiOutputLanguage = settings?.aiOutputLanguage || 'auto';
+
+  useEffect(() => {
+    let active = true;
+    steer
+      .apiKeys()
+      .then((keys) => active && setAPIKeys(keys))
+      .catch((error: unknown) => {
+        if (active)
+          onNotice(
+            error instanceof Error ? error.message : 'Could not load API keys.',
+          );
+      })
+      .finally(() => active && setAPIKeysLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [onNotice]);
+
+  const createAPIKey = async (event: SyntheticEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const name = apiKeyName.trim();
+    if (!name || creatingAPIKey) return;
+    setCreatingAPIKey(true);
+    try {
+      const created = await steer.createAPIKey(name);
+      setAPIKeys((current) => [created.apiKey, ...current]);
+      setGeneratedToken(created.token);
+      onNotice(t('API key generated.'));
+    } catch (error) {
+      onNotice(
+        error instanceof Error ? error.message : 'Could not generate API key.',
+      );
+    } finally {
+      setCreatingAPIKey(false);
+    }
+  };
+
+  const revokeAPIKey = async () => {
+    if (!revokingAPIKey || apiKeyActionPending) return;
+    setAPIKeyActionPending(true);
+    try {
+      const revoked = await steer.revokeAPIKey(revokingAPIKey.id);
+      setAPIKeys((current) =>
+        current.map((key) => (key.id === revoked.id ? revoked : key)),
+      );
+      setRevokingAPIKey(null);
+      onNotice(t('API key revoked.'));
+    } catch (error) {
+      onNotice(
+        error instanceof Error ? error.message : 'Could not revoke API key.',
+      );
+    } finally {
+      setAPIKeyActionPending(false);
+    }
+  };
+
+  const openAPIKeyDialog = () => {
+    setAPIKeyName('');
+    setGeneratedToken('');
+    setAPIKeyDialog(true);
+  };
 
   const update = async (next: {
     systemAgentId?: string | null;
@@ -5095,147 +5217,306 @@ function SystemSettingsView({
   };
 
   return (
-    <div className="ws-page ws-settings-page">
-      <PageIntro
-        eyebrow={t('System').toUpperCase()}
-        title={t('Settings')}
-        description={t('Manage how Steer works across this workspace.')}
-        action={null}
-      />
-      <section className="ws-settings-group">
-        <div className="ws-settings-heading">
-          <h2>{t('General')}</h2>
-          <p>{t('Basic preferences for Steer.')}</p>
-        </div>
-        <div className="ws-settings-list">
-          <div className="ws-settings-row">
-            <div className="ws-settings-copy">
-              <label htmlFor="interface-language-select">
-                {t('Interface language')}
-              </label>
-              <p>{t('Language used throughout the Steer interface.')}</p>
-            </div>
-            <Select
-              value={interfaceLanguage}
-              onValueChange={(value) => {
-                const language = String(
-                  value,
-                ) as WorkspaceSettingsRecord['interfaceLanguage'];
-                setInterfaceLanguage(language);
-                void update({ interfaceLanguage: language });
-              }}
-              disabled={saving}
-            >
-              <SelectTrigger
-                id="interface-language-select"
-                className="ws-settings-select"
-                aria-label={t('Interface language')}
-              >
-                <span>
-                  {interfaceLanguage === 'zh-CN'
-                    ? t('Simplified Chinese')
-                    : interfaceLanguage === 'en'
-                      ? t('English')
-                      : t('System default')}
-                </span>
-              </SelectTrigger>
-              <SelectContent className="ws-select-popup">
-                <SelectItem value="auto">{t('System default')}</SelectItem>
-                <SelectItem value="zh-CN">{t('Simplified Chinese')}</SelectItem>
-                <SelectItem value="en">{t('English')}</SelectItem>
-              </SelectContent>
-            </Select>
+    <>
+      <div className="ws-page ws-settings-page">
+        <PageIntro
+          eyebrow={t('System').toUpperCase()}
+          title={t('Settings')}
+          description={t('Manage how Steer works across this workspace.')}
+          action={null}
+        />
+        <section className="ws-settings-group">
+          <div className="ws-settings-heading">
+            <h2>{t('General')}</h2>
+            <p>{t('Basic preferences for Steer.')}</p>
           </div>
-          <div className="ws-settings-row">
-            <div className="ws-settings-copy">
-              <label htmlFor="ai-output-language-select">
-                {t('AI output language')}
-              </label>
-              <p>
-                {t(
-                  'Language used by the System Agent for generated summaries.',
-                )}
-              </p>
-            </div>
-            <Select
-              value={aiOutputLanguage}
-              onValueChange={(value) =>
-                void update({
-                  aiOutputLanguage: String(
+          <div className="ws-settings-list">
+            <div className="ws-settings-row">
+              <div className="ws-settings-copy">
+                <label htmlFor="interface-language-select">
+                  {t('Interface language')}
+                </label>
+                <p>{t('Language used throughout the Steer interface.')}</p>
+              </div>
+              <Select
+                value={interfaceLanguage}
+                onValueChange={(value) => {
+                  const language = String(
                     value,
-                  ) as WorkspaceSettingsRecord['aiOutputLanguage'],
-                })
-              }
-              disabled={saving}
-            >
-              <SelectTrigger
-                id="ai-output-language-select"
-                className="ws-settings-select"
-                aria-label={t('AI output language')}
+                  ) as WorkspaceSettingsRecord['interfaceLanguage'];
+                  setInterfaceLanguage(language);
+                  void update({ interfaceLanguage: language });
+                }}
+                disabled={saving}
               >
-                <span>
-                  {aiOutputLanguage === 'zh-CN'
-                    ? t('Simplified Chinese')
-                    : aiOutputLanguage === 'en'
-                      ? t('English')
-                      : t('System default')}
-                </span>
-              </SelectTrigger>
-              <SelectContent className="ws-select-popup">
-                <SelectItem value="auto">{t('System default')}</SelectItem>
-                <SelectItem value="zh-CN">{t('Simplified Chinese')}</SelectItem>
-                <SelectItem value="en">{t('English')}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </section>
-      <section className="ws-settings-group">
-        <div className="ws-settings-heading">
-          <h2>{t('AI & automation')}</h2>
-          <p>{t('Choose how Steer handles workspace AI tasks.')}</p>
-        </div>
-        <div className="ws-settings-list">
-          <div className="ws-settings-row">
-            <div className="ws-settings-copy">
-              <label htmlFor="system-agent-select">{t('System Agent')}</label>
-              <p>{t('Used for work log summaries and future AI features.')}</p>
-            </div>
-            <Select
-              value={settings?.systemAgentId || 'none'}
-              onValueChange={(value) =>
-                void update({
-                  systemAgentId:
-                    String(value) === 'none' ? null : String(value),
-                })
-              }
-              disabled={saving || agents.length === 0}
-            >
-              <SelectTrigger
-                id="system-agent-select"
-                className="ws-settings-select"
-                aria-label={t('System Agent')}
-              >
-                <span>
-                  {selected?.name ||
-                    (agents.length
-                      ? t('Not configured')
-                      : t('No agents available'))}
-                </span>
-              </SelectTrigger>
-              <SelectContent className="ws-select-popup">
-                <SelectItem value="none">{t('Not configured')}</SelectItem>
-                {agents.map((agent) => (
-                  <SelectItem key={agent.id} value={agent.id}>
-                    {agent.name}
+                <SelectTrigger
+                  id="interface-language-select"
+                  className="ws-settings-select"
+                  aria-label={t('Interface language')}
+                >
+                  <span>
+                    {interfaceLanguage === 'zh-CN'
+                      ? t('Simplified Chinese')
+                      : interfaceLanguage === 'en'
+                        ? t('English')
+                        : t('System default')}
+                  </span>
+                </SelectTrigger>
+                <SelectContent className="ws-select-popup">
+                  <SelectItem value="auto">{t('System default')}</SelectItem>
+                  <SelectItem value="zh-CN">
+                    {t('Simplified Chinese')}
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  <SelectItem value="en">{t('English')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="ws-settings-row">
+              <div className="ws-settings-copy">
+                <label htmlFor="ai-output-language-select">
+                  {t('AI output language')}
+                </label>
+                <p>
+                  {t(
+                    'Language used by the System Agent for generated summaries.',
+                  )}
+                </p>
+              </div>
+              <Select
+                value={aiOutputLanguage}
+                onValueChange={(value) =>
+                  void update({
+                    aiOutputLanguage: String(
+                      value,
+                    ) as WorkspaceSettingsRecord['aiOutputLanguage'],
+                  })
+                }
+                disabled={saving}
+              >
+                <SelectTrigger
+                  id="ai-output-language-select"
+                  className="ws-settings-select"
+                  aria-label={t('AI output language')}
+                >
+                  <span>
+                    {aiOutputLanguage === 'zh-CN'
+                      ? t('Simplified Chinese')
+                      : aiOutputLanguage === 'en'
+                        ? t('English')
+                        : t('System default')}
+                  </span>
+                </SelectTrigger>
+                <SelectContent className="ws-select-popup">
+                  <SelectItem value="auto">{t('System default')}</SelectItem>
+                  <SelectItem value="zh-CN">
+                    {t('Simplified Chinese')}
+                  </SelectItem>
+                  <SelectItem value="en">{t('English')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        </div>
-      </section>
-    </div>
+        </section>
+        <section className="ws-settings-group">
+          <div className="ws-settings-heading">
+            <h2>{t('AI & automation')}</h2>
+            <p>{t('Choose how Steer handles workspace AI tasks.')}</p>
+          </div>
+          <div className="ws-settings-list">
+            <div className="ws-settings-row">
+              <div className="ws-settings-copy">
+                <label htmlFor="system-agent-select">{t('System Agent')}</label>
+                <p>
+                  {t('Used for work log summaries and future AI features.')}
+                </p>
+              </div>
+              <Select
+                value={settings?.systemAgentId || 'none'}
+                onValueChange={(value) =>
+                  void update({
+                    systemAgentId:
+                      String(value) === 'none' ? null : String(value),
+                  })
+                }
+                disabled={saving || agents.length === 0}
+              >
+                <SelectTrigger
+                  id="system-agent-select"
+                  className="ws-settings-select"
+                  aria-label={t('System Agent')}
+                >
+                  <span>
+                    {selected?.name ||
+                      (agents.length
+                        ? t('Not configured')
+                        : t('No agents available'))}
+                  </span>
+                </SelectTrigger>
+                <SelectContent className="ws-select-popup">
+                  <SelectItem value="none">{t('Not configured')}</SelectItem>
+                  {agents.map((agent) => (
+                    <SelectItem key={agent.id} value={agent.id}>
+                      {agent.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </section>
+        <section className="ws-settings-group">
+          <div className="ws-settings-heading ws-settings-heading-action">
+            <div>
+              <h2>{t('API access')}</h2>
+              <p>{t('Use API keys to submit Agent tasks from other tools.')}</p>
+            </div>
+            <Button onClick={openAPIKeyDialog}>
+              <KeyRound aria-hidden="true" />
+              {t('Generate API key')}
+            </Button>
+          </div>
+          <div className="ws-settings-list ws-api-key-list">
+            {apiKeysLoading ? (
+              <div className="ws-api-key-empty">{t('Loading API keys…')}</div>
+            ) : apiKeys.length === 0 ? (
+              <div className="ws-api-key-empty">
+                <KeyRound aria-hidden="true" />
+                <span>{t('No API keys yet.')}</span>
+              </div>
+            ) : (
+              apiKeys.map((key) => (
+                <div
+                  className={`ws-settings-row ws-api-key-row${key.revokedAt ? ' is-revoked' : ''}`}
+                  key={key.id}
+                >
+                  <div className="ws-api-key-identity">
+                    <span className="ws-api-key-icon">
+                      <KeyRound aria-hidden="true" />
+                    </span>
+                    <div className="ws-settings-copy">
+                      <strong>{key.name}</strong>
+                      <p>
+                        <code>{key.prefix}…</code>
+                        <span aria-hidden="true"> · </span>
+                        {key.revokedAt
+                          ? t('Revoked')
+                          : key.lastUsedAt
+                            ? `${t('Last used')} ${formatDate(key.lastUsedAt)}`
+                            : t('Never used')}
+                      </p>
+                    </div>
+                  </div>
+                  {!key.revokedAt && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="ws-api-key-revoke"
+                      aria-label={`${t('Revoke')} ${key.name}`}
+                      title={t('Revoke')}
+                      onClick={() => setRevokingAPIKey(key)}
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+      <Dialog
+        open={apiKeyDialog}
+        onOpenChange={(open) => {
+          setAPIKeyDialog(open);
+          if (!open) {
+            setAPIKeyName('');
+            setGeneratedToken('');
+          }
+        }}
+      >
+        <DialogContent className="ws-workspace-dialog ws-api-key-dialog">
+          <DialogTitle>
+            {generatedToken ? t('API key ready') : t('Generate API key')}
+          </DialogTitle>
+          <DialogDescription>
+            {generatedToken
+              ? t('Copy this key now. You will not be able to see it again.')
+              : t(
+                  'This key can submit, read, and cancel tasks in this workspace.',
+                )}
+          </DialogDescription>
+          {generatedToken ? (
+            <div className="ws-api-key-token-panel">
+              <code>{generatedToken}</code>
+              <Button
+                onClick={() => {
+                  void navigator.clipboard.writeText(generatedToken);
+                  onNotice(t('API key copied.'));
+                }}
+              >
+                <Copy aria-hidden="true" />
+                {t('Copy API key')}
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={(event) => void createAPIKey(event)}>
+              <label>
+                {t('Name')}
+                <input
+                  maxLength={80}
+                  value={apiKeyName}
+                  onChange={(event) => setAPIKeyName(event.target.value)}
+                  placeholder={t('For example: Local automation')}
+                />
+              </label>
+              <p className="ws-field-note">
+                {t('Permissions: read, submit, and cancel Agent tasks.')}
+              </p>
+              <div className="ws-form-actions">
+                <button type="button" onClick={() => setAPIKeyDialog(false)}>
+                  {t('Cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={!apiKeyName.trim() || creatingAPIKey}
+                >
+                  {creatingAPIKey ? t('Generating…') : t('Generate')}
+                </button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+      <AlertDialog
+        open={Boolean(revokingAPIKey)}
+        onOpenChange={(open) => !open && setRevokingAPIKey(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('Revoke API key?')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                'Any integration using this key will immediately lose access.',
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={apiKeyActionPending}>
+              {t('Cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={apiKeyActionPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void revokeAPIKey();
+              }}
+            >
+              {apiKeyActionPending ? t('Revoking…') : t('Revoke')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

@@ -18,6 +18,17 @@ export type WorkspaceRecord = {
   updatedAt: string;
 };
 
+export type WorkspaceAPIKeyRecord = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  prefix: string;
+  scopes: Array<'tasks:read' | 'tasks:write' | 'tasks:cancel'>;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+};
+
 export class SteerHTTPError extends Error {
   constructor(
     message: string,
@@ -254,25 +265,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function streamRunEvents(
-  id: string,
+async function streamEvents(
+  path: string,
   after: number,
   signal: AbortSignal,
   onEvent: (event: RelayEvent) => void,
 ) {
-  const response = await fetch(
-    `${baseURL}/runs/${encodeURIComponent(id)}/events/stream?after=${after}`,
-    {
-      headers: {
-        Accept: 'text/event-stream',
-        ...(selectedWorkspaceId
-          ? { 'X-Steer-Workspace': selectedWorkspaceId }
-          : {}),
-      },
-      credentials: 'include',
-      signal,
+  const response = await fetch(`${baseURL}${path}?after=${after}`, {
+    headers: {
+      Accept: 'text/event-stream',
+      ...(selectedWorkspaceId
+        ? { 'X-Steer-Workspace': selectedWorkspaceId }
+        : {}),
     },
-  );
+    credentials: 'include',
+    signal,
+  });
   if (!response.ok || !response.body) {
     const body = (await response.json().catch(() => null)) as {
       error?: string;
@@ -317,6 +325,19 @@ async function streamRunEvents(
   if (!completed) throw new Error('Run event stream ended unexpectedly.');
 }
 
+const streamRunEvents = (
+  id: string,
+  after: number,
+  signal: AbortSignal,
+  onEvent: (event: RelayEvent) => void,
+) =>
+  streamEvents(
+    `/runs/${encodeURIComponent(id)}/events/stream`,
+    after,
+    signal,
+    onEvent,
+  );
+
 export const steer = {
   setWorkspace: (workspaceId: string) => {
     selectedWorkspaceId = workspaceId;
@@ -339,6 +360,19 @@ export const steer = {
     request<WorkspaceRecord>('/workspaces', {
       method: 'POST',
       body: JSON.stringify({ name }),
+    }),
+  apiKeys: () => request<WorkspaceAPIKeyRecord[]>('/api-keys'),
+  createAPIKey: (name: string) =>
+    request<{ apiKey: WorkspaceAPIKeyRecord; token: string }>('/api-keys', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        scopes: ['tasks:read', 'tasks:write', 'tasks:cancel'],
+      }),
+    }),
+  revokeAPIKey: (id: string) =>
+    request<WorkspaceAPIKeyRecord>(`/api-keys/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     }),
   availableRuntimes: () => request<RelayNode[]>('/runtimes/available'),
   claimAvailableRuntimes: (runtimeIds: string[]) =>
@@ -621,6 +655,42 @@ export const steer = {
       assistantMessage: { id: string };
     }>('/chat', { method: 'POST', body });
   },
+  createTask: (input: {
+    prompt: string;
+    agentId: string;
+    projectId?: string;
+    conversationId?: string;
+    images?: File[];
+    idempotencyKey?: string;
+  }) => {
+    const body = new FormData();
+    body.set('prompt', input.prompt);
+    body.set('agentId', input.agentId);
+    if (input.projectId) body.set('projectId', input.projectId);
+    if (input.conversationId) body.set('conversationId', input.conversationId);
+    input.images?.forEach((image) => body.append('images', image, image.name));
+    const idempotencyKey =
+      input.idempotencyKey ??
+      (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `web-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    return request<{
+      taskId: string;
+      conversationId: string;
+      sessionId: string;
+      runId: string;
+      status: string;
+      userMessage: {
+        id: string;
+        attachments?: ChatMessageRecord['attachments'];
+      };
+      assistantMessage: { id: string };
+    }>('/tasks', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
+      body,
+    });
+  },
   messageAttachmentURL: (messageId: string, attachmentId: string) =>
     `${baseURL}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`,
   run: (id: string) =>
@@ -631,7 +701,37 @@ export const steer = {
       events: RelayEvent[];
       artifacts: unknown[];
     }>(`/runs/${id}`),
+  task: (id: string) =>
+    request<{
+      task: {
+        id: string;
+        conversationId: string;
+        runId: string;
+        status: string;
+      };
+      run: RelayRun;
+      content: string;
+      error?: string | null;
+      events: RelayEvent[];
+      artifacts: unknown[];
+    }>(`/tasks/${encodeURIComponent(id)}`),
   streamRunEvents,
+  streamTaskEvents: async (
+    id: string,
+    after: number,
+    signal: AbortSignal,
+    onEvent: (event: RelayEvent) => void,
+  ) =>
+    streamEvents(
+      `/tasks/${encodeURIComponent(id)}/events`,
+      after,
+      signal,
+      onEvent,
+    ),
   cancelRun: (id: string) =>
     request<RelayRun>(`/runs/${id}/cancel`, { method: 'POST' }),
+  cancelTask: (id: string) =>
+    request<RelayRun>(`/tasks/${encodeURIComponent(id)}/cancel`, {
+      method: 'POST',
+    }),
 };

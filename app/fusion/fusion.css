@@ -5481,14 +5481,14 @@ button.ws-chat-response-meta:focus-visible {
 }
 
 .ws-agents-table > .ws-table-head {
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 150px 75px 45px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 150px 75px 64px;
   padding-left: 58px;
 }
 
 .ws-agents-table > div:not(.ws-table-head) {
   display: grid;
   min-height: 62px;
-  grid-template-columns: 30px minmax(0, 1.3fr) minmax(0, 1fr) 150px 75px 45px;
+  grid-template-columns: 30px minmax(0, 1.3fr) minmax(0, 1fr) 150px 75px 64px;
   align-items: center;
   gap: 14px;
   padding: 10px 14px;
@@ -5657,6 +5657,37 @@ button.ws-chat-response-meta:focus-visible {
   display: block;
 }
 
+.ws-agent-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.ws-agent-actions button {
+  display: inline-grid;
+  min-width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-caption);
+  font-weight: 600;
+}
+
+.ws-agent-actions svg {
+  width: 13px;
+  height: 13px;
+}
+
+.ws-agent-actions button:hover {
+  background: var(--ws-surface-subtle);
+  color: var(--ws-text);
+}
+
 .ws-agents-table strong,
 .ws-runtime-table strong {
   overflow: hidden;
@@ -5686,21 +5717,6 @@ button.ws-chat-response-meta:focus-visible {
   border-radius: 50%;
   background: #4f9a6b;
   box-shadow: 0 0 0 3px #4f9a6b14;
-}
-
-.ws-agents-table > div > button {
-  padding: 4px;
-  border: 0;
-  background: none;
-  color: var(--ws-text-secondary);
-  font-size: var(--ws-font-caption);
-  font-weight: 600;
-}
-
-.ws-agents-table > div > button:hover {
-  color: var(--ws-text);
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 .ws-runtime-table > div:not(.ws-table-head) > svg {
@@ -5756,6 +5772,33 @@ button.ws-chat-response-meta:focus-visible {
   line-height: 1.45;
 }
 
+.ws-settings-heading-action {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.ws-settings-heading-action > button {
+  height: 34px;
+  flex: 0 0 auto;
+  gap: 7px;
+  border-radius: 9px;
+  background: var(--ws-action);
+  color: #fff;
+  font-size: var(--ws-font-caption);
+  font-weight: 620;
+}
+
+.ws-settings-heading-action > button:hover {
+  background: var(--ws-action-hover);
+}
+
+.ws-settings-heading-action > button svg {
+  width: 14px;
+  height: 14px;
+}
+
 .ws-settings-list {
   overflow: hidden;
   border: 1px solid var(--ws-border);
@@ -5784,6 +5827,14 @@ button.ws-chat-response-meta:focus-visible {
   line-height: 1.4;
 }
 
+.ws-settings-copy strong {
+  display: block;
+  color: var(--ws-text);
+  font-size: 12.5px;
+  font-weight: 620;
+  line-height: 1.4;
+}
+
 .ws-settings-copy p {
   margin: 3px 0 0;
   color: var(--ws-muted);
@@ -5802,7 +5853,117 @@ button.ws-chat-response-meta:focus-visible {
   text-overflow: ellipsis;
 }
 
+.ws-api-key-row {
+  min-height: 68px;
+}
+
+.ws-api-key-row.is-revoked {
+  background: var(--ws-surface-subtle);
+  opacity: 0.68;
+}
+
+.ws-api-key-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+}
+
+.ws-api-key-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border: 1px solid var(--ws-border);
+  border-radius: 9px;
+  background: var(--ws-surface-subtle);
+  color: var(--ws-text-secondary);
+}
+
+.ws-api-key-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.ws-api-key-row code {
+  color: var(--ws-text-secondary);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.ws-api-key-revoke {
+  flex: 0 0 auto;
+  color: var(--ws-muted);
+}
+
+.ws-api-key-revoke:hover {
+  background: var(--ws-negative-soft) !important;
+  color: var(--ws-negative) !important;
+}
+
+.ws-api-key-empty {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px;
+  color: var(--ws-muted);
+  font-size: var(--ws-font-caption);
+}
+
+.ws-api-key-empty svg {
+  width: 15px;
+  height: 15px;
+}
+
+.ws-api-key-dialog {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.ws-api-key-token-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.ws-api-key-token-panel code {
+  overflow-wrap: anywhere;
+  padding: 14px;
+  border: 1px solid var(--ws-border);
+  border-radius: 10px;
+  background: var(--ws-surface-subtle);
+  color: var(--ws-text);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  user-select: all;
+}
+
+.ws-api-key-token-panel button {
+  justify-self: end;
+  gap: 7px;
+  border-radius: 9px;
+  background: var(--ws-action);
+  color: #fff;
+  font-size: var(--ws-font-caption);
+}
+
+.ws-api-key-token-panel button:hover {
+  background: var(--ws-action-hover);
+}
+
 @media (max-width: 760px) {
+  .ws-settings-heading-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ws-settings-heading-action > button {
+    align-self: flex-start;
+  }
+
   .ws-settings-row {
     align-items: flex-start;
     flex-direction: column;
@@ -6583,7 +6744,7 @@ button.ws-chat-response-meta:focus-visible {
   }
 
   .ws-agents-table > .ws-table-head {
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 75px 45px;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 75px 64px;
   }
 
   .ws-agents-table > .ws-table-head > span:nth-child(3),
@@ -6592,7 +6753,7 @@ button.ws-chat-response-meta:focus-visible {
   }
 
   .ws-agents-table > div:not(.ws-table-head) {
-    grid-template-columns: 30px minmax(0, 1.4fr) minmax(0, 1fr) 75px 45px;
+    grid-template-columns: 30px minmax(0, 1.4fr) minmax(0, 1fr) 75px 64px;
   }
 
   .ws-runtime-table > .ws-table-head {
@@ -6717,7 +6878,7 @@ button.ws-chat-response-meta:focus-visible {
   }
 
   .ws-agents-table > div:not(.ws-table-head) {
-    grid-template-columns: 30px minmax(0, 1fr) 65px 40px;
+    grid-template-columns: 30px minmax(0, 1fr) 65px 64px;
   }
 
   .ws-agents-table > div:not(.ws-table-head) > span:nth-child(3),
