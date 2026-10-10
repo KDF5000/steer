@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -53,6 +54,14 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 	}
 	if err := st.BindRelayNodeRuntimes(ctx, workspace.ID, user.ID, nodeID, []string{physicalRuntimeID}); err != nil {
 		t.Fatal(err)
+	}
+	if err := st.SyncRelayNode(ctx, node.ID, node.Name, node.Capacity, "offline", time.Now(), []store.RelayNodeRuntime{{
+		ID: physicalRuntimeID, NodeID: nodeID, Provider: "codex", State: "healthy",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.DeleteOwnedRelayNode(ctx, user.ID, nodeID); !errors.Is(err, store.ErrRelayNodeInUse) {
+		t.Fatalf("delete bound offline Node = %v, want %v", err, store.ErrRelayNodeInUse)
 	}
 	bindings, err := st.WorkspaceRuntimeBindings(ctx, workspace.ID)
 	if err != nil || len(bindings) != 1 {
@@ -147,6 +156,11 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 	}
 	if !claimedNodeFound {
 		t.Fatalf("claimed Node %q is missing from the owner's Node list", generatedEnrollment.NodeID)
+	}
+	call(http.MethodDelete, "/relay-nodes/"+nodeID, "", http.StatusConflict)
+	call(http.MethodDelete, "/relay-nodes/"+generatedEnrollment.NodeID, "", http.StatusNoContent)
+	if strings.Contains(call(http.MethodGet, "/relay-nodes", "", http.StatusOK).Body.String(), generatedEnrollment.NodeID) {
+		t.Fatalf("removed offline Node %q is still listed", generatedEnrollment.NodeID)
 	}
 	publicRequest = httptest.NewRequest(http.MethodPost, "/api/v1/relay-node-enrollments/claim", strings.NewReader(claimBody))
 	publicRequest.Header.Set("Content-Type", "application/json")

@@ -77,7 +77,11 @@ type WorkspaceRuntimeBinding struct {
 	UpdatedAt          time.Time `json:"updatedAt"`
 }
 
-var ErrRuntimeBindingInUse = errors.New("runtime binding is still used by an Agent, Project, or conversation")
+var (
+	ErrRuntimeBindingInUse = errors.New("runtime binding is still used by an Agent, Project, or conversation")
+	ErrRelayNodeOnline     = errors.New("Relay Node must be offline before it can be removed")
+	ErrRelayNodeInUse      = errors.New("Relay Node still has Runtime bindings assigned to a workspace")
+)
 
 const userColumns = `id,email,display_name,password_hash,created_at,updated_at`
 const workspaceColumns = `id,name,owner_user_id,created_at,updated_at`
@@ -310,6 +314,47 @@ func (s *Store) RelayNodeRuntimes(ctx context.Context, nodeID string) ([]RelayNo
 		runtimes = append(runtimes, runtime)
 	}
 	return runtimes, rows.Err()
+}
+
+func (s *Store) DeleteOwnedRelayNode(ctx context.Context, userID, nodeID string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var state string
+	err = tx.QueryRow(ctx, `SELECT state FROM relay_nodes WHERE id=$1 AND owner_user_id=$2 FOR UPDATE`, nodeID, userID).Scan(&state)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if state != "offline" {
+		return ErrRelayNodeOnline
+	}
+	var bound bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(
+		SELECT 1 FROM workspace_runtime_bindings b
+		JOIN relay_node_runtimes r ON r.id=b.node_runtime_id
+		WHERE r.node_id=$1
+	)`, nodeID).Scan(&bound); err != nil {
+		return err
+	}
+	if bound {
+		return ErrRelayNodeInUse
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM relay_node_runtimes WHERE node_id=$1`, nodeID); err != nil {
+		return err
+	}
+	command, err := tx.Exec(ctx, `DELETE FROM relay_nodes WHERE id=$1 AND owner_user_id=$2`, nodeID, userID)
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *Store) BindRelayNodeRuntimes(ctx context.Context, workspaceID, userID, nodeID string, runtimeIDs []string) error {

@@ -6890,7 +6890,15 @@ button.ws-chat-response-meta:focus-visible {
   gap: 16px;
 }
 
-.ws-runtime-discovery-heading > button {
+.ws-runtime-discovery-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.ws-runtime-discovery-actions button {
   display: inline-flex;
   min-height: 32px;
   flex: 0 0 auto;
@@ -6905,11 +6913,11 @@ button.ws-chat-response-meta:focus-visible {
   font-weight: 580;
 }
 
-.ws-runtime-discovery-heading > button:hover:not(:disabled) {
+.ws-runtime-discovery-actions button:hover:not(:disabled) {
   background: var(--ws-surface-subtle);
 }
 
-.ws-runtime-discovery-heading > button:disabled {
+.ws-runtime-discovery-actions button:disabled {
   opacity: 0.55;
 }
 
@@ -6977,6 +6985,29 @@ button.ws-chat-response-meta:focus-visible {
   color: var(--ws-text-tertiary);
   font-size: 10.5px;
   text-transform: capitalize;
+}
+
+.ws-runtime-discovery-list .ws-runtime-remove-node {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ws-text-tertiary);
+}
+
+.ws-runtime-discovery-list .ws-runtime-remove-node:hover {
+  background: var(--ws-negative-soft);
+  color: var(--ws-negative);
+}
+
+.ws-runtime-discovery-list .ws-runtime-remove-node svg {
+  width: 12px;
+  height: 12px;
 }
 
 .ws-runtime-discovery-list label {

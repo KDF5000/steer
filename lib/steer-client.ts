@@ -431,6 +431,10 @@ export const steer = {
       method: 'POST',
     }),
   relayNodes: () => request<RelayNode[]>('/relay-nodes'),
+  deleteRelayNode: (nodeId: string) =>
+    request<void>(`/relay-nodes/${encodeURIComponent(nodeId)}`, {
+      method: 'DELETE',
+    }),
   bindRelayNode: (nodeId: string, runtimeIds: string[]) =>
     request<RelayNode[]>(
       `/relay-nodes/${encodeURIComponent(nodeId)}/bindings`,

@@ -119,6 +119,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/integrations/{id}/reconnect", s.reconnectIntegration)
 	mux.HandleFunc("POST /api/v1/relay-node-enrollments", s.createRelayNodeEnrollment)
 	mux.HandleFunc("GET /api/v1/relay-nodes", s.listOwnedRelayNodes)
+	mux.HandleFunc("DELETE /api/v1/relay-nodes/{id}", s.deleteOwnedRelayNode)
 	mux.HandleFunc("POST /api/v1/relay-nodes/{id}/bindings", s.bindRelayNode)
 	mux.HandleFunc("DELETE /api/v1/runtime-bindings/{id}", s.disconnectRuntimeBinding)
 	mux.HandleFunc("PUT /api/v1/nodes/{id}/capacity", s.updateNodeCapacity)
@@ -1174,6 +1175,8 @@ func writeError(w http.ResponseWriter, err error) {
 	} else if errors.Is(err, store.ErrConflict) {
 		status = http.StatusConflict
 	} else if errors.Is(err, store.ErrRuntimeBindingInUse) {
+		status = http.StatusConflict
+	} else if errors.Is(err, store.ErrRelayNodeOnline) || errors.Is(err, store.ErrRelayNodeInUse) {
 		status = http.StatusConflict
 	} else if errors.Is(err, store.ErrAgentInUse) {
 		status = http.StatusConflict

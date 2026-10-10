@@ -288,6 +288,13 @@ const zhCN: Record<string, string> = {
   Copied: '已复制',
   'Copy command': '复制命令',
   'Refresh discovered Runtimes': '刷新发现的运行环境',
+  'Choose an existing Node': '选择已有 Node',
+  'Show installed Node': '显示本次安装的 Node',
+  'Remove offline Relay Node': '移除离线 Relay Node',
+  'No other Relay Nodes are available for this account.':
+    '当前账户没有其他可用的 Relay Node。',
+  'Waiting for the installed Node to connect. Run the command, then refresh.':
+    '正在等待本次安装的 Node 连接。请执行安装命令后刷新。',
   'Adding…': '正在添加…',
   'Projects, conversations, Agents, and Runtimes stay isolated inside this workspace.':
     '项目、对话、智能体和运行环境在此工作区内相互隔离。',

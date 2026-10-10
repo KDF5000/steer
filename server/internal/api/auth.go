@@ -313,6 +313,22 @@ func (s *Server) listOwnedRelayNodes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, nodes)
 }
 
+func (s *Server) deleteOwnedRelayNode(w http.ResponseWriter, r *http.Request) {
+	if _, ok := r.Context().Value(apiKeyContextKey).(store.WorkspaceAPIKey); ok {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "API keys cannot remove Relay Nodes."})
+		return
+	}
+	if err := s.reconcileRelayNodes(r.Context()); err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.store.DeleteOwnedRelayNode(r.Context(), userFromContext(r.Context()).ID, r.PathValue("id")); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) bindRelayNode(w http.ResponseWriter, r *http.Request) {
 	if _, ok := r.Context().Value(apiKeyContextKey).(store.WorkspaceAPIKey); ok {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "API keys cannot manage Relay Nodes."})

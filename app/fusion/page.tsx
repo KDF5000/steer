@@ -639,6 +639,10 @@ export default function Fusion() {
   const [runtimeDiscoveryError, setRuntimeDiscoveryError] = useState('');
   const [relayEnrollmentToken, setRelayEnrollmentToken] = useState('');
   const [relayEnrollmentNodeID, setRelayEnrollmentNodeID] = useState('');
+  const [deletingRelayNode, setDeletingRelayNode] = useState<RelayNode | null>(
+    null,
+  );
+  const [deletingRelayNodeBusy, setDeletingRelayNodeBusy] = useState(false);
   const [creatingAgent, setCreatingAgent] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [formError, setFormError] = useState('');
@@ -1731,6 +1735,7 @@ export default function Fusion() {
     setRuntimeDiscoveryError('');
     try {
       const enrollment = await steer.createRelayNodeEnrollment();
+      setSelectedRuntimeIDs([]);
       setRelayEnrollmentToken(enrollment.token);
       setRelayEnrollmentNodeID(enrollment.nodeId);
     } catch (error) {
@@ -1739,6 +1744,35 @@ export default function Fusion() {
           ? error.message
           : 'Could not create an installation token.',
       );
+    }
+  };
+
+  const deleteSelectedRelayNode = async () => {
+    if (!deletingRelayNode || deletingRelayNodeBusy) return;
+    setDeletingRelayNodeBusy(true);
+    try {
+      await steer.deleteRelayNode(deletingRelayNode.id);
+      const removedRuntimeIDs = new Set(
+        (deletingRelayNode.runtimes || []).map((runtime) => runtime.id),
+      );
+      setAvailableRuntimeNodes((current) =>
+        current.filter((node) => node.id !== deletingRelayNode.id),
+      );
+      setSelectedRuntimeIDs((current) =>
+        current.filter((runtimeID) => !removedRuntimeIDs.has(runtimeID)),
+      );
+      if (relayEnrollmentNodeID === deletingRelayNode.id) {
+        setRelayEnrollmentToken('');
+        setRelayEnrollmentNodeID('');
+      }
+      setDeletingRelayNode(null);
+      setNotice('Offline Relay Node removed.');
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : 'Could not remove Relay Node.',
+      );
+    } finally {
+      setDeletingRelayNodeBusy(false);
     }
   };
 
@@ -2606,6 +2640,7 @@ export default function Fusion() {
         </AlertDialogContent>
       </AlertDialog>
       <RuntimeDialog
+        key={`${relayEnrollmentNodeID || 'existing'}:${runtimeDialog ? 'open' : 'closed'}`}
         open={runtimeDialog}
         connected={relayConnected}
         error={relayError}
@@ -2624,7 +2659,42 @@ export default function Fusion() {
         onSelect={setSelectedRuntimeIDs}
         onClaim={() => void claimSelectedRuntimes()}
         onCreateEnrollment={() => void createRelayEnrollment()}
+        onRemoveNode={setDeletingRelayNode}
       />
+      <AlertDialog
+        open={Boolean(deletingRelayNode)}
+        onOpenChange={(open) =>
+          !open && !deletingRelayNodeBusy && setDeletingRelayNode(null)
+        }
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Remove {deletingRelayNode?.labels?.name || 'this Relay Node'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the offline Node from Steer. It does not uninstall
+              the Relay Node service on the machine. A Node with Runtime
+              bindings cannot be removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingRelayNodeBusy}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deletingRelayNodeBusy}
+              onClick={(event) => {
+                event.preventDefault();
+                void deleteSelectedRelayNode();
+              }}
+            >
+              {deletingRelayNodeBusy ? 'Removing…' : 'Remove Node'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {notice && (
         <output className="ws-toast" aria-live="polite">
           <Check aria-hidden="true" />
@@ -6719,6 +6789,7 @@ function RuntimeDialog({
   onSelect,
   onClaim,
   onCreateEnrollment,
+  onRemoveNode,
 }: {
   open: boolean;
   connected: boolean;
@@ -6738,9 +6809,11 @@ function RuntimeDialog({
   onSelect: (runtimeIDs: string[]) => void;
   onClaim: () => void;
   onCreateEnrollment: () => void;
+  onRemoveNode: (node: RelayNode) => void;
 }) {
   const { t } = useI18n();
   const [commandCopied, setCommandCopied] = useState(false);
+  const [showExistingNodes, setShowExistingNodes] = useState(false);
   const shellQuote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
   const publicSteerAPIURL = (
     steerAPIURL.startsWith('http')
@@ -6753,6 +6826,13 @@ function RuntimeDialog({
     enrollmentToken && enrollmentNodeID
       ? `RELAY_NODE_ID=${shellQuote(enrollmentNodeID)}\nRELAY_MACHINE_NAME_JSON=$(hostname | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')\ncurl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh | RELAY_NODE_TOKEN='YOUR_NODE_TOKEN' sh -s -- --server ${shellQuote(publicURL || 'https://relay.example.com')} --node-id "$RELAY_NODE_ID" --force --install-service && \\\n  curl -fsS -X POST ${shellQuote(`${publicSteerAPIURL}/relay-node-enrollments/claim`)} -H 'Content-Type: application/json' --data-binary "{\\"token\\":\\"${enrollmentToken}\\",\\"nodeId\\":\\"$RELAY_NODE_ID\\",\\"name\\":\\"$RELAY_MACHINE_NAME_JSON\\",\\"capacity\\":2}"`
       : '';
+  const visibleNodes = enrollmentNodeID
+    ? nodes.filter((node) =>
+        showExistingNodes
+          ? node.id !== enrollmentNodeID
+          : node.id === enrollmentNodeID,
+      )
+    : nodes;
 
   async function copyInstallCommand() {
     const copied = await writeClipboard(command);
@@ -6762,7 +6842,7 @@ function RuntimeDialog({
   }
 
   function toggleRuntime(runtimeID: string) {
-    const selectedNode = nodes.find((node) =>
+    const selectedNode = visibleNodes.find((node) =>
       node.runtimes?.some((runtime) => runtime.id === runtimeID),
     );
     onSelect(
@@ -6873,36 +6953,70 @@ function RuntimeDialog({
                     )}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={onRefresh}
-                  disabled={discovering || claiming}
-                  aria-label={t('Refresh discovered Runtimes')}
-                >
-                  <RefreshCw className={discovering ? 'is-spinning' : ''} />
-                  {discovering ? t('Refreshing…') : t('Refresh')}
-                </button>
+                <div className="ws-runtime-discovery-actions">
+                  {enrollmentNodeID && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelect([]);
+                        setShowExistingNodes((current) => !current);
+                      }}
+                    >
+                      {showExistingNodes
+                        ? t('Show installed Node')
+                        : t('Choose an existing Node')}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={onRefresh}
+                    disabled={discovering || claiming}
+                    aria-label={t('Refresh discovered Runtimes')}
+                  >
+                    <RefreshCw className={discovering ? 'is-spinning' : ''} />
+                    {discovering ? t('Refreshing…') : t('Refresh')}
+                  </button>
+                </div>
               </div>
               {discoveryError && (
                 <p className="ws-form-error" role="alert">
                   {discoveryError}
                 </p>
               )}
-              {!discovering && !discoveryError && nodes.length === 0 && (
+              {!discovering && !discoveryError && visibleNodes.length === 0 && (
                 <div className="ws-runtime-empty">
-                  {t(
-                    'No Relay Nodes owned by your account were found. Install a Node, then refresh.',
-                  )}
+                  {enrollmentNodeID
+                    ? showExistingNodes
+                      ? t(
+                          'No other Relay Nodes are available for this account.',
+                        )
+                      : t(
+                          'Waiting for the installed Node to connect. Run the command, then refresh.',
+                        )
+                    : t(
+                        'No Relay Nodes owned by your account were found. Install a Node, then refresh.',
+                      )}
                 </div>
               )}
-              {nodes.length > 0 && (
+              {visibleNodes.length > 0 && (
                 <div className="ws-runtime-discovery-list">
-                  {nodes.map((node) => (
+                  {visibleNodes.map((node) => (
                     <section key={node.id}>
                       <header>
                         <Server aria-hidden="true" />
                         <strong>{node.labels?.name || node.id}</strong>
                         <small>{node.state || 'unknown'}</small>
+                        {node.state === 'offline' && (
+                          <button
+                            type="button"
+                            className="ws-runtime-remove-node"
+                            onClick={() => onRemoveNode(node)}
+                            aria-label={t('Remove offline Relay Node')}
+                            title={t('Remove offline Relay Node')}
+                          >
+                            <Trash2 aria-hidden="true" />
+                          </button>
+                        )}
                       </header>
                       <div>
                         {(node.runtimes ?? []).map((runtime) => (
