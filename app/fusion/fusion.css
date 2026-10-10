@@ -6917,6 +6917,12 @@ button.ws-chat-response-meta:focus-visible {
   background: var(--ws-surface-subtle);
 }
 
+.ws-runtime-discovery-actions button.is-active {
+  border-color: var(--ws-text);
+  background: var(--ws-text);
+  color: #fff;
+}
+
 .ws-runtime-discovery-actions button:disabled {
   opacity: 0.55;
 }

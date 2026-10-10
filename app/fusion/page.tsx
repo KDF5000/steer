@@ -6838,7 +6838,9 @@ function RuntimeDialog({
 }) {
   const { t } = useI18n();
   const [commandCopied, setCommandCopied] = useState(false);
-  const [showExistingNodes, setShowExistingNodes] = useState(false);
+  const [nodeView, setNodeView] = useState<'installed' | 'existing'>(
+    'installed',
+  );
   const shellQuote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
   const publicSteerAPIURL = (
     steerAPIURL.startsWith('http')
@@ -6851,13 +6853,12 @@ function RuntimeDialog({
     enrollmentToken && enrollmentNodeID
       ? `RELAY_NODE_ID=${shellQuote(enrollmentNodeID)}\nRELAY_MACHINE_NAME_JSON=$(hostname | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')\ncurl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh | RELAY_NODE_TOKEN='YOUR_NODE_TOKEN' sh -s -- --server ${shellQuote(publicURL || 'https://relay.example.com')} --node-id "$RELAY_NODE_ID" --force --install-service && \\\n  curl -fsS -X POST ${shellQuote(`${publicSteerAPIURL}/relay-node-enrollments/claim`)} -H 'Content-Type: application/json' --data-binary "{\\"token\\":\\"${enrollmentToken}\\",\\"nodeId\\":\\"$RELAY_NODE_ID\\",\\"name\\":\\"$RELAY_MACHINE_NAME_JSON\\",\\"capacity\\":2}"`
       : '';
-  const visibleNodes = enrollmentNodeID
-    ? nodes.filter((node) =>
-        showExistingNodes
-          ? node.id !== enrollmentNodeID
-          : node.id === enrollmentNodeID,
-      )
-    : nodes;
+  const visibleNodes =
+    nodeView === 'installed'
+      ? enrollmentNodeID
+        ? nodes.filter((node) => node.id === enrollmentNodeID)
+        : []
+      : nodes.filter((node) => node.id !== enrollmentNodeID);
 
   async function copyInstallCommand() {
     const copied = await writeClipboard(command);
@@ -6979,19 +6980,26 @@ function RuntimeDialog({
                   </p>
                 </div>
                 <div className="ws-runtime-discovery-actions">
-                  {enrollmentNodeID && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onSelect([]);
-                        setShowExistingNodes((current) => !current);
-                      }}
-                    >
-                      {showExistingNodes
-                        ? t('Show installed Node')
-                        : t('Choose an existing Node')}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className={nodeView === 'installed' ? 'is-active' : ''}
+                    onClick={() => {
+                      onSelect([]);
+                      setNodeView('installed');
+                    }}
+                  >
+                    {t('Installed Node')}
+                  </button>
+                  <button
+                    type="button"
+                    className={nodeView === 'existing' ? 'is-active' : ''}
+                    onClick={() => {
+                      onSelect([]);
+                      setNodeView('existing');
+                    }}
+                  >
+                    {t('Choose an existing Node')}
+                  </button>
                   <button
                     type="button"
                     onClick={onRefresh}
@@ -7010,17 +7018,21 @@ function RuntimeDialog({
               )}
               {!discovering && !discoveryError && visibleNodes.length === 0 && (
                 <div className="ws-runtime-empty">
-                  {enrollmentNodeID
-                    ? showExistingNodes
+                  {nodeView === 'installed'
+                    ? enrollmentNodeID
+                      ? t(
+                          'Waiting for the installed Node to connect. Run the command, then refresh.',
+                        )
+                      : t(
+                          'Generate an installation command above to track the new Node here.',
+                        )
+                    : enrollmentNodeID
                       ? t(
                           'No other Relay Nodes are available for this account.',
                         )
                       : t(
-                          'Waiting for the installed Node to connect. Run the command, then refresh.',
-                        )
-                    : t(
-                        'No Relay Nodes owned by your account were found. Install a Node, then refresh.',
-                      )}
+                          'No Relay Nodes owned by your account were found. Install a Node, then refresh.',
+                        )}
                 </div>
               )}
               {visibleNodes.length > 0 && (
