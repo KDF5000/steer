@@ -710,6 +710,14 @@ func (s *Server) workspaceNodes(ctx context.Context, workspaceID string) ([]cont
 			}
 		}
 		if len(filtered) > 0 {
+			record, lookupErr := s.store.RelayNodeByID(ctx, node.ID)
+			if lookupErr != nil {
+				return nil, lookupErr
+			}
+			if node.Labels == nil {
+				node.Labels = map[string]string{}
+			}
+			node.Labels["name"] = record.Name
 			node.Runtimes = filtered
 			visible = append(visible, node)
 		}

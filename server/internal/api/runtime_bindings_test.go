@@ -159,6 +159,7 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 	var bootstrap struct {
 		Relay struct {
 			Nodes []struct {
+				Labels   map[string]string `json:"labels"`
 				Runtimes []struct {
 					ID string `json:"id"`
 				} `json:"runtimes"`
@@ -170,6 +171,9 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 	}
 	if len(bootstrap.Relay.Nodes) != 1 || len(bootstrap.Relay.Nodes[0].Runtimes) != 1 || bootstrap.Relay.Nodes[0].Runtimes[0].ID != bindingID {
 		t.Fatalf("bootstrap exposed a physical Runtime instead of its binding: %+v", bootstrap.Relay.Nodes)
+	}
+	if bootstrap.Relay.Nodes[0].Labels["name"] != "Test Node" {
+		t.Fatalf("bootstrap Node name = %q, want %q", bootstrap.Relay.Nodes[0].Labels["name"], "Test Node")
 	}
 
 	call(http.MethodPost, "/tasks", `{"prompt":"Verify binding","agentId":"`+agent.ID+`"}`, http.StatusAccepted)

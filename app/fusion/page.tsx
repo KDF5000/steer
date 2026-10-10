@@ -5116,7 +5116,7 @@ function AgentsView({
             <div key={node.id}>
               <Server />
               <span>
-                <strong>{node.id}</strong>
+                <strong title={node.id}>{node.labels?.name || node.id}</strong>
                 <small>{t('Online · heartbeat just now')}</small>
               </span>
               <span>{location}</span>
