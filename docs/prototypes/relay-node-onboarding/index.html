@@ -1,0 +1,1170 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Steer · 添加运行环境交互方案</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f1f1f3;
+        --surface: #fff;
+        --surface-subtle: #fafafa;
+        --border: #e1e1e5;
+        --border-strong: #d1d2d8;
+        --text: #292a30;
+        --secondary: #696a72;
+        --tertiary: #96979f;
+        --accent: #5556c8;
+        --accent-soft: #f2f2ff;
+        --green: #48966a;
+        --green-soft: #f3faf6;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          'PingFang SC',
+          'Microsoft YaHei',
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        min-width: 940px;
+        min-height: 760px;
+        margin: 0;
+      }
+      body {
+        background:
+          radial-gradient(circle at 50% -20%, #ffffff 0, transparent 42%),
+          var(--bg);
+        color: var(--text);
+        font-size: 14px;
+        -webkit-font-smoothing: antialiased;
+      }
+      button,
+      input {
+        color: inherit;
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      .prototype-bar {
+        display: flex;
+        min-height: 76px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 28px;
+        border-bottom: 1px solid #dedee2;
+        background: #ffffffdc;
+        padding: 12px 28px;
+        backdrop-filter: blur(14px);
+      }
+      .prototype-title {
+        min-width: 270px;
+      }
+      .prototype-title strong {
+        display: block;
+        font-size: 15px;
+      }
+      .prototype-title span {
+        display: block;
+        margin-top: 4px;
+        color: var(--secondary);
+        font-size: 12px;
+      }
+      .variants {
+        display: flex;
+        gap: 7px;
+      }
+      .variant {
+        min-width: 152px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: #fff;
+        padding: 9px 12px;
+        text-align: left;
+      }
+      .variant:hover {
+        border-color: #bfc0c8;
+      }
+      .variant.active {
+        border-color: #898adb;
+        background: var(--accent-soft);
+        box-shadow: 0 0 0 2px #5556c812;
+      }
+      .variant strong {
+        display: block;
+        font-size: 12px;
+      }
+      .variant small {
+        color: var(--tertiary);
+        font-size: 11px;
+      }
+      .variant .recommend {
+        margin-left: 5px;
+        border-radius: 9px;
+        background: #e7e7ff;
+        padding: 2px 5px;
+        color: var(--accent);
+        font-size: 9px;
+        font-weight: 700;
+      }
+      .stage {
+        padding: 24px;
+      }
+      .modal {
+        width: min(980px, calc(100vw - 48px));
+        min-height: 560px;
+        margin: 0 auto;
+        border: 1px solid #e5e5e7;
+        border-radius: 20px;
+        background: var(--surface);
+        box-shadow: 0 28px 90px #24252e22;
+      }
+      .modal-head {
+        position: relative;
+        padding: 28px 34px 20px;
+      }
+      .modal-head h1 {
+        margin: 0;
+        font-size: 25px;
+        font-weight: 680;
+        letter-spacing: -0.03em;
+      }
+      .modal-head p {
+        margin: 8px 0 0;
+        color: var(--secondary);
+        line-height: 1.55;
+      }
+      .close {
+        position: absolute;
+        top: 24px;
+        right: 26px;
+        width: 34px;
+        height: 34px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        font-size: 25px;
+      }
+      .close:hover {
+        background: #f3f3f4;
+      }
+      .body {
+        padding: 0 34px 24px;
+      }
+      .connection {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        border: 1px solid #cde8d8;
+        border-radius: 9px;
+        background: var(--green-soft);
+        padding: 9px 12px;
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 0 4px #e1f2e8;
+      }
+      .connection strong {
+        font-size: 13px;
+      }
+      .connection small {
+        margin-left: 8px;
+        color: var(--secondary);
+      }
+      .steps {
+        margin-top: 12px;
+      }
+      .step {
+        display: grid;
+        grid-template-columns: 31px minmax(0, 1fr);
+        gap: 15px;
+        padding: 10px 0;
+      }
+      .step-number {
+        display: grid;
+        width: 29px;
+        height: 29px;
+        place-items: center;
+        border: 1px solid var(--border-strong);
+        border-radius: 50%;
+        color: var(--secondary);
+        font-weight: 650;
+      }
+      .step h2 {
+        margin: 4px 0 0;
+        font-size: 14px;
+        font-weight: 670;
+      }
+      .step p {
+        margin: 5px 0 0;
+        color: var(--secondary);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+      .install-description .existing-page-entry {
+        display: inline-flex;
+        margin: 0 0 0 12px;
+        color: inherit;
+        font-size: inherit;
+        vertical-align: baseline;
+      }
+      .install-description .existing-page-entry .text-button {
+        color: inherit;
+        font-size: inherit;
+        font-weight: 500;
+        text-decoration: underline;
+        text-decoration-color: #c7c8ce;
+        text-underline-offset: 3px;
+      }
+      .install-description .existing-page-entry .text-button:hover {
+        color: #5556a9;
+        text-decoration-color: #9b9cd0;
+      }
+      .address {
+        width: 100%;
+        height: 42px;
+        margin-top: 10px;
+        border: 1px solid var(--border-strong);
+        border-radius: 9px;
+        padding: 0 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .address-view {
+        display: flex;
+        height: 38px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 8px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: #fafafa;
+        padding: 0 11px;
+      }
+      .address-view code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+      }
+      .address-view button {
+        border: 0;
+        background: transparent;
+        color: var(--secondary);
+        font-size: 11px;
+      }
+      .address-editor {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .address-editor .address {
+        height: 38px;
+        margin: 0;
+      }
+      .primary,
+      .secondary,
+      .text-button,
+      .refresh,
+      .back {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 640;
+      }
+      .primary {
+        min-height: 38px;
+        border: 1px solid #2f3036;
+        background: #2f3036;
+        padding: 0 15px;
+        color: #fff;
+        box-shadow: 0 1px 2px #00000018;
+      }
+      .primary:hover {
+        background: #202126;
+      }
+      .secondary {
+        min-height: 36px;
+        border: 1px solid var(--border-strong);
+        background: #fff;
+        padding: 0 13px;
+      }
+      .secondary:hover {
+        background: #f7f7f8;
+      }
+      .text-button,
+      .back {
+        border: 0;
+        background: transparent;
+        padding: 5px 0;
+        color: var(--accent);
+      }
+      .command-reveal {
+        position: relative;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 66px;
+        margin-top: 12px;
+        overflow: hidden;
+        border: 1px dashed #d2d3d8;
+        border-radius: 10px;
+        background: #fafafb;
+        padding: 12px 13px;
+      }
+      .command-content {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        opacity: 0.44;
+        filter: blur(3px);
+        transition:
+          opacity 0.22s ease,
+          filter 0.22s ease;
+      }
+      .command-reveal.revealed .command-content {
+        opacity: 1;
+        filter: none;
+      }
+      .command-content code {
+        overflow: hidden;
+        color: #55565d;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .command-cover {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 0;
+        background:
+          linear-gradient(90deg, #fafafbea, #f5f5f7f5 45%, #fafafbea),
+          repeating-linear-gradient(135deg, transparent 0 7px, #eeeef1 7px 8px);
+        color: #484951;
+        font-size: 12px;
+        font-weight: 670;
+        transition:
+          opacity 0.2s ease,
+          visibility 0.2s ease;
+      }
+      .command-cover .command-action-label {
+        text-decoration: underline;
+        text-decoration-color: #c2c3ca;
+        text-decoration-thickness: 1px;
+        text-underline-offset: 4px;
+        transition:
+          color 0.16s ease,
+          text-decoration-color 0.16s ease;
+      }
+      .command-cover:hover {
+        background: #f5f5f8f5;
+      }
+      .command-cover:hover .command-action-label {
+        color: #5556a9;
+        text-decoration-color: #9b9cd0;
+      }
+      .command-reveal.revealed .command-cover {
+        visibility: hidden;
+        opacity: 0;
+      }
+      .copy {
+        flex: 0 0 auto;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: #fff;
+        padding: 6px 9px;
+        font-size: 11px;
+      }
+      .command-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .command-meta small {
+        color: var(--tertiary);
+        font-size: 10px;
+      }
+      .guide {
+        margin-left: 8px;
+        color: var(--accent);
+        font-size: 11px;
+        text-decoration: none;
+      }
+      .node-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+      }
+      .pending-state {
+        display: flex;
+        min-height: 42px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        border-bottom: 1px solid #eeeef0;
+      }
+      .pending-state small {
+        color: var(--tertiary);
+        font-size: 11px;
+      }
+      .step-three.is-active .pending-state {
+        display: none;
+      }
+      .step-three-content {
+        display: none;
+      }
+      .step-three.is-active .step-three-content {
+        display: block;
+      }
+      .auto-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--secondary);
+        font-size: 11px;
+      }
+      .spinner {
+        width: 12px;
+        height: 12px;
+        border: 1.5px solid #d0d1d6;
+        border-top-color: #666872;
+        border-radius: 50%;
+        animation: spin 0.85s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .detected-runtime {
+        display: none;
+        margin-top: 9px;
+        border: 1px solid #d8e7dd;
+        border-radius: 10px;
+        background: #fbfefc;
+        padding: 10px 12px;
+      }
+      .step-three.is-discovered .waiting-node {
+        display: none;
+      }
+      .step-three.is-discovered .detected-runtime {
+        display: block;
+      }
+      .detected-runtime header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+      .detected-runtime header strong {
+        font-size: 12px;
+      }
+      .detected-runtime header small {
+        color: var(--green);
+        font-size: 10px;
+      }
+      .refresh {
+        flex: 0 0 auto;
+        border: 0;
+        background: transparent;
+        padding: 5px 0;
+        color: var(--secondary);
+        font-weight: 540;
+      }
+      .refresh:hover {
+        color: var(--text);
+      }
+      .empty {
+        display: grid;
+        min-height: 78px;
+        margin-top: 10px;
+        place-items: center;
+        border: 1px dashed #d2d3d8;
+        border-radius: 10px;
+        color: var(--tertiary);
+        font-size: 12px;
+        text-align: center;
+      }
+      .existing-link-row {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 10px;
+        color: var(--secondary);
+        font-size: 11px;
+      }
+      .existing-link-row .text-button {
+        font-size: 11px;
+      }
+      .existing-page-entry {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 9px;
+        color: var(--tertiary);
+        font-size: 11px;
+      }
+      .existing-page-entry .text-button {
+        font-size: 11px;
+      }
+      .node-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .inline-picker {
+        margin-top: 10px;
+        border: 1px solid #dddde4;
+        border-radius: 10px;
+        background: #fafaff;
+        padding: 10px;
+      }
+      .inline-picker header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 7px;
+      }
+      .inline-picker header strong {
+        font-size: 11px;
+      }
+      .inline-picker header button {
+        border: 0;
+        background: transparent;
+        color: var(--secondary);
+        font-size: 11px;
+      }
+      .inline-picker .node-list {
+        grid-template-columns: 1fr 1fr;
+        margin-top: 0;
+      }
+      .node-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #fff;
+        padding: 11px 13px;
+        text-align: left;
+      }
+      .node-card:hover {
+        border-color: #bfc0ca;
+      }
+      .node-card.selected {
+        border-color: #898adb;
+        background: #f8f8ff;
+      }
+      .machine {
+        display: grid;
+        width: 31px;
+        height: 31px;
+        place-items: center;
+        border-radius: 8px;
+        background: #f0f0f2;
+        font-size: 15px;
+      }
+      .node-card strong {
+        display: block;
+        font-size: 12px;
+      }
+      .node-card small {
+        color: var(--tertiary);
+        font-size: 11px;
+      }
+      .online {
+        margin-left: auto;
+        color: var(--green);
+        font-size: 11px;
+      }
+      .node-group {
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #fff;
+      }
+      .node-group > header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        background: #fafafa;
+      }
+      .node-group > header strong {
+        font-size: 12px;
+      }
+      .runtime-options {
+        display: grid;
+      }
+      .runtime-option {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        border: 0;
+        border-top: 1px solid #eeeef0;
+        background: #fff;
+        padding: 9px 12px 9px 52px;
+        text-align: left;
+      }
+      .runtime-option:hover {
+        background: #fafaff;
+      }
+      .runtime-option.selected {
+        background: #f5f5ff;
+        color: #4f50a7;
+      }
+      .runtime-check {
+        display: grid;
+        width: 15px;
+        height: 15px;
+        place-items: center;
+        border: 1px solid #c9cad0;
+        border-radius: 4px;
+        color: transparent;
+        font-size: 10px;
+      }
+      .runtime-option.selected .runtime-check {
+        border-color: #7778c7;
+        background: #7778c7;
+        color: #fff;
+      }
+      .runtime-option strong {
+        font-size: 11px;
+      }
+      .runtime-option small {
+        margin-left: auto;
+        color: var(--tertiary);
+        font-size: 10px;
+      }
+      .choice-callout {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-top: 11px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface-subtle);
+        padding: 11px 13px;
+      }
+      .choice-callout strong {
+        display: block;
+        font-size: 12px;
+      }
+      .choice-callout small {
+        color: var(--tertiary);
+        font-size: 11px;
+      }
+      .existing-back {
+        margin: -4px 0 12px;
+        color: var(--secondary);
+        font-weight: 560;
+      }
+      .existing-back:hover {
+        color: var(--text);
+      }
+      .existing-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 18px 0 8px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #ededf0;
+      }
+      .back {
+        color: var(--secondary);
+      }
+      .existing-toolbar strong {
+        font-size: 12px;
+      }
+      .footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 9px;
+        border-top: 1px solid #e7e7e9;
+        padding: 16px 34px;
+      }
+      .footer .primary[disabled] {
+        opacity: 0.45;
+        cursor: default;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .scheme-note {
+        position: fixed;
+        right: 18px;
+        bottom: 16px;
+        max-width: 300px;
+        border: 1px solid #dedee5;
+        border-radius: 10px;
+        background: #fffffff2;
+        padding: 10px 12px;
+        box-shadow: 0 8px 28px #22232b16;
+        color: var(--secondary);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .scheme-note strong {
+        color: var(--text);
+      }
+      @media (max-height: 820px) {
+        .prototype-bar {
+          min-height: 68px;
+        }
+        .stage {
+          padding: 16px;
+        }
+        .modal {
+          min-height: 620px;
+        }
+        .modal-head {
+          padding-top: 22px;
+          padding-bottom: 15px;
+        }
+        .step {
+          padding: 10px 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="prototype-bar">
+      <div class="prototype-title">
+        <strong>添加运行环境 · 交互原型</strong>
+        <span>点击右侧方案切换；页面内按钮均可操作</span>
+      </div>
+      <nav class="variants" aria-label="交互方案">
+        <button class="variant" data-variant="a">
+          <strong>方案 A · 次级文字入口</strong>
+          <small>最轻量，保留在当前步骤</small>
+        </button>
+        <button class="variant active" data-variant="b">
+          <strong
+            >方案 B · 二级选择页 <span class="recommend">推荐</span></strong
+          >
+          <small>主次最清晰，可自然返回</small>
+        </button>
+        <button class="variant" data-variant="c">
+          <strong>方案 C · 情境化入口</strong>
+          <small>在等待区域提供替代路径</small>
+        </button>
+      </nav>
+    </header>
+
+    <main class="stage">
+      <section class="modal">
+        <header class="modal-head">
+          <button class="back existing-back hidden">← 返回添加运行环境</button>
+          <h1 id="modal-title">添加运行环境</h1>
+          <p id="modal-description">
+            将本地或远程机器连接到 Relay，已安装的运行环境 CLI 会被自动发现。
+          </p>
+          <button class="close" aria-label="关闭">×</button>
+        </header>
+
+        <div class="body">
+          <div class="connection">
+            <span class="dot"></span>
+            <div>
+              <strong>Relay 已连接</strong
+              ><small>Steer Server 可以访问 Relay。</small>
+            </div>
+          </div>
+
+          <div id="install-view">
+            <div class="steps">
+              <section class="step">
+                <span class="step-number">1</span>
+                <div>
+                  <h2>Relay 公网地址</h2>
+                  <div class="address-view">
+                    <code>http://10.37.127.105:8787</code>
+                    <button class="edit-address">修改</button>
+                  </div>
+                  <div class="address-editor hidden">
+                    <input
+                      class="address"
+                      value="http://10.37.127.105:8787"
+                      aria-label="Relay 公网地址"
+                    />
+                    <button class="secondary save-address">保存</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="step">
+                <span class="step-number">2</span>
+                <div>
+                  <h2>安装新的 Relay Node</h2>
+                  <p class="install-description">
+                    在可使用 Codex、Trae 或其他运行环境的机器上执行一次安装。
+                    <span class="existing-page-entry scheme-b">
+                      <span>已有 Relay Node？</span>
+                      <button class="text-button open-existing">
+                        选择已有 Node →
+                      </button>
+                    </span>
+                  </p>
+                  <div class="command-reveal">
+                    <div class="command-content">
+                      <code
+                        >curl -fsSL
+                        https://raw.githubusercontent.com/KDF5000/relay/main/install.sh
+                        | ...</code
+                      >
+                      <button class="copy" disabled>复制命令</button>
+                    </div>
+                    <button class="command-cover generate">
+                      <span class="command-action-label">点击生成安装命令</span>
+                    </button>
+                  </div>
+                  <div class="command-meta">
+                    <small class="generate-hint"
+                      >生成后的一次性凭证将在 15 分钟后过期</small
+                    >
+                    <a
+                      class="guide"
+                      href="https://github.com/KDF5000/relay#deployment"
+                      target="_blank"
+                      >部署指南 ↗</a
+                    >
+                  </div>
+                </div>
+              </section>
+
+              <section class="step step-three">
+                <span class="step-number">3</span>
+                <div>
+                  <div class="pending-state">
+                    <div>
+                      <h2>检测新 Node</h2>
+                      <p>生成安装命令后将自动开始检测。</p>
+                    </div>
+                    <small>等待生成命令</small>
+                  </div>
+                  <div class="step-three-content">
+                    <div class="node-head">
+                      <div>
+                        <h2>检测新 Node</h2>
+                        <p>执行安装命令后，新机器会自动显示在这里。</p>
+                      </div>
+                      <span class="auto-status"
+                        ><span class="spinner"></span>自动检测中</span
+                      >
+                    </div>
+                    <div class="empty waiting-node">正在等待新 Node 连接…</div>
+                    <div class="detected-runtime">
+                      <header>
+                        <strong>n37-082-077</strong>
+                        <small>● 已连接</small>
+                      </header>
+                      <button class="runtime-option">
+                        <span class="runtime-check">✓</span>
+                        <strong>Trae</strong>
+                        <small>n37-082-077/trae</small>
+                      </button>
+                      <button class="runtime-option">
+                        <span class="runtime-check">✓</span>
+                        <strong>Codex</strong>
+                        <small>n37-082-077/codex</small>
+                      </button>
+                    </div>
+
+                    <div class="existing-link-row scheme-a hidden">
+                      <span>这台机器之前已经安装过 Relay Node？</span>
+                      <button class="text-button open-existing">
+                        选择已有 Node →
+                      </button>
+                    </div>
+
+                    <div class="choice-callout scheme-c hidden">
+                      <div>
+                        <strong>已经有可用的 Relay Node？</strong>
+                        <small
+                          >无需重复安装，可以直接添加账户下的其他 Node。</small
+                        >
+                      </div>
+                      <button class="secondary open-existing">
+                        选择已有 Node
+                      </button>
+                    </div>
+
+                    <div id="inline-existing" class="inline-picker hidden">
+                      <header>
+                        <strong>从已有 Node 中选择</strong>
+                        <button class="close-inline">收起</button>
+                      </header>
+                      <div class="node-list">
+                        <button class="node-card">
+                          <span class="machine">▣</span>
+                          <span
+                            ><strong>n37-082-077</strong
+                            ><small>Trae · Codex</small></span
+                          >
+                          <span class="online">● 在线</span>
+                        </button>
+                        <button class="node-card">
+                          <span class="machine">▣</span>
+                          <span
+                            ><strong>dev-macbook-pro</strong
+                            ><small>Codex</small></span
+                          >
+                          <span class="online">● 在线</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div id="existing-view" class="hidden">
+            <div class="existing-toolbar">
+              <strong>可用 Node</strong>
+              <button class="refresh">↻ 刷新列表</button>
+            </div>
+            <div class="node-list">
+              <section class="node-group">
+                <header>
+                  <span class="machine">▣</span><strong>n37-082-077</strong
+                  ><span class="online">● 在线</span>
+                </header>
+                <div class="runtime-options">
+                  <button class="runtime-option">
+                    <span class="runtime-check">✓</span><strong>Trae</strong
+                    ><small>n37-082-077/trae</small>
+                  </button>
+                  <button class="runtime-option">
+                    <span class="runtime-check">✓</span><strong>Codex</strong
+                    ><small>n37-082-077/codex</small>
+                  </button>
+                </div>
+              </section>
+              <section class="node-group">
+                <header>
+                  <span class="machine">▣</span><strong>dev-macbook-pro</strong
+                  ><span class="online">● 在线</span>
+                </header>
+                <div class="runtime-options">
+                  <button class="runtime-option">
+                    <span class="runtime-check">✓</span><strong>Codex</strong
+                    ><small>dev-macbook-pro/codex</small>
+                  </button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        <footer class="footer">
+          <button class="secondary">关闭</button>
+          <button class="primary add" disabled>添加到工作区</button>
+        </footer>
+      </section>
+    </main>
+
+    <aside class="scheme-note"></aside>
+
+    <script>
+      const state = {
+        variant: 'b',
+        existing: false,
+        inline: false,
+        generated: false,
+        discovered: false,
+      };
+      const notes = {
+        a: '<strong>方案 A：</strong>已有 Node 是步骤 3 下方的文字级入口，最轻量，但列表和安装流程仍处于同一页面。',
+        b: '<strong>方案 B（推荐）：</strong>默认只呈现安装流程；“选择已有 Node”进入独立二级页面，并提供明确返回。认知层级最清楚。',
+        c: '<strong>方案 C：</strong>把已有 Node 作为等待区里的替代方案，用户遇到“尚未发现”时才会看到，渐进披露最强。',
+      };
+      const variants = document.querySelectorAll('.variant');
+      const installView = document.querySelector('#install-view');
+      const existingView = document.querySelector('#existing-view');
+      const inlineExisting = document.querySelector('#inline-existing');
+      const empty = document.querySelector('.empty');
+      const title = document.querySelector('#modal-title');
+      const description = document.querySelector('#modal-description');
+      const add = document.querySelector('.add');
+      const existingBack = document.querySelector('.existing-back');
+      const stepThree = document.querySelector('.step-three');
+      const autoStatus = document.querySelector('.auto-status');
+
+      function render() {
+        variants.forEach((item) =>
+          item.classList.toggle(
+            'active',
+            item.dataset.variant === state.variant,
+          ),
+        );
+        document
+          .querySelectorAll('.scheme-a')
+          .forEach((item) =>
+            item.classList.toggle(
+              'hidden',
+              state.variant !== 'a' || state.inline,
+            ),
+          );
+        document
+          .querySelectorAll('.scheme-b')
+          .forEach((item) =>
+            item.classList.toggle(
+              'hidden',
+              state.variant !== 'b' || state.existing,
+            ),
+          );
+        document
+          .querySelectorAll('.scheme-c')
+          .forEach((item) =>
+            item.classList.toggle(
+              'hidden',
+              state.variant !== 'c' || state.inline,
+            ),
+          );
+        installView.classList.toggle('hidden', state.existing);
+        existingView.classList.toggle('hidden', !state.existing);
+        existingBack.classList.toggle('hidden', !state.existing);
+        inlineExisting.classList.toggle('hidden', !state.inline);
+        empty.classList.toggle('hidden', state.inline);
+        stepThree.classList.toggle('is-active', state.generated);
+        stepThree.classList.toggle('is-discovered', state.discovered);
+        autoStatus.innerHTML = state.discovered
+          ? '<span style="color:var(--green)">●</span> 已自动发现'
+          : '<span class="spinner"></span>自动检测中';
+        title.textContent = state.existing ? '选择已有 Node' : '添加运行环境';
+        description.textContent = state.existing
+          ? '从账户已有的 Relay Node 中选择运行环境，并添加到当前工作区。'
+          : '将本地或远程机器连接到 Relay，已安装的运行环境 CLI 会被自动发现。';
+        document.querySelector('.scheme-note').innerHTML = notes[state.variant];
+        add.disabled = !document.querySelector(
+          '.node-card.selected, .runtime-option.selected',
+        );
+      }
+
+      variants.forEach((item) =>
+        item.addEventListener('click', () => {
+          state.variant = item.dataset.variant;
+          state.existing = false;
+          state.inline = false;
+          state.generated = false;
+          state.discovered = false;
+          document
+            .querySelectorAll('.node-card')
+            .forEach((card) => card.classList.remove('selected'));
+          document
+            .querySelectorAll('.runtime-option')
+            .forEach((option) => option.classList.remove('selected'));
+          document
+            .querySelector('.command-reveal')
+            .classList.remove('revealed');
+          document.querySelector('.copy').disabled = true;
+          document.querySelector('.generate-hint').textContent =
+            '生成后的一次性凭证将在 15 分钟后过期';
+          render();
+        }),
+      );
+      document.querySelectorAll('.open-existing').forEach((button) =>
+        button.addEventListener('click', () => {
+          document
+            .querySelectorAll('.node-card, .runtime-option')
+            .forEach((item) => item.classList.remove('selected'));
+          if (state.variant === 'b') state.existing = true;
+          else state.inline = true;
+          render();
+        }),
+      );
+      existingBack.addEventListener('click', () => {
+        state.existing = false;
+        document
+          .querySelectorAll('.node-card, .runtime-option')
+          .forEach((item) => item.classList.remove('selected'));
+        render();
+      });
+      document.querySelector('.close-inline').addEventListener('click', () => {
+        state.inline = false;
+        render();
+      });
+      document.querySelectorAll('.generate').forEach((button) =>
+        button.addEventListener('click', () => {
+          document.querySelector('.command-reveal').classList.add('revealed');
+          document.querySelector('.copy').disabled = false;
+          document.querySelector('.generate-hint').textContent =
+            '已生成，有效期剩余 14:59';
+          state.generated = true;
+          render();
+          window.setTimeout(() => {
+            if (!state.generated) return;
+            state.discovered = true;
+            render();
+          }, 2800);
+        }),
+      );
+      document.querySelector('.copy').addEventListener('click', (event) => {
+        event.currentTarget.textContent = '已复制';
+        setTimeout(() => {
+          event.currentTarget.textContent = '复制命令';
+        }, 1200);
+      });
+      document.querySelectorAll('.node-card').forEach((card) =>
+        card.addEventListener('click', () => {
+          document
+            .querySelectorAll('.node-card, .runtime-option')
+            .forEach((item) => item.classList.remove('selected'));
+          card.classList.add('selected');
+          render();
+        }),
+      );
+      document.querySelectorAll('.runtime-option').forEach((option) =>
+        option.addEventListener('click', () => {
+          option.classList.toggle('selected');
+          render();
+        }),
+      );
+      document.querySelector('.edit-address').addEventListener('click', () => {
+        document.querySelector('.address-view').classList.add('hidden');
+        document.querySelector('.address-editor').classList.remove('hidden');
+      });
+      document.querySelector('.save-address').addEventListener('click', () => {
+        const input = document.querySelector('.address-editor .address');
+        document.querySelector('.address-view code').textContent = input.value;
+        document.querySelector('.address-editor').classList.add('hidden');
+        document.querySelector('.address-view').classList.remove('hidden');
+      });
+      document.querySelectorAll('.refresh').forEach((button) =>
+        button.addEventListener('click', () => {
+          const before = button.textContent;
+          button.textContent = '↻ 正在刷新…';
+          setTimeout(() => {
+            button.textContent = before;
+          }, 900);
+        }),
+      );
+      render();
+    </script>
+  </body>
+</html>

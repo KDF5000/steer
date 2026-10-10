@@ -48,6 +48,7 @@ const zhCN: Record<string, string> = {
   'Create skill': '创建 Skill',
   'Daily records': '每日记录',
   Delete: '删除',
+  Edit: '修改',
   'Delete Agent': '删除智能体',
   'Delete this conversation?': '删除此对话？',
   'Deleting…': '正在删除…',
@@ -282,6 +283,28 @@ const zhCN: Record<string, string> = {
     '请在安装了 Codex、Trae 或其他运行环境的机器上执行此命令。',
   'Install once on the machine where Codex, Trae, or another Runtime is available. The installation will belong to your account.':
     '只需在可使用 Codex、Trae 或其他运行环境的机器上安装一次，安装后的 Node 将归属于你的账户。',
+  'Install once on the machine where Codex, Trae, or another Runtime is available,':
+    '在可使用 Codex、Trae 或其他运行环境的机器上执行一次安装，',
+  'Already have a Relay Node?': '已有 Relay Node？',
+  'Back to adding a Runtime': '返回添加运行环境',
+  'Choose Runtime instances from Relay Nodes owned by your account.':
+    '从当前账户已有的 Relay Node 中选择运行环境并添加到工作区。',
+  'Generating installation command…': '正在生成安装命令…',
+  'Click to generate installation command': '点击生成安装命令',
+  'The one-time enrollment token expires 15 minutes after it is generated.':
+    '生成后的一次性认领令牌将在 15 分钟后过期。',
+  'Detect the new Node': '检测新 Node',
+  'Detection starts automatically after the installation command is generated.':
+    '生成安装命令后将自动开始检测。',
+  'Waiting for command': '等待生成命令',
+  'Run the installation command. The new machine will appear here automatically.':
+    '执行安装命令后，新机器会自动显示在这里。',
+  'Waiting for the installed Node to connect…': '正在等待本次安装的 Node 连接…',
+  'Available Relay Nodes': '可用的 Relay Node',
+  'No Runtime CLI was discovered on this Node.':
+    '此 Node 上未发现可用的运行环境 CLI。',
+  'This Node is offline. Check the Relay Node service and refresh.':
+    '此 Node 当前离线，请检查 Relay Node 服务后刷新。',
   'Relay deployment guide': 'Relay 部署指南',
   'Copy Relay Node install command': '复制 Relay Node 安装命令',
   'Relay Node install command copied': 'Relay Node 安装命令已复制',

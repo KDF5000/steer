@@ -6452,8 +6452,13 @@ button.ws-chat-response-meta:focus-visible {
 }
 
 .ws-runtime-dialog {
-  width: min(690px, calc(100vw - 32px)) !important;
-  max-width: 690px !important;
+  width: min(780px, calc(100vw - 32px)) !important;
+  max-width: 780px !important;
+  scrollbar-width: none;
+}
+
+.ws-runtime-dialog::-webkit-scrollbar {
+  display: none;
 }
 
 .ws-agent-dialog [data-slot='dialog-title'],
@@ -6707,16 +6712,16 @@ button.ws-chat-response-meta:focus-visible {
 
 .ws-runtime-onboarding {
   display: grid;
-  gap: 4px;
-  margin-top: 14px;
+  gap: 2px;
+  margin-top: 12px;
 }
 
 .ws-runtime-connection {
   display: flex;
   align-items: center;
-  gap: 11px;
-  margin-bottom: 9px;
-  padding: 11px 13px;
+  gap: 9px;
+  margin-bottom: 6px;
+  padding: 8px 11px;
   border: 1px solid var(--ws-border);
   border-radius: 9px;
   background: #fafafa;
@@ -6740,11 +6745,6 @@ button.ws-chat-response-meta:focus-visible {
   box-shadow: 0 0 0 4px #4d9a6a18;
 }
 
-.ws-runtime-connection strong,
-.ws-runtime-connection small {
-  display: block;
-}
-
 .ws-runtime-connection strong {
   color: #3e3f46;
   font-size: var(--ws-font-control);
@@ -6752,7 +6752,6 @@ button.ws-chat-response-meta:focus-visible {
 }
 
 .ws-runtime-connection small {
-  margin-top: 2px;
   color: var(--ws-text-tertiary);
   font-size: var(--ws-font-caption);
 }
@@ -6761,7 +6760,7 @@ button.ws-chat-response-meta:focus-visible {
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr);
   gap: 12px;
-  padding: 13px 0;
+  padding: 9px 0;
 }
 
 .ws-runtime-step > span {
@@ -6784,12 +6783,13 @@ button.ws-chat-response-meta:focus-visible {
 }
 
 .ws-runtime-step p {
+  margin: 0;
   color: var(--ws-text-secondary);
   font-size: 12px;
   line-height: 1.55;
 }
 
-.ws-runtime-step input {
+.ws-runtime-address-editor input {
   width: 100%;
   height: 39px;
   margin-top: 8px;
@@ -6800,66 +6800,220 @@ button.ws-chat-response-meta:focus-visible {
   font: 11.5px var(--font-geist-mono);
 }
 
-.ws-runtime-command {
-  position: relative;
-  overflow: hidden;
-  margin-top: 9px;
-  border: 1px solid #34353b;
-  border-radius: 9px;
-  background: #25262b;
+.ws-runtime-address-summary,
+.ws-runtime-address-editor {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
 }
 
-.ws-runtime-command pre {
+.ws-runtime-address-summary {
+  min-height: 37px;
+  justify-content: space-between;
+  padding: 0 10px;
+  border: 1px solid var(--ws-border);
+  border-radius: 8px;
+  background: var(--ws-surface-subtle);
+}
+
+.ws-runtime-address-summary code {
   overflow: hidden;
-  padding: 13px 48px 13px 14px;
-  color: #f1f1f3;
-  font: 10.5px/1.6 var(--font-geist-mono);
+  color: #45464d;
+  font: 11.5px var(--font-geist-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-runtime-address-summary button,
+.ws-runtime-address-editor button {
+  min-height: 28px;
+  flex: 0 0 auto;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-caption);
+  font-weight: 580;
+}
+
+.ws-runtime-address-summary button:hover,
+.ws-runtime-address-editor button:hover {
+  background: var(--ws-surface-hover);
+  color: var(--ws-text);
+}
+
+.ws-runtime-address-editor input {
+  min-width: 0;
+  flex: 1;
+  margin-top: 0;
+}
+
+.ws-runtime-address-editor button {
+  border: 1px solid var(--ws-border-strong);
+  background: #fff;
+}
+
+.ws-runtime-install-description > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  margin-left: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+.ws-runtime-install-description button {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+}
+
+.ws-runtime-install-description button span {
+  text-decoration: underline;
+  text-decoration-color: #c7c8ce;
+  text-underline-offset: 3px;
+}
+
+.ws-runtime-install-description button:hover {
+  color: #5556a9;
+}
+
+.ws-runtime-install-description button:hover span {
+  text-decoration-color: #9b9cd0;
+}
+
+.ws-runtime-command-reveal {
+  position: relative;
+  min-height: 64px;
+  margin-top: 10px;
+  overflow: hidden;
+  border: 1px dashed var(--ws-border-strong);
+  border-radius: 9px;
+  background: #fafafb;
+}
+
+.ws-runtime-command-content {
+  display: flex;
+  min-height: 64px;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 11px;
+  opacity: 0.42;
+  filter: blur(3px);
+  transition:
+    opacity 180ms ease,
+    filter 180ms ease;
+}
+
+.ws-runtime-command-reveal.is-revealed .ws-runtime-command-content {
+  opacity: 1;
+  filter: none;
+}
+
+.ws-runtime-command-content pre {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  overflow: visible;
+}
+
+.ws-runtime-command-content code {
+  display: block;
+  color: #55565d;
+  font: 10.5px/1.55 var(--font-geist-mono);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-.ws-runtime-command button {
-  position: absolute;
-  top: 9px;
-  right: 9px;
+.ws-runtime-command-content > button {
   display: grid;
-  width: 27px;
-  height: 27px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
   place-items: center;
-  border: 1px solid #5b5c64;
+  border: 1px solid var(--ws-border);
   border-radius: 6px;
-  background: #3c3d44;
-  box-shadow: 0 1px 2px #00000030;
-  color: #f5f5f6;
-  transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    transform 120ms ease;
+  background: #fff;
+  color: var(--ws-text-secondary);
+  margin-top: 1px;
 }
 
-.ws-runtime-command button:hover {
-  border-color: #73747d;
-  background: #4a4b53;
+.ws-runtime-command-content > button:hover:not(:disabled) {
+  border-color: var(--ws-border-strong);
+  background: var(--ws-surface-hover);
 }
 
-.ws-runtime-command button:active {
-  transform: scale(0.96);
+.ws-runtime-command-content > button.is-copied {
+  border-color: #b9d7c4;
+  background: #f3faf6;
+  color: #397a53;
 }
 
-.ws-runtime-command button:focus-visible {
-  outline: 2px solid #a9aaf9;
-  outline-offset: 2px;
+.ws-runtime-command-content > button svg {
+  width: 13px;
+  height: 13px;
 }
 
-.ws-runtime-command button.is-copied {
-  border-color: #527a63;
-  background: #365845;
+.ws-runtime-command-cover {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background:
+    linear-gradient(90deg, #fafafbea, #f5f5f7f5 45%, #fafafbea),
+    repeating-linear-gradient(135deg, transparent 0 7px, #eeeef1 7px 8px);
+  color: #484951;
+  font-size: var(--ws-font-control);
+  font-weight: 650;
 }
 
-.ws-runtime-command button svg {
-  width: 14px;
-  height: 14px;
+.ws-runtime-command-cover span {
+  text-decoration: underline;
+  text-decoration-color: #c2c3ca;
+  text-underline-offset: 4px;
+}
+
+.ws-runtime-command-cover:hover:not(:disabled) {
+  background: #f5f5f8f5;
+}
+
+.ws-runtime-command-cover:hover:not(:disabled) span {
+  color: #5556a9;
+  text-decoration-color: #9b9cd0;
+}
+
+.ws-runtime-command-cover:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.ws-runtime-command-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  margin-top: 5px;
+}
+
+.ws-runtime-command-meta small {
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+
+.ws-runtime-step .ws-runtime-command-meta a {
+  margin-top: 0;
 }
 
 .ws-runtime-step a {
@@ -6883,6 +7037,43 @@ button.ws-chat-response-meta:focus-visible {
   height: 12px;
 }
 
+.ws-runtime-back {
+  display: inline-flex;
+  align-items: center;
+  align-self: start;
+  gap: 3px;
+  margin: -4px 0 4px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-caption);
+  font-weight: 560;
+}
+
+.ws-runtime-back svg {
+  width: 13px;
+  height: 13px;
+}
+
+.ws-runtime-back:hover {
+  color: var(--ws-text);
+}
+
+.ws-runtime-detection-pending {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ws-runtime-detection-pending small {
+  flex: 0 0 auto;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+
 .ws-runtime-discovery-heading {
   display: flex;
   align-items: flex-start;
@@ -6890,50 +7081,50 @@ button.ws-chat-response-meta:focus-visible {
   gap: 16px;
 }
 
-.ws-runtime-discovery-actions {
-  display: flex;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-.ws-runtime-discovery-actions button {
-  display: inline-flex;
-  min-height: 32px;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px;
-  border: 1px solid var(--ws-border-strong);
-  border-radius: 7px;
-  background: #fff;
-  color: var(--ws-text-secondary);
-  font-size: var(--ws-font-caption);
-  font-weight: 580;
-}
-
-.ws-runtime-discovery-actions button:hover:not(:disabled) {
-  background: var(--ws-surface-subtle);
-}
-
-.ws-runtime-discovery-actions button.is-active {
-  border-color: var(--ws-text);
-  background: var(--ws-text);
-  color: #fff;
-}
-
-.ws-runtime-discovery-actions button:disabled {
-  opacity: 0.55;
-}
-
-.ws-runtime-discovery-heading svg {
+.ws-runtime-existing-toolbar button svg {
   width: 13px;
   height: 13px;
 }
 
-.ws-runtime-discovery-heading svg.is-spinning {
+.ws-runtime-existing-toolbar svg.is-spinning {
   animation: ws-runtime-capacity-spin 700ms linear infinite;
+}
+
+.ws-runtime-existing {
+  margin-top: 17px;
+}
+
+.ws-runtime-existing-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ws-border);
+}
+
+.ws-runtime-existing-toolbar strong {
+  color: var(--ws-text);
+  font-size: var(--ws-font-control);
+  font-weight: 620;
+}
+
+.ws-runtime-existing-toolbar button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-caption);
+  font-weight: 560;
+}
+
+.ws-runtime-existing-toolbar button:hover:not(:disabled) {
+  background: var(--ws-surface-hover);
 }
 
 .ws-runtime-empty {
@@ -6953,6 +7144,15 @@ button.ws-chat-response-meta:focus-visible {
   max-height: 220px;
   margin-top: 9px;
   overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.ws-runtime-discovery-list::-webkit-scrollbar {
+  display: none;
+}
+
+.ws-runtime-existing .ws-runtime-discovery-list {
+  max-height: min(360px, calc(100vh - 300px));
 }
 
 .ws-runtime-discovery-list > section {
@@ -7079,6 +7279,19 @@ button.ws-chat-response-meta:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+@media (max-width: 680px) {
+  .ws-runtime-install-description > span {
+    display: flex;
+    width: fit-content;
+    margin: 4px 0 0;
+  }
+
+  .ws-runtime-discovery-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 
 /* Notifications */

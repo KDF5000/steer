@@ -30,6 +30,7 @@ import {
   MoreHorizontal,
   PanelLeft,
   ChevronDown,
+  ChevronLeft,
   Pencil,
   Plus,
   RefreshCw,
@@ -2683,7 +2684,7 @@ export default function Fusion() {
         onRefresh={() => void discoverRuntimes()}
         onSelect={setSelectedRuntimeIDs}
         onClaim={() => void claimSelectedRuntimes()}
-        onCreateEnrollment={() => void createRelayEnrollment()}
+        onCreateEnrollment={createRelayEnrollment}
         onRemoveNode={setDeletingRelayNode}
       />
       <AlertDialog
@@ -6833,14 +6834,19 @@ function RuntimeDialog({
   onRefresh: () => void;
   onSelect: (runtimeIDs: string[]) => void;
   onClaim: () => void;
-  onCreateEnrollment: () => void;
+  onCreateEnrollment: () => Promise<void>;
   onRemoveNode: (node: RelayNode) => void;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [commandCopied, setCommandCopied] = useState(false);
+  const [creatingEnrollment, setCreatingEnrollment] = useState(false);
+  const [editingPublicURL, setEditingPublicURL] = useState(false);
+  const [publicURLDraft, setPublicURLDraft] = useState(publicURL);
   const [nodeView, setNodeView] = useState<'installed' | 'existing'>(
     'installed',
   );
+  const refreshRef = useRef(onRefresh);
+  const discoveringRef = useRef(discovering);
   const shellQuote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
   const publicSteerAPIURL = (
     steerAPIURL.startsWith('http')
@@ -6853,12 +6859,29 @@ function RuntimeDialog({
     enrollmentToken && enrollmentNodeID
       ? `RELAY_NODE_ID=${shellQuote(enrollmentNodeID)}\nRELAY_MACHINE_NAME_JSON=$(hostname | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')\ncurl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh | RELAY_NODE_TOKEN='YOUR_NODE_TOKEN' sh -s -- --server ${shellQuote(publicURL || 'https://relay.example.com')} --node-id "$RELAY_NODE_ID" --force --install-service && \\\n  curl -fsS -X POST ${shellQuote(`${publicSteerAPIURL}/relay-node-enrollments/claim`)} -H 'Content-Type: application/json' --data-binary "{\\"token\\":\\"${enrollmentToken}\\",\\"nodeId\\":\\"$RELAY_NODE_ID\\",\\"name\\":\\"$RELAY_MACHINE_NAME_JSON\\",\\"capacity\\":2}"`
       : '';
-  const visibleNodes =
-    nodeView === 'installed'
-      ? enrollmentNodeID
-        ? nodes.filter((node) => node.id === enrollmentNodeID)
-        : []
-      : nodes.filter((node) => node.id !== enrollmentNodeID);
+  const installedNode = enrollmentNodeID
+    ? nodes.find((node) => node.id === enrollmentNodeID)
+    : undefined;
+  const existingNodes = nodes.filter((node) => node.id !== enrollmentNodeID);
+
+  useEffect(() => {
+    refreshRef.current = onRefresh;
+  }, [onRefresh]);
+
+  useEffect(() => {
+    discoveringRef.current = discovering;
+  }, [discovering]);
+
+  useEffect(() => {
+    if (!open || nodeView !== 'installed' || !enrollmentNodeID || installedNode)
+      return;
+    const refreshIfIdle = () => {
+      if (!discoveringRef.current) refreshRef.current();
+    };
+    refreshIfIdle();
+    const interval = window.setInterval(refreshIfIdle, 4_000);
+    return () => window.clearInterval(interval);
+  }, [enrollmentNodeID, installedNode, nodeView, open]);
 
   async function copyInstallCommand() {
     const copied = await writeClipboard(command);
@@ -6867,8 +6890,24 @@ function RuntimeDialog({
     window.setTimeout(() => setCommandCopied(false), 1600);
   }
 
+  async function createEnrollment() {
+    if (creatingEnrollment) return;
+    setCreatingEnrollment(true);
+    try {
+      await onCreateEnrollment();
+    } finally {
+      setCreatingEnrollment(false);
+    }
+  }
+
+  function savePublicURL() {
+    const nextURL = publicURLDraft.trim();
+    if (nextURL) onURL(nextURL);
+    setEditingPublicURL(false);
+  }
+
   function toggleRuntime(runtimeID: string) {
-    const selectedNode = visibleNodes.find((node) =>
+    const selectedNode = nodes.find((node) =>
       node.runtimes?.some((runtime) => runtime.id === runtimeID),
     );
     onSelect(
@@ -6883,61 +6922,166 @@ function RuntimeDialog({
     );
   }
 
+  function renderNodes(displayNodes: RelayNode[]) {
+    return (
+      <div className="ws-runtime-discovery-list">
+        {displayNodes.map((node) => (
+          <section key={node.id}>
+            <header>
+              <Server aria-hidden="true" />
+              <strong>{node.labels?.name || node.id}</strong>
+              <small>{node.state || 'unknown'}</small>
+              {node.state === 'offline' && (
+                <button
+                  type="button"
+                  className="ws-runtime-remove-node"
+                  onClick={() => onRemoveNode(node)}
+                  aria-label={t('Remove offline Relay Node')}
+                  title={t('Remove offline Relay Node')}
+                >
+                  <Trash2 aria-hidden="true" />
+                </button>
+              )}
+            </header>
+            <div>
+              {(node.runtimes ?? []).map((runtime) => (
+                <label key={runtime.id}>
+                  <input
+                    type="checkbox"
+                    checked={selectedRuntimeIDs.includes(runtime.id)}
+                    disabled={claiming}
+                    onChange={() => toggleRuntime(runtime.id)}
+                  />
+                  <span>
+                    <strong>{runtime.provider}</strong>
+                    <small>{runtime.id}</small>
+                  </span>
+                  {runtime.version && <em>{runtime.version}</em>}
+                </label>
+              ))}
+              {!node.runtimes?.length && (
+                <p className="ws-runtime-node-empty">
+                  {node.state === 'online'
+                    ? t('No Runtime CLI was discovered on this Node.')
+                    : t(
+                        'This Node is offline. Check the Relay Node service and refresh.',
+                      )}
+                </p>
+              )}
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpen}>
       <DialogContent className="ws-runtime-dialog">
-        <DialogTitle>{t('Add Runtime')}</DialogTitle>
-        <DialogDescription>
-          {t(
-            'Connect a local or remote machine to Relay. Installed Runtime CLIs are discovered automatically.',
-          )}
-        </DialogDescription>
-        <div className="ws-runtime-onboarding">
-          <div
-            className={`ws-runtime-connection ${connected ? 'is-connected' : ''}`}
+        {nodeView === 'existing' && (
+          <button
+            type="button"
+            className="ws-runtime-back"
+            onClick={() => {
+              onSelect([]);
+              setNodeView('installed');
+            }}
           >
-            <span className="ws-runtime-status-dot" />
-            <div>
+            <ChevronLeft aria-hidden="true" />
+            <span>{t('Back to adding a Runtime')}</span>
+          </button>
+        )}
+        <DialogTitle>
+          {nodeView === 'existing'
+            ? t('Choose an existing Node')
+            : t('Add Runtime')}
+        </DialogTitle>
+        <DialogDescription>
+          {nodeView === 'existing'
+            ? t(
+                'Choose Runtime instances from Relay Nodes owned by your account.',
+              )
+            : t(
+                'Connect a local or remote machine to Relay. Installed Runtime CLIs are discovered automatically.',
+              )}
+        </DialogDescription>
+        {nodeView === 'installed' ? (
+          <div className="ws-runtime-onboarding">
+            <div
+              className={`ws-runtime-connection ${connected ? 'is-connected' : ''}`}
+            >
+              <span className="ws-runtime-status-dot" />
               <strong>
                 {connected ? t('Relay connected') : t('Relay not connected')}
               </strong>
               <small>{error || t('Steer Server can reach Relay.')}</small>
             </div>
-          </div>
-          <section className="ws-runtime-step">
-            <span>1</span>
-            <div>
-              <h3>{t('Public Relay address')}</h3>
-              <input
-                value={publicURL}
-                onChange={(event) => onURL(event.target.value)}
-                aria-label="Public Relay Server URL"
-                spellCheck={false}
-              />
-            </div>
-          </section>
-          <section className="ws-runtime-step">
-            <span>2</span>
-            <div>
-              <h3>{t('Install a new Relay Node')}</h3>
-              <p>
-                {t(
-                  'Install once on the machine where Codex, Trae, or another Runtime is available. The installation will belong to your account.',
+            <section className="ws-runtime-step">
+              <span>1</span>
+              <div>
+                <h3>{t('Public Relay address')}</h3>
+                {editingPublicURL ? (
+                  <div className="ws-runtime-address-editor">
+                    <input
+                      value={publicURLDraft}
+                      onChange={(event) =>
+                        setPublicURLDraft(event.target.value)
+                      }
+                      aria-label="Public Relay Server URL"
+                      spellCheck={false}
+                    />
+                    <button type="button" onClick={savePublicURL}>
+                      {t('Save')}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="ws-runtime-address-summary">
+                    <code>{publicURL}</code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPublicURLDraft(publicURL);
+                        setEditingPublicURL(true);
+                      }}
+                    >
+                      {t('Edit')}
+                    </button>
+                  </div>
                 )}
-              </p>
-              {!enrollmentToken ? (
-                <button
-                  type="button"
-                  className="ws-runtime-enrollment-button"
-                  onClick={onCreateEnrollment}
+              </div>
+            </section>
+            <section className="ws-runtime-step">
+              <span>2</span>
+              <div>
+                <h3>{t('Install a new Relay Node')}</h3>
+                <p className="ws-runtime-install-description">
+                  {t(
+                    'Install once on the machine where Codex, Trae, or another Runtime is available,',
+                  )}
+                  {language === 'en' ? ' ' : ''}
+                  <span>
+                    {t('Already have a Relay Node?')}
+                    {language === 'en' ? ' ' : ''}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelect([]);
+                        setNodeView('existing');
+                      }}
+                    >
+                      <span>{t('Choose an existing Node')}</span>
+                    </button>
+                  </span>
+                </p>
+                <div
+                  className={`ws-runtime-command-reveal ${enrollmentToken ? 'is-revealed' : ''}`}
                 >
-                  {t('Generate installation command')}
-                </button>
-              ) : (
-                <>
-                  <div className="ws-runtime-command">
+                  <div className="ws-runtime-command-content">
                     <pre>
-                      <code>{command}</code>
+                      <code>
+                        {command ||
+                          'curl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh | …'}
+                      </code>
                     </pre>
                     <button
                       type="button"
@@ -6949,145 +7093,125 @@ function RuntimeDialog({
                       title={commandCopied ? t('Copied') : t('Copy command')}
                       className={commandCopied ? 'is-copied' : undefined}
                       onClick={() => void copyInstallCommand()}
+                      disabled={!enrollmentToken}
                     >
                       {commandCopied ? <Check /> : <Copy />}
                     </button>
                   </div>
+                  {!enrollmentToken && (
+                    <button
+                      type="button"
+                      className="ws-runtime-command-cover"
+                      disabled={creatingEnrollment}
+                      onClick={() => void createEnrollment()}
+                    >
+                      <span>
+                        {creatingEnrollment
+                          ? t('Generating installation command…')
+                          : t('Click to generate installation command')}
+                      </span>
+                    </button>
+                  )}
+                </div>
+                <div className="ws-runtime-command-meta">
                   <small>
-                    {t('This one-time enrollment token expires in 15 minutes.')}
+                    {enrollmentToken
+                      ? t(
+                          'This one-time enrollment token expires in 15 minutes.',
+                        )
+                      : t(
+                          'The one-time enrollment token expires 15 minutes after it is generated.',
+                        )}
                   </small>
-                </>
-              )}
-              <a
-                href="https://github.com/KDF5000/relay#deployment"
-                target="_blank"
-                rel="noreferrer"
-              >
-                {t('Relay deployment guide')} <ExternalLink />
-              </a>
-            </div>
-          </section>
-          <section className="ws-runtime-step">
-            <span>3</span>
-            <div>
-              <div className="ws-runtime-discovery-heading">
-                <div>
-                  <h3>{t('Your Relay Nodes')}</h3>
-                  <p>
-                    {t(
-                      'Select Runtime instances to share with this workspace.',
-                    )}
+                  <a
+                    href="https://github.com/KDF5000/relay#deployment"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t('Relay deployment guide')} <ExternalLink />
+                  </a>
+                </div>
+                {!enrollmentToken && discoveryError && (
+                  <p className="ws-form-error" role="alert">
+                    {discoveryError}
                   </p>
-                </div>
-                <div className="ws-runtime-discovery-actions">
-                  <button
-                    type="button"
-                    className={nodeView === 'installed' ? 'is-active' : ''}
-                    onClick={() => {
-                      onSelect([]);
-                      setNodeView('installed');
-                    }}
-                  >
-                    {t('Installed Node')}
-                  </button>
-                  <button
-                    type="button"
-                    className={nodeView === 'existing' ? 'is-active' : ''}
-                    onClick={() => {
-                      onSelect([]);
-                      setNodeView('existing');
-                    }}
-                  >
-                    {t('Choose an existing Node')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onRefresh}
-                    disabled={discovering || claiming}
-                    aria-label={t('Refresh discovered Runtimes')}
-                  >
-                    <RefreshCw className={discovering ? 'is-spinning' : ''} />
-                    {discovering ? t('Refreshing…') : t('Refresh')}
-                  </button>
-                </div>
+                )}
               </div>
-              {discoveryError && (
-                <p className="ws-form-error" role="alert">
-                  {discoveryError}
-                </p>
-              )}
-              {!discovering && !discoveryError && visibleNodes.length === 0 && (
-                <div className="ws-runtime-empty">
-                  {nodeView === 'installed'
-                    ? enrollmentNodeID
-                      ? t(
-                          'Waiting for the installed Node to connect. Run the command, then refresh.',
-                        )
-                      : t(
-                          'Generate an installation command above to track the new Node here.',
-                        )
-                    : enrollmentNodeID
-                      ? t(
-                          'No other Relay Nodes are available for this account.',
-                        )
-                      : t(
-                          'No Relay Nodes owned by your account were found. Install a Node, then refresh.',
+            </section>
+            <section
+              className={`ws-runtime-step ws-runtime-detection ${enrollmentToken ? 'is-active' : ''}`}
+            >
+              <span>3</span>
+              <div>
+                {!enrollmentToken ? (
+                  <div className="ws-runtime-detection-pending">
+                    <div>
+                      <h3>{t('Detect the new Node')}</h3>
+                      <p>
+                        {t(
+                          'Detection starts automatically after the installation command is generated.',
                         )}
-                </div>
-              )}
-              {visibleNodes.length > 0 && (
-                <div className="ws-runtime-discovery-list">
-                  {visibleNodes.map((node) => (
-                    <section key={node.id}>
-                      <header>
-                        <Server aria-hidden="true" />
-                        <strong>{node.labels?.name || node.id}</strong>
-                        <small>{node.state || 'unknown'}</small>
-                        {node.state === 'offline' && (
-                          <button
-                            type="button"
-                            className="ws-runtime-remove-node"
-                            onClick={() => onRemoveNode(node)}
-                            aria-label={t('Remove offline Relay Node')}
-                            title={t('Remove offline Relay Node')}
-                          >
-                            <Trash2 aria-hidden="true" />
-                          </button>
-                        )}
-                      </header>
+                      </p>
+                    </div>
+                    <small>{t('Waiting for command')}</small>
+                  </div>
+                ) : (
+                  <>
+                    <div className="ws-runtime-discovery-heading">
                       <div>
-                        {(node.runtimes ?? []).map((runtime) => (
-                          <label key={runtime.id}>
-                            <input
-                              type="checkbox"
-                              checked={selectedRuntimeIDs.includes(runtime.id)}
-                              disabled={claiming}
-                              onChange={() => toggleRuntime(runtime.id)}
-                            />
-                            <span>
-                              <strong>{runtime.provider}</strong>
-                              <small>{runtime.id}</small>
-                            </span>
-                            {runtime.version && <em>{runtime.version}</em>}
-                          </label>
-                        ))}
-                        {!node.runtimes?.length && (
-                          <p className="ws-runtime-node-empty">
-                            {node.state === 'online'
-                              ? t('No Runtime CLI was discovered on this Node.')
-                              : t(
-                                  'This Node is offline. Check the Relay Node service and refresh.',
-                                )}
-                          </p>
-                        )}
+                        <h3>{t('Detect the new Node')}</h3>
+                        <p>
+                          {t(
+                            'Run the installation command. The new machine will appear here automatically.',
+                          )}
+                        </p>
                       </div>
-                    </section>
-                  ))}
-                </div>
-              )}
+                    </div>
+                    {discoveryError && (
+                      <p className="ws-form-error" role="alert">
+                        {discoveryError}
+                      </p>
+                    )}
+                    {!installedNode && !discoveryError && (
+                      <div className="ws-runtime-empty">
+                        {t('Waiting for the installed Node to connect…')}
+                      </div>
+                    )}
+                    {installedNode && renderNodes([installedNode])}
+                  </>
+                )}
+              </div>
+            </section>
+          </div>
+        ) : (
+          <div className="ws-runtime-existing">
+            <div className="ws-runtime-existing-toolbar">
+              <strong>{t('Available Relay Nodes')}</strong>
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={discovering || claiming}
+                aria-busy={discovering}
+              >
+                <RefreshCw className={discovering ? 'is-spinning' : ''} />
+                {t('Refresh')}
+              </button>
             </div>
-          </section>
-        </div>
+            {discoveryError && (
+              <p className="ws-form-error" role="alert">
+                {discoveryError}
+              </p>
+            )}
+            {!discoveryError && existingNodes.length === 0 && (
+              <div className="ws-runtime-empty">
+                {discovering
+                  ? t('Refreshing…')
+                  : t('No other Relay Nodes are available for this account.')}
+              </div>
+            )}
+            {existingNodes.length > 0 && renderNodes(existingNodes)}
+          </div>
+        )}
         <div className="ws-form-actions ws-runtime-actions">
           <button type="button" onClick={() => onOpen(false)}>
             {t('Close')}
