@@ -1,7 +1,7 @@
 FROM golang:1.26-alpine AS build
 WORKDIR /src
 COPY server/go.mod server/go.sum ./
-RUN go env -w GOPROXY=https://goproxy.cn,direct && go mod download
+RUN go env -w GOPROXY="https://goproxy.cn|https://proxy.golang.org|direct" && go mod download
 COPY server/ ./
 RUN CGO_ENABLED=0 go build -trimpath -o /out/steer-server ./cmd/steer-server
 
