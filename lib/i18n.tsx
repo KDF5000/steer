@@ -288,6 +288,8 @@ const zhCN: Record<string, string> = {
   Copied: '已复制',
   'Copy command': '复制命令',
   'Refresh discovered Runtimes': '刷新发现的运行环境',
+  'Relay Node refresh timed out. Check the Steer Server and Relay Server connection.':
+    '刷新 Relay Node 超时，请检查 Steer Server 与 Relay Server 的连接。',
   'Choose an existing Node': '选择已有 Node',
   'Show installed Node': '显示本次安装的 Node',
   'Remove offline Relay Node': '移除离线 Relay Node',

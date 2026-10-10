@@ -659,6 +659,7 @@ export default function Fusion() {
   const gitStatusWorkspace = useRef('');
   const workspaceHydrationSequence = useRef(0);
   const sessionLoadSequence = useRef(0);
+  const runtimeDiscoverySequence = useRef(0);
   const routeReady = useRef(false);
   const skipRouteWrite = useRef(false);
   const createAgentLock = useRef(false);
@@ -1664,12 +1665,24 @@ export default function Fusion() {
   };
 
   const discoverRuntimes = async () => {
+    const sequence = ++runtimeDiscoverySequence.current;
     const requestedWorkspace = workspaceID;
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 12_000);
     setRuntimeDiscoveryLoading(true);
     setRuntimeDiscoveryError('');
     try {
-      const nodes = await steer.relayNodes();
-      if (!mounted.current || steer.workspace() !== requestedWorkspace) return;
+      const nodes = await steer.relayNodes(controller.signal);
+      if (
+        !mounted.current ||
+        sequence !== runtimeDiscoverySequence.current ||
+        steer.workspace() !== requestedWorkspace
+      )
+        return;
       setAvailableRuntimeNodes(nodes);
       setSelectedRuntimeIDs((current) =>
         current.filter((id) =>
@@ -1679,12 +1692,24 @@ export default function Fusion() {
         ),
       );
     } catch (error) {
-      if (!mounted.current || steer.workspace() !== requestedWorkspace) return;
+      if (
+        !mounted.current ||
+        sequence !== runtimeDiscoverySequence.current ||
+        steer.workspace() !== requestedWorkspace
+      )
+        return;
       setRuntimeDiscoveryError(
-        error instanceof Error ? error.message : 'Could not refresh Relay.',
+        timedOut
+          ? t(
+              'Relay Node refresh timed out. Check the Steer Server and Relay Server connection.',
+            )
+          : error instanceof Error
+            ? error.message
+            : 'Could not refresh Relay.',
       );
     } finally {
-      if (mounted.current && steer.workspace() === requestedWorkspace)
+      window.clearTimeout(timeout);
+      if (mounted.current && sequence === runtimeDiscoverySequence.current)
         setRuntimeDiscoveryLoading(false);
     }
   };
