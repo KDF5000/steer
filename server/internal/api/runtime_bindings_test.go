@@ -146,6 +146,9 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 	}
 	claimedNodeFound := false
 	for _, node := range ownedNodes {
+		if node.ID == nodeID {
+			t.Fatalf("fully bound Node %q was returned as available", nodeID)
+		}
 		if node.ID != generatedEnrollment.NodeID {
 			continue
 		}

@@ -310,7 +310,31 @@ func (s *Server) listOwnedRelayNodes(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, nodes)
+	bindings, err := s.store.WorkspaceRuntimeBindings(r.Context(), s.workspace(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	boundRuntimeIDs := make(map[string]bool, len(bindings))
+	for _, binding := range bindings {
+		boundRuntimeIDs[binding.NodeRuntimeID] = true
+	}
+	availableNodes := make([]controlplane.Node, 0, len(nodes))
+	for _, node := range nodes {
+		originalRuntimeCount := len(node.Runtimes)
+		availableRuntimes := make([]controlplane.Runtime, 0, originalRuntimeCount)
+		for _, runtime := range node.Runtimes {
+			if !boundRuntimeIDs[runtime.ID] {
+				availableRuntimes = append(availableRuntimes, runtime)
+			}
+		}
+		if originalRuntimeCount > 0 && len(availableRuntimes) == 0 {
+			continue
+		}
+		node.Runtimes = availableRuntimes
+		availableNodes = append(availableNodes, node)
+	}
+	writeJSON(w, http.StatusOK, availableNodes)
 }
 
 func (s *Server) deleteOwnedRelayNode(w http.ResponseWriter, r *http.Request) {
