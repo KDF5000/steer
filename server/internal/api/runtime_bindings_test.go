@@ -128,6 +128,26 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 	if publicResponse.Code != http.StatusCreated {
 		t.Fatalf("public enrollment claim = %d: %s", publicResponse.Code, publicResponse.Body.String())
 	}
+	var ownedNodes []struct {
+		ID       string            `json:"id"`
+		Runtimes []json.RawMessage `json:"runtimes"`
+	}
+	if err := json.Unmarshal(call(http.MethodGet, "/relay-nodes", "", http.StatusOK).Body.Bytes(), &ownedNodes); err != nil {
+		t.Fatal(err)
+	}
+	claimedNodeFound := false
+	for _, node := range ownedNodes {
+		if node.ID != generatedEnrollment.NodeID {
+			continue
+		}
+		claimedNodeFound = true
+		if node.Runtimes == nil || len(node.Runtimes) != 0 {
+			t.Fatalf("new offline Node runtimes = %#v, want an empty JSON array", node.Runtimes)
+		}
+	}
+	if !claimedNodeFound {
+		t.Fatalf("claimed Node %q is missing from the owner's Node list", generatedEnrollment.NodeID)
+	}
 	publicRequest = httptest.NewRequest(http.MethodPost, "/api/v1/relay-node-enrollments/claim", strings.NewReader(claimBody))
 	publicRequest.Header.Set("Content-Type", "application/json")
 	publicResponse = httptest.NewRecorder()

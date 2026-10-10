@@ -382,6 +382,9 @@ func (s *Server) ownedRelayNodes(ctx context.Context, userID string) ([]controlp
 			if node.Labels == nil {
 				node.Labels = map[string]string{}
 			}
+			if node.Runtimes == nil {
+				node.Runtimes = []controlplane.Runtime{}
+			}
 			node.Labels["name"] = record.Name
 			nodes = append(nodes, node)
 			continue
@@ -390,7 +393,12 @@ func (s *Server) ownedRelayNodes(ctx context.Context, userID string) ([]controlp
 		if runtimeErr != nil {
 			return nil, runtimeErr
 		}
-		node := controlplane.Node{NodeRegistration: controlplane.NodeRegistration{ID: record.ID, Capacity: record.Capacity, Labels: map[string]string{"name": record.Name}}, State: record.State}
+		node := controlplane.Node{NodeRegistration: controlplane.NodeRegistration{
+			ID:       record.ID,
+			Capacity: record.Capacity,
+			Labels:   map[string]string{"name": record.Name},
+			Runtimes: make([]controlplane.Runtime, 0, len(runtimes)),
+		}, State: record.State}
 		for _, runtime := range runtimes {
 			node.Runtimes = append(node.Runtimes, controlplane.Runtime{ID: runtime.ID, Provider: runtime.Provider, Version: runtime.Version, State: runtime.State})
 		}

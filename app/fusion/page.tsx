@@ -6595,14 +6595,14 @@ function RuntimeDialog({
 
   function toggleRuntime(runtimeID: string) {
     const selectedNode = nodes.find((node) =>
-      node.runtimes.some((runtime) => runtime.id === runtimeID),
+      node.runtimes?.some((runtime) => runtime.id === runtimeID),
     );
     onSelect(
       selectedRuntimeIDs.includes(runtimeID)
         ? selectedRuntimeIDs.filter((id) => id !== runtimeID)
         : [
             ...selectedRuntimeIDs.filter((id) =>
-              selectedNode?.runtimes.some((runtime) => runtime.id === id),
+              selectedNode?.runtimes?.some((runtime) => runtime.id === id),
             ),
             runtimeID,
           ],
@@ -6737,7 +6737,7 @@ function RuntimeDialog({
                         <small>{node.state || 'unknown'}</small>
                       </header>
                       <div>
-                        {node.runtimes.map((runtime) => (
+                        {(node.runtimes ?? []).map((runtime) => (
                           <label key={runtime.id}>
                             <input
                               type="checkbox"
@@ -6752,6 +6752,15 @@ function RuntimeDialog({
                             {runtime.version && <em>{runtime.version}</em>}
                           </label>
                         ))}
+                        {!node.runtimes?.length && (
+                          <p className="ws-runtime-node-empty">
+                            {node.state === 'online'
+                              ? t('No Runtime CLI was discovered on this Node.')
+                              : t(
+                                  'This Node is offline. Check the Relay Node service and refresh.',
+                                )}
+                          </p>
+                        )}
                       </div>
                     </section>
                   ))}

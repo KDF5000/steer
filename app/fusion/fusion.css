@@ -7030,6 +7030,14 @@ button.ws-chat-response-meta:focus-visible {
   font: normal 10.5px var(--font-geist-mono);
 }
 
+.ws-runtime-node-empty {
+  margin: 0;
+  padding: 12px 10px;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+  line-height: 1.5;
+}
+
 .ws-runtime-actions button:last-child {
   display: inline-flex;
   align-items: center;
