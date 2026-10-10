@@ -472,6 +472,15 @@ export const steer = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+  updateAgent: (id: string, input: Partial<AgentRecord>) =>
+    request<AgentRecord>(`/agents/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+  deleteAgent: (id: string) =>
+    request<AgentRecord>(`/agents/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
   systemSettings: () => request<WorkspaceSettingsRecord>('/system/settings'),
   updateSystemSettings: (settings: {
     systemAgentId: string | null;

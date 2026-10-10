@@ -175,6 +175,13 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 	if bootstrap.Relay.Nodes[0].Labels["name"] != "Test Node" {
 		t.Fatalf("bootstrap Node name = %q, want %q", bootstrap.Relay.Nodes[0].Labels["name"], "Test Node")
 	}
+	var updatedAgent store.Agent
+	if err := json.Unmarshal(call(http.MethodPut, "/agents/"+agent.ID, `{"name":"Rebound Agent","role":"General execution","instructions":"","runtimeProvider":"codex","runtimeId":"`+bindingID+`","model":null}`, http.StatusOK).Body.Bytes(), &updatedAgent); err != nil {
+		t.Fatal(err)
+	}
+	if updatedAgent.RuntimeID == nil || *updatedAgent.RuntimeID != bindingID {
+		t.Fatalf("updated Agent Runtime = %+v, want binding %q", updatedAgent.RuntimeID, bindingID)
+	}
 
 	call(http.MethodPost, "/tasks", `{"prompt":"Verify binding","agentId":"`+agent.ID+`"}`, http.StatusAccepted)
 	mu.Lock()

@@ -204,6 +204,7 @@ type RuntimeChoice = {
   runtimeId: string;
   models: string[];
   defaultModel: string;
+  unavailable?: boolean;
 };
 
 function projectRunError(
@@ -614,6 +615,9 @@ export default function Fusion() {
   const [chatSessions, setChatSessions] = useState<ChatSessionRecord[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [agentDialog, setAgentDialog] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<AgentItem | null>(null);
+  const [deletingAgent, setDeletingAgent] = useState<AgentItem | null>(null);
+  const [deletingAgentBusy, setDeletingAgentBusy] = useState(false);
   const [projectDialog, setProjectDialog] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectRecord | null>(
     null,
@@ -685,7 +689,7 @@ export default function Fusion() {
   const activeExecutionRuntime = runtimeChoices.find(
     (runtime) => runtime.runtimeId === composerExecutionRuntimeId,
   );
-  const automaticChoices = [
+  const automaticChoices: RuntimeChoice[] = [
     ...new Set(runtimeChoices.map((item) => item.provider)),
   ].map((provider) => ({
     value: `${provider}::`,
@@ -699,8 +703,29 @@ export default function Fusion() {
       runtimeChoices.find((item) => item.provider === provider)?.defaultModel ||
       '',
   }));
-  const allRuntimeChoices = [...automaticChoices, ...runtimeChoices];
-  const selectedRuntimeChoice = allRuntimeChoices.find(
+  const allRuntimeChoices: RuntimeChoice[] = [
+    ...automaticChoices,
+    ...runtimeChoices,
+  ];
+  const agentRuntimeChoices: RuntimeChoice[] =
+    editingAgent?.runtimeId &&
+    !allRuntimeChoices.some(
+      (choice) => choice.runtimeId === editingAgent.runtimeId,
+    )
+      ? [
+          {
+            value: `${editingAgent.runtimeProvider || 'unknown'}::${editingAgent.runtimeId}`,
+            label: `Unavailable Runtime / ${editingAgent.runtimeProvider || 'unknown'}`,
+            provider: editingAgent.runtimeProvider || 'unknown',
+            runtimeId: editingAgent.runtimeId,
+            models: [],
+            defaultModel: '',
+            unavailable: true,
+          },
+          ...allRuntimeChoices,
+        ]
+      : allRuntimeChoices;
+  const selectedRuntimeChoice = agentRuntimeChoices.find(
     (item) => item.value === agentRuntime,
   );
   const runtimeRows: RuntimeSummary[] = runtimeNodes.map((node) => [
@@ -1526,14 +1551,40 @@ export default function Fusion() {
     }
   };
 
-  const createAgent = async (event: SyntheticEvent<HTMLFormElement>) => {
+  const openNewAgent = () => {
+    setEditingAgent(null);
+    setAgentRuntime(
+      automaticChoices[0]?.value || runtimeChoices[0]?.value || '',
+    );
+    setAgentModel('Runtime default');
+    setFormError('');
+    setAgentDialog(true);
+  };
+
+  const openAgentEditor = (agent: AgentItem) => {
+    setEditingAgent(agent);
+    setAgentRuntime(
+      agent.runtimeId
+        ? `${agent.runtimeProvider || 'unknown'}::${agent.runtimeId}`
+        : `${agent.runtimeProvider || ''}::`,
+    );
+    setAgentModel(agent.model || 'Runtime default');
+    setFormError('');
+    setAgentDialog(true);
+  };
+
+  const saveAgent = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (createAgentLock.current) return;
     const data = new FormData(event.currentTarget);
     const name = formValue(data, 'name');
-    if (!name || !selectedRuntimeChoice) {
+    if (!name || !selectedRuntimeChoice || selectedRuntimeChoice.unavailable) {
       setFormError(
-        name ? 'Connect Relay and select a Runtime.' : 'Enter an Agent name.',
+        !name
+          ? 'Enter an Agent name.'
+          : selectedRuntimeChoice?.unavailable
+            ? 'The previously selected Runtime is unavailable. Select an active Runtime.'
+            : 'Connect Relay and select a Runtime.',
       );
       return;
     }
@@ -1541,37 +1592,70 @@ export default function Fusion() {
     setCreatingAgent(true);
     setFormError('');
     try {
-      const created = await steer.createAgent({
+      const input = {
         name,
         role: formValue(data, 'role') || 'General execution',
         instructions: formValue(data, 'instructions'),
         runtimeProvider: selectedRuntimeChoice.provider,
         runtimeId: selectedRuntimeChoice.runtimeId || null,
         model: agentModel === 'Runtime default' ? null : agentModel,
-      });
+      };
+      const saved = editingAgent
+        ? await steer.updateAgent(editingAgent.id, input)
+        : await steer.createAgent(input);
       const selectedSkillIDs = data.getAll('skills').map(String);
-      if (selectedSkillIDs.length) {
-        await steer.setAgentSkills(created.id, selectedSkillIDs);
-        setAgentSkillAssignments((current) => ({
-          ...current,
-          [created.id]: selectedSkillIDs,
-        }));
-      }
-      setAgentList((current) => [...current, agentFromRecord(created)]);
-      setChatAgent((current) => current || created.id);
-      setAgentDialog(false);
-      setNotice(
-        selectedSkillIDs.length
-          ? 'Agent created with assigned Skills.'
-          : 'Agent created.',
+      await steer.setAgentSkills(saved.id, selectedSkillIDs);
+      setAgentSkillAssignments((current) => ({
+        ...current,
+        [saved.id]: selectedSkillIDs,
+      }));
+      setAgentList((current) =>
+        editingAgent
+          ? current.map((agent) =>
+              agent.id === saved.id ? agentFromRecord(saved) : agent,
+            )
+          : [...current, agentFromRecord(saved)],
       );
+      setChatAgent((current) => current || saved.id);
+      setAgentDialog(false);
+      setEditingAgent(null);
+      setNotice(editingAgent ? 'Agent updated.' : 'Agent created.');
     } catch (error) {
       setFormError(
-        error instanceof Error ? error.message : 'Could not create Agent.',
+        error instanceof Error ? error.message : 'Could not save Agent.',
       );
     } finally {
       createAgentLock.current = false;
       setCreatingAgent(false);
+    }
+  };
+
+  const deleteSelectedAgent = async () => {
+    if (!deletingAgent || deletingAgentBusy) return;
+    setDeletingAgentBusy(true);
+    try {
+      const deleted = await steer.deleteAgent(deletingAgent.id);
+      setAgentList((current) =>
+        current.filter((agent) => agent.id !== deleted.id),
+      );
+      setAgentSkillAssignments((current) => {
+        const next = { ...current };
+        delete next[deleted.id];
+        return next;
+      });
+      if (chatAgent === deleted.id) {
+        setChatAgent(
+          agentList.find((agent) => agent.id !== deleted.id)?.id || '',
+        );
+      }
+      setDeletingAgent(null);
+      setNotice('Agent deleted.');
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : 'Could not delete Agent.',
+      );
+    } finally {
+      setDeletingAgentBusy(false);
     }
   };
 
@@ -2319,7 +2403,9 @@ export default function Fusion() {
             relayError={relayError}
             tab={agentTab}
             onTab={setAgentTab}
-            onCreate={() => setAgentDialog(true)}
+            onCreate={openNewAgent}
+            onEdit={openAgentEditor}
+            onDelete={setDeletingAgent}
             onAddRuntime={openRuntimeDialog}
             onCapacity={updateRuntimeCapacity}
             onDisconnect={disconnectRuntime}
@@ -2463,22 +2549,62 @@ export default function Fusion() {
         </AlertDialogContent>
       </AlertDialog>
       <AgentDialog
+        key={`${editingAgent?.id || 'new'}:${agentDialog ? 'open' : 'closed'}`}
         open={agentDialog}
         creating={creatingAgent}
         error={formError}
+        agent={editingAgent}
         runtime={agentRuntime}
         model={agentModel}
-        choices={allRuntimeChoices}
+        choices={agentRuntimeChoices}
         skills={skillList}
+        selectedSkillIDs={
+          editingAgent ? agentSkillAssignments[editingAgent.id] || [] : []
+        }
         selectedChoice={selectedRuntimeChoice}
-        onOpen={setAgentDialog}
+        onOpen={(open) => {
+          setAgentDialog(open);
+          if (!open) setEditingAgent(null);
+        }}
         onRuntime={(value) => {
           setAgentRuntime(value);
           setAgentModel('Runtime default');
         }}
         onModel={setAgentModel}
-        onSubmit={createAgent}
+        onSubmit={saveAgent}
       />
+      <AlertDialog
+        open={Boolean(deletingAgent)}
+        onOpenChange={(open) =>
+          !open && !deletingAgentBusy && setDeletingAgent(null)
+        }
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deletingAgent?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the Agent and its Skill assignments. Agents used by a
+              conversation, integration, or workspace setting must be
+              disconnected before deletion.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingAgentBusy}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deletingAgentBusy}
+              onClick={(event) => {
+                event.preventDefault();
+                void deleteSelectedAgent();
+              }}
+            >
+              {deletingAgentBusy ? 'Deleting…' : 'Delete Agent'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <RuntimeDialog
         open={runtimeDialog}
         connected={relayConnected}
@@ -4989,6 +5115,8 @@ function AgentsView({
   tab,
   onTab,
   onCreate,
+  onEdit,
+  onDelete,
   onAddRuntime,
   onCapacity,
   onDisconnect,
@@ -5002,6 +5130,8 @@ function AgentsView({
   tab: string;
   onTab: (value: string) => void;
   onCreate: () => void;
+  onEdit: (agent: AgentItem) => void;
+  onDelete: (agent: AgentItem) => void;
   onAddRuntime: () => void;
   onCapacity: (nodeID: string, capacity: number) => Promise<void>;
   onDisconnect: (bindingID: string) => Promise<void>;
@@ -5081,6 +5211,14 @@ function AgentsView({
               <span className="ws-agent-actions">
                 <button
                   type="button"
+                  aria-label={t('Edit Agent')}
+                  title={t('Edit Agent')}
+                  onClick={() => onEdit(agent)}
+                >
+                  <Pencil aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
                   className="ws-agent-copy-id"
                   aria-label={t('Copy Agent ID')}
                   title={`${t('Copy Agent ID')} · ${agent.id}`}
@@ -5098,6 +5236,14 @@ function AgentsView({
                   onClick={() => onChat(agent.id)}
                 >
                   <MessageSquare aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={t('Delete Agent')}
+                  title={t('Delete Agent')}
+                  onClick={() => onDelete(agent)}
+                >
+                  <Trash2 aria-hidden="true" />
                 </button>
               </span>
             </div>
@@ -6378,10 +6524,12 @@ function AgentDialog({
   open,
   creating,
   error,
+  agent,
   runtime,
   model,
   choices,
   skills,
+  selectedSkillIDs,
   selectedChoice,
   onOpen,
   onRuntime,
@@ -6391,19 +6539,23 @@ function AgentDialog({
   open: boolean;
   creating: boolean;
   error: string;
+  agent: AgentItem | null;
   runtime: string;
   model: string;
   choices: RuntimeChoice[];
   skills: SkillRecord[];
+  selectedSkillIDs: string[];
   selectedChoice?: RuntimeChoice;
   onOpen: (open: boolean) => void;
   onRuntime: (value: string) => void;
   onModel: (value: string) => void;
   onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void;
 }) {
+  const { t } = useI18n();
   const models = [
     'Runtime default',
     ...new Set([
+      ...(model !== 'Runtime default' ? [model] : []),
       ...(selectedChoice?.defaultModel ? [selectedChoice.defaultModel] : []),
       ...(selectedChoice?.models || []),
     ]),
@@ -6411,15 +6563,18 @@ function AgentDialog({
   return (
     <Dialog open={open} onOpenChange={(value) => !creating && onOpen(value)}>
       <DialogContent className="ws-agent-dialog">
-        <DialogTitle>Create Agent</DialogTitle>
+        <DialogTitle>{agent ? t('Edit Agent') : t('Create Agent')}</DialogTitle>
         <DialogDescription>
-          Define reusable behavior and choose where Relay may run it.
+          {agent
+            ? 'Update this Agent’s behavior and execution Runtime.'
+            : 'Define reusable behavior and choose where Relay may run it.'}
         </DialogDescription>
         <form onSubmit={onSubmit}>
           <label>
             Name
             <input
               name="name"
+              defaultValue={agent?.name || ''}
               autoComplete="off"
               placeholder="e.g. Security Reviewer"
               required
@@ -6429,6 +6584,7 @@ function AgentDialog({
             Role
             <input
               name="role"
+              defaultValue={agent?.role || ''}
               autoComplete="off"
               placeholder="What should this Agent handle?"
             />
@@ -6447,7 +6603,11 @@ function AgentDialog({
               </SelectTrigger>
               <SelectContent className="ws-select-popup">
                 {choices.map((choice) => (
-                  <SelectItem key={choice.value} value={choice.value}>
+                  <SelectItem
+                    key={choice.value}
+                    value={choice.value}
+                    disabled={choice.unavailable}
+                  >
                     {choice.label}
                   </SelectItem>
                 ))}
@@ -6479,6 +6639,7 @@ function AgentDialog({
             Instructions
             <textarea
               name="instructions"
+              defaultValue={agent?.instructions || ''}
               placeholder="Role, constraints, and output preferences…"
             />
           </label>
@@ -6496,6 +6657,7 @@ function AgentDialog({
                       type="checkbox"
                       name="skills"
                       value={skill.id}
+                      defaultChecked={selectedSkillIDs.includes(skill.id)}
                       aria-label={`Assign ${skill.name}`}
                     />
                     <span>
@@ -6523,7 +6685,13 @@ function AgentDialog({
               Cancel
             </button>
             <button type="submit" disabled={creating}>
-              {creating ? 'Creating…' : 'Create Agent'}
+              {creating
+                ? agent
+                  ? 'Saving…'
+                  : 'Creating…'
+                : agent
+                  ? t('Save changes')
+                  : t('Create Agent')}
             </button>
           </div>
         </form>

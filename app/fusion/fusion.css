@@ -5481,14 +5481,14 @@ button.ws-chat-response-meta:focus-visible {
 }
 
 .ws-agents-table > .ws-table-head {
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 150px 75px 64px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 150px 75px 124px;
   padding-left: 58px;
 }
 
 .ws-agents-table > div:not(.ws-table-head) {
   display: grid;
   min-height: 62px;
-  grid-template-columns: 30px minmax(0, 1.3fr) minmax(0, 1fr) 150px 75px 64px;
+  grid-template-columns: 30px minmax(0, 1.3fr) minmax(0, 1fr) 150px 75px 124px;
   align-items: center;
   gap: 14px;
   padding: 10px 14px;
@@ -7132,7 +7132,7 @@ button.ws-chat-response-meta:focus-visible {
   }
 
   .ws-agents-table > .ws-table-head {
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 75px 64px;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 75px 124px;
   }
 
   .ws-agents-table > .ws-table-head > span:nth-child(3),
@@ -7141,7 +7141,7 @@ button.ws-chat-response-meta:focus-visible {
   }
 
   .ws-agents-table > div:not(.ws-table-head) {
-    grid-template-columns: 30px minmax(0, 1.4fr) minmax(0, 1fr) 75px 64px;
+    grid-template-columns: 30px minmax(0, 1.4fr) minmax(0, 1fr) 75px 124px;
   }
 
   .ws-runtime-table > .ws-table-head {
@@ -7266,7 +7266,7 @@ button.ws-chat-response-meta:focus-visible {
   }
 
   .ws-agents-table > div:not(.ws-table-head) {
-    grid-template-columns: 30px minmax(0, 1fr) 65px 64px;
+    grid-template-columns: 30px minmax(0, 1fr) 65px 124px;
   }
 
   .ws-agents-table > div:not(.ws-table-head) > span:nth-child(3),

@@ -19,8 +19,9 @@ import (
 var migrationFiles embed.FS
 
 var (
-	ErrNotFound = errors.New("not found")
-	ErrConflict = errors.New("conflict")
+	ErrNotFound   = errors.New("not found")
+	ErrConflict   = errors.New("conflict")
+	ErrAgentInUse = errors.New("agent is still used by a conversation, integration, or workspace setting")
 )
 
 type Store struct{ pool *pgxpool.Pool }
@@ -317,6 +318,46 @@ func (s *Store) CreateAgent(ctx context.Context, workspaceID string, a Agent) (A
 	a.WorkspaceID = workspaceID
 	return scanAgent(s.pool.QueryRow(ctx, `INSERT INTO agents(id,workspace_id,name,role,instructions,runtime_provider,runtime_id,model,workspace_kind,workspace_source,workspace_ref) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING `+agentColumns,
 		a.ID, a.WorkspaceID, a.Name, a.Role, a.Instructions, a.RuntimeProvider, a.RuntimeID, a.Model, a.WorkspaceKind, a.WorkspaceSource, a.WorkspaceRef))
+}
+
+func (s *Store) UpdateAgent(ctx context.Context, workspaceID, id string, a Agent) (Agent, error) {
+	updated, err := scanAgent(s.pool.QueryRow(ctx, `UPDATE agents SET name=$3,role=$4,instructions=$5,runtime_provider=$6,runtime_id=$7,model=$8,updated_at=now() WHERE workspace_id=$1 AND id=$2 RETURNING `+agentColumns,
+		workspaceID, id, a.Name, a.Role, a.Instructions, a.RuntimeProvider, a.RuntimeID, a.Model))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Agent{}, ErrNotFound
+	}
+	return updated, err
+}
+
+func (s *Store) DeleteAgent(ctx context.Context, workspaceID, id string) (Agent, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return Agent{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var referenced bool
+	if err := tx.QueryRow(ctx, `SELECT
+		EXISTS(SELECT 1 FROM chat_sessions WHERE workspace_id=$1 AND agent_id=$2)
+		OR EXISTS(SELECT 1 FROM workspace_integrations WHERE workspace_id=$1 AND agent_id=$2)
+		OR EXISTS(SELECT 1 FROM workspace_settings WHERE workspace_id=$1 AND system_agent_id=$2)
+	`, workspaceID, id).Scan(&referenced); err != nil {
+		return Agent{}, err
+	}
+	if referenced {
+		return Agent{}, ErrAgentInUse
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM agent_skills WHERE workspace_id=$1 AND agent_id=$2`, workspaceID, id); err != nil {
+		return Agent{}, err
+	}
+	deleted, err := scanAgent(tx.QueryRow(ctx, `DELETE FROM agents WHERE workspace_id=$1 AND id=$2 RETURNING `+agentColumns, workspaceID, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Agent{}, ErrNotFound
+	}
+	if err != nil {
+		return Agent{}, err
+	}
+	return deleted, tx.Commit(ctx)
 }
 
 func (s *Store) WorkspaceSettings(ctx context.Context, workspaceID string) (WorkspaceSettings, error) {

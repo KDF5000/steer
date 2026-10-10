@@ -125,6 +125,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/bootstrap", s.bootstrap)
 	mux.HandleFunc("GET /api/v1/agents", s.listAgents)
 	mux.HandleFunc("POST /api/v1/agents", s.createAgent)
+	mux.HandleFunc("PUT /api/v1/agents/{id}", s.updateAgent)
+	mux.HandleFunc("DELETE /api/v1/agents/{id}", s.deleteAgent)
 	mux.HandleFunc("GET /api/v1/system/settings", s.systemSettings)
 	mux.HandleFunc("PUT /api/v1/system/settings", s.updateSystemSettings)
 	mux.HandleFunc("GET /api/v1/agents/{id}/skills", s.agentSkills)
@@ -475,26 +477,8 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	in.Name = strings.TrimSpace(in.Name)
-	in.Role = strings.TrimSpace(in.Role)
-	in.RuntimeProvider = strings.TrimSpace(in.RuntimeProvider)
-	if in.Name == "" || in.RuntimeProvider == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and runtimeProvider are required"})
+	if !s.validateAgentInput(w, r, &in) {
 		return
-	}
-	if in.Role == "" {
-		in.Role = "General execution"
-	}
-	if in.RuntimeID != nil && strings.TrimSpace(*in.RuntimeID) != "" {
-		assigned, err := s.store.RuntimeAssigned(r.Context(), s.workspace(r), *in.RuntimeID)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		if !assigned {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "The selected Runtime is not assigned to this workspace."})
-			return
-		}
 	}
 	item, err := s.store.CreateAgent(r.Context(), s.workspace(r), in)
 	if err != nil {
@@ -502,6 +486,73 @@ func (s *Server) createAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, item)
+}
+
+func (s *Server) updateAgent(w http.ResponseWriter, r *http.Request) {
+	var in store.Agent
+	if err := decodeJSON(r, &in); err != nil {
+		writeError(w, err)
+		return
+	}
+	if !s.validateAgentInput(w, r, &in) {
+		return
+	}
+	item, err := s.store.UpdateAgent(r.Context(), s.workspace(r), r.PathValue("id"), in)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (s *Server) deleteAgent(w http.ResponseWriter, r *http.Request) {
+	item, err := s.store.DeleteAgent(r.Context(), s.workspace(r), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (s *Server) validateAgentInput(w http.ResponseWriter, r *http.Request, in *store.Agent) bool {
+	in.Name = strings.TrimSpace(in.Name)
+	in.Role = strings.TrimSpace(in.Role)
+	in.RuntimeProvider = strings.TrimSpace(in.RuntimeProvider)
+	if in.Name == "" || in.RuntimeProvider == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and runtimeProvider are required"})
+		return false
+	}
+	if in.Role == "" {
+		in.Role = "General execution"
+	}
+	if in.RuntimeID != nil {
+		runtimeID := strings.TrimSpace(*in.RuntimeID)
+		if runtimeID == "" {
+			in.RuntimeID = nil
+		} else {
+			in.RuntimeID = &runtimeID
+		}
+	}
+	if in.Model != nil {
+		model := strings.TrimSpace(*in.Model)
+		if model == "" {
+			in.Model = nil
+		} else {
+			in.Model = &model
+		}
+	}
+	if in.RuntimeID != nil {
+		assigned, err := s.store.RuntimeAssigned(r.Context(), s.workspace(r), *in.RuntimeID)
+		if err != nil {
+			writeError(w, err)
+			return false
+		}
+		if !assigned {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "The selected Runtime is not assigned to this workspace."})
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Server) artifactContent(w http.ResponseWriter, r *http.Request) {
@@ -1123,6 +1174,8 @@ func writeError(w http.ResponseWriter, err error) {
 	} else if errors.Is(err, store.ErrConflict) {
 		status = http.StatusConflict
 	} else if errors.Is(err, store.ErrRuntimeBindingInUse) {
+		status = http.StatusConflict
+	} else if errors.Is(err, store.ErrAgentInUse) {
 		status = http.StatusConflict
 	} else if errors.Is(err, errSystemAgentNotConfigured) {
 		status = http.StatusConflict
