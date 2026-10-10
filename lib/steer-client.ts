@@ -57,6 +57,7 @@ export type FeishuIntegrationInput = {
 
 export type RelayNodeEnrollment = {
   token: string;
+  nodeId: string;
   expiresAt: string;
 };
 

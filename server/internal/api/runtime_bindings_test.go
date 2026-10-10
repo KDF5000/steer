@@ -109,11 +109,18 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 		}
 		return response
 	}
-	rawEnrollmentToken := "steer_enr_" + uuid.NewString()
-	if _, err := st.CreateRelayNodeEnrollment(ctx, user.ID, tokenHash(rawEnrollmentToken), time.Now().Add(time.Hour)); err != nil {
+	var generatedEnrollment struct {
+		Token     string    `json:"token"`
+		NodeID    string    `json:"nodeId"`
+		ExpiresAt time.Time `json:"expiresAt"`
+	}
+	if err := json.Unmarshal(call(http.MethodPost, "/relay-node-enrollments", "", http.StatusCreated).Body.Bytes(), &generatedEnrollment); err != nil {
 		t.Fatal(err)
 	}
-	claimBody := `{"token":"` + rawEnrollmentToken + `","nodeId":"node_claimed_` + suffix + `","name":"Claimed Node","capacity":2}`
+	if !strings.HasPrefix(generatedEnrollment.Token, "steer_enr_") || !strings.HasPrefix(generatedEnrollment.NodeID, "node_") || generatedEnrollment.ExpiresAt.Before(time.Now()) {
+		t.Fatalf("invalid generated enrollment: %+v", generatedEnrollment)
+	}
+	claimBody := `{"token":"` + generatedEnrollment.Token + `","nodeId":"` + generatedEnrollment.NodeID + `","name":"Claimed Node","capacity":2}`
 	publicRequest := httptest.NewRequest(http.MethodPost, "/api/v1/relay-node-enrollments/claim", strings.NewReader(claimBody))
 	publicRequest.Header.Set("Content-Type", "application/json")
 	publicResponse := httptest.NewRecorder()

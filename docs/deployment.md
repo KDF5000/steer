@@ -127,18 +127,31 @@ Open **System → Runtimes → Add Runtime** in Steer:
 The generated command has this form:
 
 ```bash
+RELAY_NODE_ID='node_generated-by-steer'
+RELAY_MACHINE_NAME_JSON=$(hostname | sed 's/\\/\\\\/g; s/"/\\"/g')
 curl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh \
   | RELAY_NODE_TOKEN='the-same-node-token-as-relay' sh -s -- \
     --server https://relay.example.com \
-    --steer-server https://steer.example.com/api/v1 \
-    --enrollment-token 'steer_enr_...' \
-    --install-service
+    --node-id "$RELAY_NODE_ID" \
+    --force \
+    --install-service && \
+  curl -fsS -X POST https://steer.example.com/api/v1/relay-node-enrollments/claim \
+    -H 'Content-Type: application/json' \
+    --data-binary "{\"token\":\"steer_enr_...\",\"nodeId\":\"$RELAY_NODE_ID\",\"name\":\"$RELAY_MACHINE_NAME_JSON\",\"capacity\":2}"
 ```
 
-The installer generates a stable random Node ID and uses the machine hostname
-only as its display name. `RELAY_NODE_TOKEN` still authenticates the Node to
-Relay Server; the short-lived Steer enrollment token establishes the Node's
-owner and cannot be reused.
+Steer generates the stable Node ID before installation. The Relay installer
+uses that ID, then the second request claims the same Node in Steer and uses the
+machine hostname only as its display name. `--force` replaces an existing Relay
+Node configuration so that a re-registration cannot silently keep a different
+Node ID; the installer creates a timestamped backup first. `RELAY_NODE_TOKEN`
+still authenticates the Node to Relay Server; the short-lived Steer enrollment
+token establishes the Node's owner and cannot be reused.
+
+Both the Relay Server URL and the Steer API URL in this command must be
+reachable from the machine running the installer. In particular, do not use a
+browser-relative Steer URL such as `/api/v1`, or `localhost` unless Steer is
+running on that same machine.
 
 Disconnecting a Runtime from one Workspace deletes only that Workspace's
 logical Binding. It does not stop or uninstall the Node and does not affect

@@ -634,6 +634,7 @@ export default function Fusion() {
   const [runtimeClaiming, setRuntimeClaiming] = useState(false);
   const [runtimeDiscoveryError, setRuntimeDiscoveryError] = useState('');
   const [relayEnrollmentToken, setRelayEnrollmentToken] = useState('');
+  const [relayEnrollmentNodeID, setRelayEnrollmentNodeID] = useState('');
   const [creatingAgent, setCreatingAgent] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [formError, setFormError] = useState('');
@@ -1603,6 +1604,7 @@ export default function Fusion() {
   const openRuntimeDialog = () => {
     setRuntimeDialog(true);
     setRelayEnrollmentToken('');
+    setRelayEnrollmentNodeID('');
     void discoverRuntimes();
   };
 
@@ -1646,6 +1648,7 @@ export default function Fusion() {
     try {
       const enrollment = await steer.createRelayNodeEnrollment();
       setRelayEnrollmentToken(enrollment.token);
+      setRelayEnrollmentNodeID(enrollment.nodeId);
     } catch (error) {
       setRuntimeDiscoveryError(
         error instanceof Error
@@ -2487,6 +2490,7 @@ export default function Fusion() {
         discovering={runtimeDiscoveryLoading}
         claiming={runtimeClaiming}
         enrollmentToken={relayEnrollmentToken}
+        enrollmentNodeID={relayEnrollmentNodeID}
         steerAPIURL={steerAPIBaseURL}
         onOpen={setRuntimeDialog}
         onURL={setRelayPublicURL}
@@ -6539,6 +6543,7 @@ function RuntimeDialog({
   discovering,
   claiming,
   enrollmentToken,
+  enrollmentNodeID,
   steerAPIURL,
   onOpen,
   onURL,
@@ -6557,6 +6562,7 @@ function RuntimeDialog({
   discovering: boolean;
   claiming: boolean;
   enrollmentToken: string;
+  enrollmentNodeID: string;
   steerAPIURL: string;
   onOpen: (open: boolean) => void;
   onURL: (value: string) => void;
@@ -6568,9 +6574,17 @@ function RuntimeDialog({
   const { t } = useI18n();
   const [commandCopied, setCommandCopied] = useState(false);
   const shellQuote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
-  const command = enrollmentToken
-    ? `curl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh | RELAY_NODE_TOKEN='YOUR_NODE_TOKEN' sh -s -- --server ${shellQuote(publicURL || 'https://relay.example.com')} --steer-server ${shellQuote(steerAPIURL)} --enrollment-token ${shellQuote(enrollmentToken)} --install-service`
-    : '';
+  const publicSteerAPIURL = (
+    steerAPIURL.startsWith('http')
+      ? steerAPIURL
+      : typeof window !== 'undefined'
+        ? new URL(steerAPIURL, window.location.origin).toString()
+        : steerAPIURL
+  ).replace(/\/$/, '');
+  const command =
+    enrollmentToken && enrollmentNodeID
+      ? `RELAY_NODE_ID=${shellQuote(enrollmentNodeID)}\nRELAY_MACHINE_NAME_JSON=$(hostname | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')\ncurl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh | RELAY_NODE_TOKEN='YOUR_NODE_TOKEN' sh -s -- --server ${shellQuote(publicURL || 'https://relay.example.com')} --node-id "$RELAY_NODE_ID" --force --install-service && \\\n  curl -fsS -X POST ${shellQuote(`${publicSteerAPIURL}/relay-node-enrollments/claim`)} -H 'Content-Type: application/json' --data-binary "{\\"token\\":\\"${enrollmentToken}\\",\\"nodeId\\":\\"$RELAY_NODE_ID\\",\\"name\\":\\"$RELAY_MACHINE_NAME_JSON\\",\\"capacity\\":2}"`
+      : '';
 
   async function copyInstallCommand() {
     const copied = await writeClipboard(command);

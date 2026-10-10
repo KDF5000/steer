@@ -13,6 +13,7 @@ import (
 
 	"github.com/KDF5000/relay/controlplane"
 	"github.com/KDF5000/steer/server/internal/store"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -249,12 +250,13 @@ func (s *Server) createRelayNodeEnrollment(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	rawToken := "steer_enr_" + base64.RawURLEncoding.EncodeToString(random)
+	nodeID := "node_" + uuid.NewString()
 	expiresAt := time.Now().Add(15 * time.Minute)
 	if _, err := s.store.CreateRelayNodeEnrollment(r.Context(), userFromContext(r.Context()).ID, tokenHash(rawToken), expiresAt); err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"token": rawToken, "expiresAt": expiresAt})
+	writeJSON(w, http.StatusCreated, map[string]any{"token": rawToken, "nodeId": nodeID, "expiresAt": expiresAt})
 }
 
 func (s *Server) claimRelayNodeEnrollment(w http.ResponseWriter, r *http.Request) {
