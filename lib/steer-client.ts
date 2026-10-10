@@ -468,9 +468,10 @@ export const steer = {
     }>(
       `/runs/${encodeURIComponent(runId)}/workspace?operation=${operation}&path=${encodeURIComponent(path)}`,
     ),
-  projectGitStatus: (projectId: string) =>
+  projectGitStatus: (projectId: string, signal?: AbortSignal) =>
     request<{ git?: WorkspaceGitStatus }>(
       `/projects/${encodeURIComponent(projectId)}/git-status`,
+      { signal },
     ),
   createAgent: (input: Partial<AgentRecord>) =>
     request<AgentRecord>('/agents', {

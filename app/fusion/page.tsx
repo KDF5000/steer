@@ -658,6 +658,8 @@ export default function Fusion() {
   const pollingRun = useRef('');
   const mounted = useRef(true);
   const gitStatusWorkspace = useRef('');
+  const requestedProjectGitStatuses = useRef(new Set<string>());
+  const projectGitStatusController = useRef<AbortController | null>(null);
   const workspaceHydrationSequence = useRef(0);
   const sessionLoadSequence = useRef(0);
   const runtimeDiscoverySequence = useRef(0);
@@ -812,6 +814,9 @@ export default function Fusion() {
   const hydrateWorkspace = useCallback(async (id: string) => {
     const sequence = ++workspaceHydrationSequence.current;
     gitStatusWorkspace.current = id;
+    projectGitStatusController.current?.abort();
+    projectGitStatusController.current = null;
+    requestedProjectGitStatuses.current.clear();
     steer.setWorkspace(id);
     const data = await steer.bootstrap();
     if (
@@ -824,19 +829,6 @@ export default function Fusion() {
     setAgentList(agents);
     setProjectList(data.projects || []);
     setProjectGitStatuses({});
-    void Promise.all(
-      (data.projects || []).map(async (project) => {
-        const result = await steer
-          .projectGitStatus(project.id)
-          .catch(() => null);
-        return result?.git ? ([project.id, result.git] as const) : null;
-      }),
-    ).then((results) => {
-      if (!mounted.current || gitStatusWorkspace.current !== id) return;
-      setProjectGitStatuses(
-        Object.fromEntries(results.filter((item) => item !== null)),
-      );
-    });
     setArtifactList(data.artifacts.map(artifactFromRecord));
     setSkillList(data.skills || []);
     setDocumentList(data.documents || []);
@@ -959,14 +951,13 @@ export default function Fusion() {
           setArtifactList(refreshed.artifacts.map(artifactFromRecord));
         const projectID = activeRunContext.current.project?.id;
         if (projectID) {
-          const gitStatus = await steer
-            .projectGitStatus(projectID)
-            .catch(() => null);
-          if (gitStatus?.git)
-            setProjectGitStatuses((current) => ({
-              ...current,
-              [projectID]: gitStatus.git!,
-            }));
+          requestedProjectGitStatuses.current.delete(projectID);
+          setProjectGitStatuses((current) => {
+            if (!(projectID in current)) return current;
+            const next = { ...current };
+            delete next[projectID];
+            return next;
+          });
         }
         activeRun.current = '';
         activeTask.current = '';
@@ -1303,6 +1294,45 @@ export default function Fusion() {
     if (window.location.hash !== hash) window.history.pushState(null, '', hash);
   }, [agentTab, artifactList, chatSession, selectedArtifact, view]);
 
+  const loadProjectGitStatus = (projectID: string) => {
+    if (
+      projectID === 'none' ||
+      requestedProjectGitStatuses.current.has(projectID)
+    )
+      return;
+    const requestedWorkspace = steer.workspace();
+    projectGitStatusController.current?.abort();
+    const controller = new AbortController();
+    projectGitStatusController.current = controller;
+    requestedProjectGitStatuses.current.add(projectID);
+    void steer
+      .projectGitStatus(projectID, controller.signal)
+      .then((result) => {
+        if (
+          !mounted.current ||
+          gitStatusWorkspace.current !== requestedWorkspace ||
+          steer.workspace() !== requestedWorkspace
+        )
+          return;
+        if (result.git)
+          setProjectGitStatuses((current) => ({
+            ...current,
+            [projectID]: result.git!,
+          }));
+      })
+      .catch(() => {
+        if (
+          gitStatusWorkspace.current === requestedWorkspace &&
+          steer.workspace() === requestedWorkspace
+        )
+          requestedProjectGitStatuses.current.delete(projectID);
+      })
+      .finally(() => {
+        if (projectGitStatusController.current === controller)
+          projectGitStatusController.current = null;
+      });
+  };
+
   const startNewChat = (projectID = 'none') => {
     sessionLoadSequence.current += 1;
     activeRun.current = '';
@@ -1319,6 +1349,16 @@ export default function Fusion() {
     setChatImages([]);
     setChatProject(projectID);
     setView('chat');
+  };
+
+  const openProject = (projectID: string) => {
+    loadProjectGitStatus(projectID);
+    startNewChat(projectID);
+  };
+
+  const selectChatProject = (projectID: string) => {
+    loadProjectGitStatus(projectID);
+    setChatProject(projectID);
   };
 
   const send = async (override?: string) => {
@@ -1485,6 +1525,13 @@ export default function Fusion() {
           ? current.map((item) => (item.id === project.id ? project : item))
           : [project, ...current],
       );
+      requestedProjectGitStatuses.current.delete(project.id);
+      setProjectGitStatuses((current) => {
+        if (!(project.id in current)) return current;
+        const next = { ...current };
+        delete next[project.id];
+        return next;
+      });
       if (!editingProject) startNewChat(project.id);
       setProjectDialog(false);
       setEditingProject(null);
@@ -1512,6 +1559,13 @@ export default function Fusion() {
       setProjectList((current) =>
         current.map((item) => (item.id === deleted.id ? deleted : item)),
       );
+      requestedProjectGitStatuses.current.delete(deleted.id);
+      setProjectGitStatuses((current) => {
+        if (!(deleted.id in current)) return current;
+        const next = { ...current };
+        delete next[deleted.id];
+        return next;
+      });
       if (!chatSession && chatProject === deleted.id) {
         setChatProject('none');
       }
@@ -1889,6 +1943,9 @@ export default function Fusion() {
     setWorkspaceList([]);
     setWorkspaceID('');
     gitStatusWorkspace.current = '';
+    projectGitStatusController.current?.abort();
+    projectGitStatusController.current = null;
+    requestedProjectGitStatuses.current.clear();
     setLoaded(false);
     setLoadError('');
   };
@@ -2062,7 +2119,7 @@ export default function Fusion() {
                             !chatSession &&
                             chatProject === project.id
                           }
-                          onClick={() => startNewChat(project.id)}
+                          onClick={() => openProject(project.id)}
                           title={project.workspaceSource}
                         >
                           <Folder aria-hidden="true" />
@@ -2360,7 +2417,7 @@ export default function Fusion() {
             images={chatImages}
             working={chatWorking}
             onAgent={setChatAgent}
-            onProject={setChatProject}
+            onProject={selectChatProject}
             onAddProject={() => setProjectDialog(true)}
             onInput={setChatInput}
             onImages={(files) => {
@@ -2518,7 +2575,7 @@ export default function Fusion() {
         onOpen={setSearchOpen}
         projects={projectList}
         artifacts={artifactList}
-        onProject={startNewChat}
+        onProject={openProject}
         onArtifact={(index) => {
           setSelectedArtifact(index);
           setView('artifacts');
