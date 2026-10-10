@@ -36,20 +36,85 @@ func TestUsersWorkspacesAndRuntimeIsolation(t *testing.T) {
 	if _, err := s.Agent(ctx, secondWorkspace.ID, agent.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("agent crossed workspace boundary: %v", err)
 	}
-	if err := s.AssignRuntime(ctx, firstWorkspace.ID, "node/runtime"); err != nil {
+	enrollment, err := s.CreateRelayNodeEnrollment(ctx, first.ID, "enrollment-"+suffix, time.Now().Add(time.Hour))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AssignRuntime(ctx, secondWorkspace.ID, "node/runtime"); !errors.Is(err, ErrConflict) {
-		t.Fatalf("runtime was assigned to two workspaces: %v", err)
-	}
-	if err := s.AssignRuntime(ctx, secondWorkspace.ID, "node/claimed"); err != nil {
+	node, err := s.EnrollRelayNode(ctx, enrollment.TokenHash, "node-"+suffix, "Shared machine", 2, "online", time.Now())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AssignRuntimes(ctx, firstWorkspace.ID, []string{"node/new", "node/claimed"}); !errors.Is(err, ErrConflict) {
-		t.Fatalf("batch claim should conflict: %v", err)
+	if _, err := s.EnrollRelayNode(ctx, enrollment.TokenHash, "another-"+suffix, "Replay", 2, "online", time.Now()); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("one-time enrollment token was reused: %v", err)
 	}
-	if assigned, err := s.RuntimeAssigned(ctx, firstWorkspace.ID, "node/new"); err != nil || assigned {
-		t.Fatalf("failed batch claim was not atomic: assigned=%t err=%v", assigned, err)
+	expired, err := s.CreateRelayNodeEnrollment(ctx, first.ID, "expired-"+suffix, time.Now().Add(-time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.EnrollRelayNode(ctx, expired.TokenHash, "expired-"+suffix, "Expired", 2, "online", time.Now()); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expired enrollment token was accepted: %v", err)
+	}
+	ownedNodes, err := s.RelayNodesForOwner(ctx, first.ID)
+	if err != nil || len(ownedNodes) != 1 || ownedNodes[0].ID != node.ID {
+		t.Fatalf("owner nodes = %+v: %v", ownedNodes, err)
+	}
+	otherNodes, err := s.RelayNodesForOwner(ctx, second.ID)
+	if err != nil || len(otherNodes) != 0 {
+		t.Fatalf("second user saw first user's Node: %+v, %v", otherNodes, err)
+	}
+	physicalRuntimeID := node.ID + "/codex"
+	if err := s.SyncRelayNode(ctx, node.ID, node.Name, node.Capacity, "online", time.Now(), []RelayNodeRuntime{{ID: physicalRuntimeID, NodeID: node.ID, Provider: "codex", State: "healthy"}}); err != nil {
+		t.Fatal(err)
+	}
+	sharedWorkspace, err := s.CreateWorkspace(ctx, first.ID, "Shared target")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BindRelayNodeRuntimes(ctx, firstWorkspace.ID, first.ID, node.ID, []string{physicalRuntimeID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BindRelayNodeRuntimes(ctx, secondWorkspace.ID, second.ID, node.ID, []string{physicalRuntimeID}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second user bound first user's Node: %v", err)
+	}
+	// The test user owns both workspaces. Sharing the same physical Runtime
+	// creates independent logical Runtime identities for each workspace.
+	if err := s.BindRelayNodeRuntimes(ctx, sharedWorkspace.ID, first.ID, node.ID, []string{physicalRuntimeID}); err != nil {
+		t.Fatal(err)
+	}
+	firstBindings, err := s.WorkspaceRuntimeBindings(ctx, firstWorkspace.ID)
+	if err != nil || len(firstBindings) != 1 {
+		t.Fatalf("first workspace bindings = %+v: %v", firstBindings, err)
+	}
+	secondBindings, err := s.WorkspaceRuntimeBindings(ctx, sharedWorkspace.ID)
+	if err != nil || len(secondBindings) != 1 {
+		t.Fatalf("second workspace bindings = %+v: %v", secondBindings, err)
+	}
+	if firstBindings[0].ID == secondBindings[0].ID {
+		t.Fatal("workspaces received the same logical Runtime identity")
+	}
+	_, firstRuntime, err := s.ResolveRuntimeBinding(ctx, firstWorkspace.ID, firstBindings[0].ID)
+	if err != nil || firstRuntime.ID != physicalRuntimeID {
+		t.Fatalf("first binding resolved to %+v: %v", firstRuntime, err)
+	}
+	_, secondRuntime, err := s.ResolveRuntimeBinding(ctx, sharedWorkspace.ID, secondBindings[0].ID)
+	if err != nil || secondRuntime.ID != physicalRuntimeID {
+		t.Fatalf("second binding resolved to %+v: %v", secondRuntime, err)
+	}
+	if err := s.DisconnectRuntimeBinding(ctx, firstWorkspace.ID, firstBindings[0].ID); err != nil {
+		t.Fatalf("disconnect first workspace binding: %v", err)
+	}
+	if _, _, err := s.ResolveRuntimeBinding(ctx, firstWorkspace.ID, firstBindings[0].ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("disconnected binding still resolved: %v", err)
+	}
+	if _, runtime, err := s.ResolveRuntimeBinding(ctx, sharedWorkspace.ID, secondBindings[0].ID); err != nil || runtime.ID != physicalRuntimeID {
+		t.Fatalf("disconnect affected the other workspace: %+v, %v", runtime, err)
+	}
+	inUseBindingID := secondBindings[0].ID
+	if _, err := s.CreateAgent(ctx, sharedWorkspace.ID, Agent{Name: "Pinned", RuntimeProvider: "codex", RuntimeID: &inUseBindingID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DisconnectRuntimeBinding(ctx, sharedWorkspace.ID, inUseBindingID); !errors.Is(err, ErrRuntimeBindingInUse) {
+		t.Fatalf("disconnected an in-use binding: %v", err)
 	}
 	if err := s.CreateAuthSession(ctx, first.ID, "token-"+suffix, time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)

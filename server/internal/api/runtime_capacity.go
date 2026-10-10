@@ -17,21 +17,16 @@ func (s *Server) updateNodeCapacity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nodeID := r.PathValue("id")
-	visible, err := s.workspaceNodes(r.Context(), s.workspace(r))
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	allowed := false
-	for _, node := range visible {
-		if node.ID == nodeID {
-			allowed = true
-			break
+	if s.authEnabled {
+		record, err := s.store.RelayNodeByID(r.Context(), nodeID)
+		if err != nil {
+			writeError(w, err)
+			return
 		}
-	}
-	if !allowed {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Runtime node not found."})
-		return
+		if record.OwnerUserID != userFromContext(r.Context()).ID {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "Runtime node not found."})
+			return
+		}
 	}
 	node, err := s.relayHTTP.UpdateNodeCapacity(r.Context(), nodeID, input.Capacity)
 	if err != nil {

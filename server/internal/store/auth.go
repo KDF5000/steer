@@ -39,6 +39,46 @@ type Workspace struct {
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
+type RelayNodeEnrollment struct {
+	ID          string
+	OwnerUserID string
+	TokenHash   string
+	ExpiresAt   time.Time
+}
+
+type RelayNode struct {
+	ID          string     `json:"id"`
+	OwnerUserID string     `json:"-"`
+	Name        string     `json:"name"`
+	Capacity    int        `json:"capacity"`
+	State       string     `json:"state"`
+	LastSeenAt  *time.Time `json:"lastSeenAt"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
+}
+
+type RelayNodeRuntime struct {
+	ID        string    `json:"id"`
+	NodeID    string    `json:"nodeId"`
+	Provider  string    `json:"provider"`
+	Version   string    `json:"version"`
+	State     string    `json:"state"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type WorkspaceRuntimeBinding struct {
+	ID                 string    `json:"id"`
+	WorkspaceID        string    `json:"workspaceId"`
+	NodeRuntimeID      string    `json:"nodeRuntimeId"`
+	AuthorizedByUserID string    `json:"-"`
+	Status             string    `json:"status"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
+}
+
+var ErrRuntimeBindingInUse = errors.New("runtime binding is still used by an Agent, Project, or conversation")
+
 const userColumns = `id,email,display_name,password_hash,created_at,updated_at`
 const workspaceColumns = `id,name,owner_user_id,created_at,updated_at`
 
@@ -156,57 +196,238 @@ func (s *Store) CreateWorkspace(ctx context.Context, userID, name string) (Works
 		uuid.NewString(), name, userID))
 }
 
-func (s *Store) AssignRuntime(ctx context.Context, workspaceID, runtimeID string) error {
-	command, err := s.pool.Exec(ctx, `INSERT INTO workspace_runtimes(runtime_id,workspace_id) VALUES($1,$2) ON CONFLICT(runtime_id) DO UPDATE SET workspace_id=EXCLUDED.workspace_id WHERE workspace_runtimes.workspace_id=EXCLUDED.workspace_id`, runtimeID, workspaceID)
+func (s *Store) CreateRelayNodeEnrollment(ctx context.Context, userID, hash string, expiresAt time.Time) (RelayNodeEnrollment, error) {
+	enrollment := RelayNodeEnrollment{ID: uuid.NewString(), OwnerUserID: userID, TokenHash: hash, ExpiresAt: expiresAt}
+	_, err := s.pool.Exec(ctx, `INSERT INTO relay_node_enrollments(id,owner_user_id,token_hash,expires_at) VALUES($1,$2,$3,$4)`,
+		enrollment.ID, enrollment.OwnerUserID, enrollment.TokenHash, enrollment.ExpiresAt)
+	return enrollment, err
+}
+
+// EnrollRelayNode consumes an installation token and establishes immutable
+// ownership for a physical Node. Re-registration never transfers ownership.
+func (s *Store) EnrollRelayNode(ctx context.Context, tokenHash, nodeID, name string, capacity int, state string, lastSeen time.Time) (RelayNode, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return RelayNode{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var ownerID string
+	err = tx.QueryRow(ctx, `UPDATE relay_node_enrollments SET consumed_at=now() WHERE token_hash=$1 AND consumed_at IS NULL AND expires_at>now() RETURNING owner_user_id`, tokenHash).Scan(&ownerID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RelayNode{}, ErrNotFound
+	}
+	if err != nil {
+		return RelayNode{}, err
+	}
+	var node RelayNode
+	err = tx.QueryRow(ctx, `INSERT INTO relay_nodes(id,owner_user_id,name,capacity,state,last_seen_at) VALUES($1,$2,$3,$4,$5,$6)
+		ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,capacity=EXCLUDED.capacity,state=EXCLUDED.state,last_seen_at=EXCLUDED.last_seen_at,updated_at=now()
+		WHERE relay_nodes.owner_user_id=EXCLUDED.owner_user_id
+		RETURNING id,owner_user_id,name,capacity,state,last_seen_at,created_at,updated_at`,
+		nodeID, ownerID, name, capacity, state, lastSeen).Scan(&node.ID, &node.OwnerUserID, &node.Name, &node.Capacity, &node.State, &node.LastSeenAt, &node.CreatedAt, &node.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RelayNode{}, ErrConflict
+	}
+	if err != nil {
+		return RelayNode{}, err
+	}
+	return node, tx.Commit(ctx)
+}
+
+func (s *Store) RelayNodeByID(ctx context.Context, nodeID string) (RelayNode, error) {
+	var node RelayNode
+	err := s.pool.QueryRow(ctx, `SELECT id,owner_user_id,name,capacity,state,last_seen_at,created_at,updated_at FROM relay_nodes WHERE id=$1`, nodeID).
+		Scan(&node.ID, &node.OwnerUserID, &node.Name, &node.Capacity, &node.State, &node.LastSeenAt, &node.CreatedAt, &node.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RelayNode{}, ErrNotFound
+	}
+	return node, err
+}
+
+func (s *Store) SyncRelayNode(ctx context.Context, nodeID, name string, capacity int, state string, lastSeen time.Time, runtimes []RelayNodeRuntime) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	command, err := tx.Exec(ctx, `UPDATE relay_nodes SET name=$2,capacity=$3,state=$4,last_seen_at=$5,updated_at=now() WHERE id=$1`, nodeID, name, capacity, state, lastSeen)
 	if err != nil {
 		return err
 	}
 	if command.RowsAffected() == 0 {
-		return ErrConflict
+		return ErrNotFound
 	}
-	return nil
+	seen := make([]string, 0, len(runtimes))
+	for _, runtime := range runtimes {
+		seen = append(seen, runtime.ID)
+		_, err := tx.Exec(ctx, `INSERT INTO relay_node_runtimes(id,node_id,provider,version,state) VALUES($1,$2,$3,$4,$5)
+			ON CONFLICT(id) DO UPDATE SET node_id=EXCLUDED.node_id,provider=EXCLUDED.provider,version=EXCLUDED.version,state=EXCLUDED.state,updated_at=now()`,
+			runtime.ID, nodeID, runtime.Provider, runtime.Version, runtime.State)
+		if err != nil {
+			return err
+		}
+	}
+	if len(seen) == 0 {
+		_, err = tx.Exec(ctx, `DELETE FROM relay_node_runtimes WHERE node_id=$1`, nodeID)
+	} else {
+		_, err = tx.Exec(ctx, `DELETE FROM relay_node_runtimes WHERE node_id=$1 AND NOT (id=ANY($2))`, nodeID, seen)
+	}
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
-// AssignRuntimes claims a set of Runtime IDs atomically. If any Runtime already
-// belongs to another workspace, none of the requested assignments are saved.
-func (s *Store) AssignRuntimes(ctx context.Context, workspaceID string, runtimeIDs []string) error {
+func (s *Store) RelayNodesForOwner(ctx context.Context, userID string) ([]RelayNode, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id,owner_user_id,name,capacity,state,last_seen_at,created_at,updated_at FROM relay_nodes WHERE owner_user_id=$1 ORDER BY updated_at DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	nodes := []RelayNode{}
+	for rows.Next() {
+		var node RelayNode
+		if err := rows.Scan(&node.ID, &node.OwnerUserID, &node.Name, &node.Capacity, &node.State, &node.LastSeenAt, &node.CreatedAt, &node.UpdatedAt); err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes, rows.Err()
+}
+
+func (s *Store) RelayNodeRuntimes(ctx context.Context, nodeID string) ([]RelayNodeRuntime, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id,node_id,provider,version,state,created_at,updated_at FROM relay_node_runtimes WHERE node_id=$1 ORDER BY provider`, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	runtimes := []RelayNodeRuntime{}
+	for rows.Next() {
+		var runtime RelayNodeRuntime
+		if err := rows.Scan(&runtime.ID, &runtime.NodeID, &runtime.Provider, &runtime.Version, &runtime.State, &runtime.CreatedAt, &runtime.UpdatedAt); err != nil {
+			return nil, err
+		}
+		runtimes = append(runtimes, runtime)
+	}
+	return runtimes, rows.Err()
+}
+
+func (s *Store) BindRelayNodeRuntimes(ctx context.Context, workspaceID, userID, nodeID string, runtimeIDs []string) error {
+	workspace, err := s.WorkspaceForUser(ctx, userID, workspaceID)
+	if err != nil {
+		return err
+	}
+	if workspace.ID == "" {
+		return ErrNotFound
+	}
+	node, err := s.RelayNodeByID(ctx, nodeID)
+	if err != nil {
+		return err
+	}
+	if node.OwnerUserID != userID {
+		return ErrNotFound
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	for _, runtimeID := range runtimeIDs {
-		command, err := tx.Exec(ctx, `INSERT INTO workspace_runtimes(runtime_id,workspace_id) VALUES($1,$2) ON CONFLICT(runtime_id) DO UPDATE SET workspace_id=EXCLUDED.workspace_id WHERE workspace_runtimes.workspace_id=EXCLUDED.workspace_id`, runtimeID, workspaceID)
-		if err != nil {
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM relay_node_runtimes WHERE id=$1 AND node_id=$2)`, runtimeID, nodeID).Scan(&exists); err != nil {
 			return err
 		}
-		if command.RowsAffected() == 0 {
-			return ErrConflict
+		if !exists {
+			return ErrNotFound
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO workspace_runtime_bindings(id,workspace_id,node_runtime_id,authorized_by_user_id) VALUES($1,$2,$3,$4)
+			ON CONFLICT(workspace_id,node_runtime_id) DO UPDATE SET status='active',authorized_by_user_id=EXCLUDED.authorized_by_user_id,updated_at=now()`,
+			uuid.NewString(), workspaceID, runtimeID, userID)
+		if err != nil {
+			return err
 		}
 	}
 	return tx.Commit(ctx)
 }
 
-func (s *Store) WorkspaceRuntimeIDs(ctx context.Context, workspaceID string) (map[string]bool, error) {
-	rows, err := s.pool.Query(ctx, `SELECT runtime_id FROM workspace_runtimes WHERE workspace_id=$1`, workspaceID)
+func (s *Store) WorkspaceRuntimeBindings(ctx context.Context, workspaceID string) ([]WorkspaceRuntimeBinding, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id,workspace_id,node_runtime_id,authorized_by_user_id,status,created_at,updated_at FROM workspace_runtime_bindings WHERE workspace_id=$1 AND status='active' ORDER BY created_at`, workspaceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	ids := map[string]bool{}
+	bindings := []WorkspaceRuntimeBinding{}
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+		var binding WorkspaceRuntimeBinding
+		if err := rows.Scan(&binding.ID, &binding.WorkspaceID, &binding.NodeRuntimeID, &binding.AuthorizedByUserID, &binding.Status, &binding.CreatedAt, &binding.UpdatedAt); err != nil {
 			return nil, err
 		}
-		ids[id] = true
+		bindings = append(bindings, binding)
 	}
-	return ids, rows.Err()
+	return bindings, rows.Err()
 }
 
-func (s *Store) RuntimeAssigned(ctx context.Context, workspaceID, runtimeID string) (bool, error) {
+// DisconnectRuntimeBinding removes only the workspace's logical access to a
+// physical Runtime. The Node, physical Runtime, and bindings in other
+// workspaces remain untouched.
+func (s *Store) DisconnectRuntimeBinding(ctx context.Context, workspaceID, bindingID string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var exists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(
+		SELECT 1 FROM workspace_runtime_bindings
+		WHERE workspace_id=$1 AND id=$2 AND status='active'
+	)`, workspaceID, bindingID).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return ErrNotFound
+	}
+
+	var referenced bool
+	if err := tx.QueryRow(ctx, `SELECT
+		EXISTS(SELECT 1 FROM agents WHERE workspace_id=$1 AND runtime_id=$2)
+		OR EXISTS(SELECT 1 FROM projects WHERE workspace_id=$1 AND runtime_id=$2 AND deleted_at IS NULL)
+		OR EXISTS(SELECT 1 FROM chat_sessions WHERE workspace_id=$1 AND execution_runtime_id=$2)
+	`, workspaceID, bindingID).Scan(&referenced); err != nil {
+		return err
+	}
+	if referenced {
+		return ErrRuntimeBindingInUse
+	}
+
+	command, err := tx.Exec(ctx, `DELETE FROM workspace_runtime_bindings WHERE workspace_id=$1 AND id=$2`, workspaceID, bindingID)
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *Store) ResolveRuntimeBinding(ctx context.Context, workspaceID, bindingID string) (WorkspaceRuntimeBinding, RelayNodeRuntime, error) {
+	var binding WorkspaceRuntimeBinding
+	var runtime RelayNodeRuntime
+	err := s.pool.QueryRow(ctx, `SELECT b.id,b.workspace_id,b.node_runtime_id,b.authorized_by_user_id,b.status,b.created_at,b.updated_at,
+		r.id,r.node_id,r.provider,r.version,r.state,r.created_at,r.updated_at
+		FROM workspace_runtime_bindings b JOIN relay_node_runtimes r ON r.id=b.node_runtime_id
+		WHERE b.workspace_id=$1 AND b.id=$2 AND b.status='active'`, workspaceID, bindingID).
+		Scan(&binding.ID, &binding.WorkspaceID, &binding.NodeRuntimeID, &binding.AuthorizedByUserID, &binding.Status, &binding.CreatedAt, &binding.UpdatedAt,
+			&runtime.ID, &runtime.NodeID, &runtime.Provider, &runtime.Version, &runtime.State, &runtime.CreatedAt, &runtime.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return WorkspaceRuntimeBinding{}, RelayNodeRuntime{}, ErrNotFound
+	}
+	return binding, runtime, err
+}
+
+func (s *Store) RuntimeAssigned(ctx context.Context, workspaceID, bindingID string) (bool, error) {
 	var assigned bool
-	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM workspace_runtimes WHERE workspace_id=$1 AND runtime_id=$2)`, workspaceID, runtimeID).Scan(&assigned)
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM workspace_runtime_bindings WHERE workspace_id=$1 AND id=$2 AND status='active')`, workspaceID, bindingID).Scan(&assigned)
 	return assigned, err
 }
 
@@ -257,10 +478,4 @@ func (s *Store) RevokeWorkspaceAPIKey(ctx context.Context, workspaceID, id strin
 		return WorkspaceAPIKey{}, ErrNotFound
 	}
 	return key, err
-}
-
-func (s *Store) UnassignedRuntime(ctx context.Context, runtimeID string) (bool, error) {
-	var available bool
-	err := s.pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM workspace_runtimes WHERE runtime_id=$1)`, runtimeID).Scan(&available)
-	return available, err
 }

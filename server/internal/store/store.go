@@ -523,6 +523,21 @@ func (s *Store) UpdateSessionAgent(ctx context.Context, wid, sessionID, agentID 
 	return nil
 }
 
+// UpdateSessionRuntime changes the execution Runtime pinned on a Session. This
+// is used for directory Projects, where the Project's Runtime is the
+// authoritative execution location and a later Project edit must move the
+// conversation along with it.
+func (s *Store) UpdateSessionRuntime(ctx context.Context, wid, sessionID, runtimeID string) error {
+	command, err := s.pool.Exec(ctx, `UPDATE chat_sessions SET execution_runtime_id=$3,updated_at=now() WHERE workspace_id=$1 AND id=$2`, wid, sessionID, runtimeID)
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) SaveChatRun(ctx context.Context, wid, sessionID, agentID, prompt, runID, status string, attachments ...MessageAttachment) (Message, Message, error) {
 	return s.saveChatRun(ctx, wid, sessionID, agentID, prompt, runID, status, nil, attachments...)
 }

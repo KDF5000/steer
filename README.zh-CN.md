@@ -16,11 +16,11 @@ Steer Web → Steer Server → PostgreSQL
 - PostgreSQL：保存按 Workspace 隔离的 Project、Agent、对话、Run 投影和成果索引；
 - Relay：独立部署的执行基础设施。Steer Server 通过 Relay Go SDK 接入，浏览器不会接触 Relay Token。
 
-详细说明见[架构设计](docs/architecture.md)、[部署拓扑](docs/deployment.md)和[Chat-first 产品设计](docs/chat-first-product.md)。
+详细说明见[架构设计](docs/architecture.md)、[部署拓扑](docs/deployment.md)、[Conversation Task API](docs/task-api.md)、[飞书集成](docs/feishu-integration.md)和[Chat-first 产品设计](docs/chat-first-product.md)。
 
 ## 当前可验证链路
 
-1. 从 Relay 自动发现 Node、Runtime 和模型；
+1. 一次性注册 Relay Node，并通过独立的逻辑 Runtime Binding 将同一个物理 Runtime 共享给一个或多个 Workspace；
 2. 创建 Agent，可自动调度或固定 Runtime 实例；
 3. 添加 Project：已有目录必须选择所在 Runtime，Git Repository 则由 Relay 通过 mirror 和隔离 worktree 准备；
 4. 选择 Agent 开始 Conversation；Project、Runtime 和已准备的工作区保持稳定，可在每次 Run 之间切换兼容当前 Runtime 的 Agent；
@@ -56,7 +56,7 @@ RELAY_HOST_TOKEN=your-host-token \
 docker compose up -d --build postgres steer-server
 ```
 
-在 Steer 的 **System → Runtimes → Add Runtime** 中可以获取 Relay Node 安装命令。Runtime 由 Node 自动发现并注册，不是在 Steer 数据库中手工创建的记录。
+在 Steer 的 **System → Runtimes → Add Runtime** 中生成带有 15 分钟有效期的一次性 enrollment token 的 Relay Node 安装命令。Node 归生成命令的登录用户所有；安装一次后，可以把同一个物理 Runtime 分别连接到该用户拥有的多个 Workspace。各 Workspace 使用独立的逻辑 Binding，Node 并发容量仍由整台机器全局共享。
 
 如需从其他机器连接 Node，请在 `.env` 中设置 `RELAY_BIND_ADDRESS=0.0.0.0`，将 `RELAY_PUBLIC_URL` 设置为本机可访问的局域网地址或 HTTPS 域名，并更换默认开发 Token。
 

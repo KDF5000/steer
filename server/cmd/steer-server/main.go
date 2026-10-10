@@ -34,7 +34,12 @@ func main() {
 		os.Exit(1)
 	}
 	relayURL := env("RELAY_BASE_URL", "http://127.0.0.1:8787")
-	handler := steerapi.New(st, relayURL, os.Getenv("RELAY_HOST_TOKEN"), env("RELAY_PUBLIC_URL", relayURL), workspaceID, strings.Split(env("STEER_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"), ","), steerapi.WithAuthentication(30*24*time.Hour)).Handler()
+	apiServer := steerapi.New(st, relayURL, os.Getenv("RELAY_HOST_TOKEN"), env("RELAY_PUBLIC_URL", relayURL), workspaceID, strings.Split(env("STEER_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"), ","), steerapi.WithAuthentication(30*24*time.Hour), steerapi.WithCredentialEncryptionKey(os.Getenv("STEER_CREDENTIAL_ENCRYPTION_KEY")))
+	if err := apiServer.StartIntegrations(ctx); err != nil {
+		slog.Error("integration manager failed to start", "error", err)
+	}
+	defer apiServer.StopIntegrations()
+	handler := apiServer.Handler()
 	server := &http.Server{Addr: env("STEER_ADDR", ":8080"), Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		slog.Info("Steer server listening", "address", server.Addr, "authentication", "enabled")

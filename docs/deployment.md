@@ -13,6 +13,11 @@ receive only an HttpOnly, SameSite cookie. When Steer Web and Steer Server use
 different origins, `STEER_ALLOWED_ORIGINS` must exactly contain the Web origin
 so credentialed requests are accepted.
 
+Workspace integration credentials are encrypted before being stored. Set a
+stable, private `STEER_CREDENTIAL_ENCRYPTION_KEY` on `steer-server`; do not use
+the Compose development default in production. See the
+[Feishu integration guide](feishu-integration.md) for the self-service setup.
+
 Steer and Relay are independent products and should be deployed as separate services.
 
 ```text
@@ -100,16 +105,51 @@ RELAY_HOST_TOKEN=the-relay-host-token
 
 For a durable environment, configure Relay's artifact backend with S3-compatible storage instead of ephemeral container storage.
 
-## Add a Runtime
+## Enroll a Relay Node and share its Runtimes
 
-A Runtime is not created as a Steer database row. It becomes available when a Relay Node reports a supported Agent CLI from its machine.
+A Relay Node represents one physical machine and process. It is installed once,
+belongs to the Steer user who generated its enrollment token, and reports the
+Agent CLIs available on that machine. The owner can share the Node's physical
+Runtimes with any of their Workspaces. Each Workspace receives an independent
+logical Runtime Binding, while Node capacity remains one global limit shared by
+all workloads on the machine.
 
-Open **System → Runtimes → Add Runtime** in Steer, or run the following command directly on a machine that already has Codex, `traex`, or `trae-cli` installed:
+Open **System → Runtimes → Add Runtime** in Steer:
+
+1. Generate an installation command. Its one-time enrollment token expires
+   after 15 minutes.
+2. Run the command on the machine where Codex, `traex`, or `trae-cli` is
+   installed.
+3. Refresh **Your Relay Nodes**, select the discovered Runtime instances, and
+   add them to the current Workspace. Repeat step 3 in another Workspace to
+   share the same physical Runtime.
+
+The generated command has this form:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh \
-  | RELAY_NODE_TOKEN='the-same-node-token-as-relay' \
-    sh -s -- --server https://relay.example.com --install-service
+  | RELAY_NODE_TOKEN='the-same-node-token-as-relay' sh -s -- \
+    --server https://relay.example.com \
+    --steer-server https://steer.example.com/api/v1 \
+    --enrollment-token 'steer_enr_...' \
+    --install-service
 ```
 
-After the Node heartbeat arrives, refresh Runtimes in Steer. The current Relay release uses a static operator-managed Node Token. A future enrollment API should replace it with scoped, short-lived installation tokens before self-service onboarding is exposed to untrusted users.
+The installer generates a stable random Node ID and uses the machine hostname
+only as its display name. `RELAY_NODE_TOKEN` still authenticates the Node to
+Relay Server; the short-lived Steer enrollment token establishes the Node's
+owner and cannot be reused.
+
+Disconnecting a Runtime from one Workspace deletes only that Workspace's
+logical Binding. It does not stop or uninstall the Node and does not affect
+other Workspaces. Steer refuses to disconnect a Binding that is still selected
+by an Agent, Project, or conversation.
+
+### Breaking upgrade from the legacy Runtime assignment model
+
+This release intentionally does not preserve the previous one-Workspace-per-
+Runtime assignments. Migration `000021` clears existing Agent, Project, and
+conversation Runtime selections. Remove the old Relay Node service and
+configuration, then reinstall it with a new Steer enrollment command. After the
+Node reconnects, share its Runtimes with each Workspace and reselect them on
+Agents and directory Projects.

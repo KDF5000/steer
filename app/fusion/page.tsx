@@ -108,7 +108,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select';
 import { runFileChanges } from '@/lib/review';
 import { setInterfaceLanguage, useI18n } from '@/lib/i18n';
@@ -123,6 +122,7 @@ import type {
 } from '@/lib/domain';
 import {
   steer,
+  steerAPIBaseURL,
   SteerHTTPError,
   type AuthUser,
   type AgentRecord,
@@ -133,6 +133,7 @@ import {
   type SkillRecord,
   type WorkspaceGitStatus,
   type WorkspaceAPIKeyRecord,
+  type WorkspaceIntegrationRecord,
   type WorkspaceSettingsRecord,
   type WorkspaceRecord,
 } from '@/lib/steer-client';
@@ -632,6 +633,7 @@ export default function Fusion() {
   const [runtimeDiscoveryLoading, setRuntimeDiscoveryLoading] = useState(false);
   const [runtimeClaiming, setRuntimeClaiming] = useState(false);
   const [runtimeDiscoveryError, setRuntimeDiscoveryError] = useState('');
+  const [relayEnrollmentToken, setRelayEnrollmentToken] = useState('');
   const [creatingAgent, setCreatingAgent] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [formError, setFormError] = useState('');
@@ -667,7 +669,7 @@ export default function Fusion() {
   const runtimeChoices = runtimeNodes.flatMap((node) =>
     (node.runtimes || []).map((runtime) => ({
       value: `${runtime.provider}::${runtime.id}`,
-      label: `${node.id} / ${runtime.provider}`,
+      label: `${node.labels?.name || node.id} / ${runtime.provider}`,
       provider: runtime.provider,
       runtimeId: runtime.id,
       models: runtime.models || [],
@@ -765,6 +767,14 @@ export default function Fusion() {
       );
       throw error;
     }
+  };
+  const disconnectRuntime = async (bindingID: string) => {
+    const requestedWorkspace = workspaceID;
+    await steer.disconnectRuntimeBinding(bindingID);
+    const data = await steer.bootstrap();
+    if (!mounted.current || steer.workspace() !== requestedWorkspace) return;
+    setRuntimeNodes(data.relay.nodes || []);
+    setNotice(t('Runtime disconnected from this workspace.'));
   };
 
   const hydrateWorkspace = useCallback(async (id: string) => {
@@ -1569,7 +1579,7 @@ export default function Fusion() {
     setRuntimeDiscoveryLoading(true);
     setRuntimeDiscoveryError('');
     try {
-      const nodes = await steer.availableRuntimes();
+      const nodes = await steer.relayNodes();
       if (!mounted.current || steer.workspace() !== requestedWorkspace) return;
       setAvailableRuntimeNodes(nodes);
       setSelectedRuntimeIDs((current) =>
@@ -1592,6 +1602,7 @@ export default function Fusion() {
 
   const openRuntimeDialog = () => {
     setRuntimeDialog(true);
+    setRelayEnrollmentToken('');
     void discoverRuntimes();
   };
 
@@ -1601,7 +1612,18 @@ export default function Fusion() {
     setRuntimeClaiming(true);
     setRuntimeDiscoveryError('');
     try {
-      const nodes = await steer.claimAvailableRuntimes(selectedRuntimeIDs);
+      const selectedNode = availableRuntimeNodes.find((node) =>
+        node.runtimes?.some((runtime) =>
+          selectedRuntimeIDs.includes(runtime.id),
+        ),
+      );
+      if (!selectedNode) {
+        throw new Error('Select Runtime instances from one Relay Node.');
+      }
+      const nodeRuntimeIDs = selectedRuntimeIDs.filter((runtimeID) =>
+        selectedNode.runtimes?.some((runtime) => runtime.id === runtimeID),
+      );
+      const nodes = await steer.bindRelayNode(selectedNode.id, nodeRuntimeIDs);
       if (!mounted.current || steer.workspace() !== requestedWorkspace) return;
       const count = selectedRuntimeIDs.length;
       setRuntimeNodes(nodes);
@@ -1616,6 +1638,20 @@ export default function Fusion() {
     } finally {
       if (mounted.current && steer.workspace() === requestedWorkspace)
         setRuntimeClaiming(false);
+    }
+  };
+
+  const createRelayEnrollment = async () => {
+    setRuntimeDiscoveryError('');
+    try {
+      const enrollment = await steer.createRelayNodeEnrollment();
+      setRelayEnrollmentToken(enrollment.token);
+    } catch (error) {
+      setRuntimeDiscoveryError(
+        error instanceof Error
+          ? error.message
+          : 'Could not create an installation token.',
+      );
     }
   };
 
@@ -2283,6 +2319,7 @@ export default function Fusion() {
             onCreate={() => setAgentDialog(true)}
             onAddRuntime={openRuntimeDialog}
             onCapacity={updateRuntimeCapacity}
+            onDisconnect={disconnectRuntime}
             onNotice={setNotice}
             onChat={(id) => {
               setChatAgent(id);
@@ -2449,11 +2486,14 @@ export default function Fusion() {
         selectedRuntimeIDs={selectedRuntimeIDs}
         discovering={runtimeDiscoveryLoading}
         claiming={runtimeClaiming}
+        enrollmentToken={relayEnrollmentToken}
+        steerAPIURL={steerAPIBaseURL}
         onOpen={setRuntimeDialog}
         onURL={setRelayPublicURL}
         onRefresh={() => void discoverRuntimes()}
         onSelect={setSelectedRuntimeIDs}
         onClaim={() => void claimSelectedRuntimes()}
+        onCreateEnrollment={() => void createRelayEnrollment()}
       />
       {notice && (
         <output className="ws-toast" aria-live="polite">
@@ -4947,6 +4987,7 @@ function AgentsView({
   onCreate,
   onAddRuntime,
   onCapacity,
+  onDisconnect,
   onNotice,
   onChat,
 }: {
@@ -4959,10 +5000,23 @@ function AgentsView({
   onCreate: () => void;
   onAddRuntime: () => void;
   onCapacity: (nodeID: string, capacity: number) => Promise<void>;
+  onDisconnect: (bindingID: string) => Promise<void>;
   onNotice: (message: string) => void;
   onChat: (id: string) => void;
 }) {
   const { t } = useI18n();
+  const runtimeName = (agent: AgentItem) => {
+    if (!agent.runtimeId) return agent.runtime;
+    for (const [node] of runtimes) {
+      const runtime = node.runtimes.find(
+        (candidate) => candidate.id === agent.runtimeId,
+      );
+      if (runtime) {
+        return `${node.labels?.name || node.id} / ${runtime.provider}`;
+      }
+    }
+    return agent.runtimeProvider || t('Runtime unavailable');
+  };
   return (
     <div className="ws-page">
       <PageIntro
@@ -5014,7 +5068,7 @@ function AgentsView({
                 <strong>{agent.name}</strong>
                 <small>{agent.role}</small>
               </span>
-              <span>{agent.runtime}</span>
+              <span>{runtimeName(agent)}</span>
               <span>{agent.model}</span>
               <span className="ws-agent-state">
                 <i />
@@ -5068,6 +5122,22 @@ function AgentsView({
                     <strong>{runtime.provider}</strong>
                     <i />
                     <small>{runtime.version || t('Version unavailable')}</small>
+                    <button
+                      type="button"
+                      aria-label={t('Disconnect Runtime from workspace')}
+                      title={t('Disconnect Runtime from workspace')}
+                      onClick={() => {
+                        void onDisconnect(runtime.id).catch((error) => {
+                          onNotice(
+                            error instanceof Error
+                              ? error.message
+                              : t('Could not disconnect Runtime.'),
+                          );
+                        });
+                      }}
+                    >
+                      <X aria-hidden="true" />
+                    </button>
                   </span>
                 ))}
               </span>
@@ -5121,7 +5191,25 @@ function SystemSettingsView({
   const [revokingAPIKey, setRevokingAPIKey] =
     useState<WorkspaceAPIKeyRecord | null>(null);
   const [apiKeyActionPending, setAPIKeyActionPending] = useState(false);
+  const [integrations, setIntegrations] = useState<
+    WorkspaceIntegrationRecord[]
+  >([]);
+  const [integrationsLoading, setIntegrationsLoading] = useState(true);
+  const [integrationDialog, setIntegrationDialog] = useState(false);
+  const [editingIntegration, setEditingIntegration] =
+    useState<WorkspaceIntegrationRecord | null>(null);
+  const [integrationName, setIntegrationName] = useState('Feishu bot');
+  const [integrationAppID, setIntegrationAppID] = useState('');
+  const [integrationSecret, setIntegrationSecret] = useState('');
+  const [integrationAgentID, setIntegrationAgentID] = useState('');
+  const [integrationEnabled, setIntegrationEnabled] = useState(true);
+  const [integrationSaving, setIntegrationSaving] = useState(false);
+  const [deletingIntegration, setDeletingIntegration] =
+    useState<WorkspaceIntegrationRecord | null>(null);
   const selected = agents.find((agent) => agent.id === settings?.systemAgentId);
+  const selectedIntegrationAgent = agents.find(
+    (agent) => agent.id === integrationAgentID,
+  );
   const interfaceLanguage = settings?.interfaceLanguage || 'auto';
   const aiOutputLanguage = settings?.aiOutputLanguage || 'auto';
 
@@ -5140,7 +5228,121 @@ function SystemSettingsView({
     return () => {
       active = false;
     };
+  }, [onNotice, settings?.workspaceId]);
+
+  const loadIntegrations = useCallback(() => {
+    steer
+      .integrations()
+      .then(setIntegrations)
+      .catch((error: unknown) =>
+        onNotice(
+          error instanceof Error
+            ? error.message
+            : 'Could not load integrations.',
+        ),
+      )
+      .finally(() => setIntegrationsLoading(false));
   }, [onNotice]);
+
+  useEffect(() => {
+    loadIntegrations();
+  }, [loadIntegrations, settings?.workspaceId]);
+
+  useEffect(() => {
+    const timer = window.setInterval(loadIntegrations, 10000);
+    return () => window.clearInterval(timer);
+  }, [loadIntegrations]);
+
+  const openIntegrationDialog = (item?: WorkspaceIntegrationRecord) => {
+    setEditingIntegration(item || null);
+    setIntegrationName(item?.name || 'Feishu bot');
+    setIntegrationAppID(item?.appId || '');
+    setIntegrationSecret('');
+    setIntegrationAgentID(item?.agentId || agents[0]?.id || '');
+    setIntegrationEnabled(item?.enabled ?? true);
+    setIntegrationDialog(true);
+  };
+
+  const saveIntegration = async (event: SyntheticEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (integrationSaving) return;
+    setIntegrationSaving(true);
+    try {
+      const input = {
+        name: integrationName.trim(),
+        appId: integrationAppID.trim(),
+        ...(integrationSecret.trim()
+          ? { appSecret: integrationSecret.trim() }
+          : {}),
+        agentId: integrationAgentID,
+        enabled: integrationEnabled,
+      };
+      const saved = editingIntegration
+        ? await steer.updateIntegration(editingIntegration.id, input)
+        : await steer.createFeishuIntegration(input);
+      setIntegrations((current) =>
+        editingIntegration
+          ? current.map((item) => (item.id === saved.id ? saved : item))
+          : [...current, saved],
+      );
+      setIntegrationDialog(false);
+      onNotice(t('Feishu integration saved.'));
+      window.setTimeout(loadIntegrations, 1500);
+    } catch (error) {
+      onNotice(
+        error instanceof Error ? error.message : 'Could not save integration.',
+      );
+    } finally {
+      setIntegrationSaving(false);
+    }
+  };
+
+  const removeIntegration = async () => {
+    if (!deletingIntegration || integrationSaving) return;
+    setIntegrationSaving(true);
+    try {
+      await steer.deleteIntegration(deletingIntegration.id);
+      setIntegrations((current) =>
+        current.filter((item) => item.id !== deletingIntegration.id),
+      );
+      setDeletingIntegration(null);
+      onNotice(t('Feishu integration deleted.'));
+    } catch (error) {
+      onNotice(
+        error instanceof Error
+          ? error.message
+          : 'Could not delete integration.',
+      );
+    } finally {
+      setIntegrationSaving(false);
+    }
+  };
+
+  const setIntegrationActive = async (
+    item: WorkspaceIntegrationRecord,
+    enabled: boolean,
+  ) => {
+    try {
+      const saved = await steer.updateIntegration(item.id, {
+        name: item.name,
+        appId: item.appId,
+        agentId: item.agentId,
+        enabled,
+      });
+      setIntegrations((current) =>
+        current.map((candidate) =>
+          candidate.id === saved.id ? saved : candidate,
+        ),
+      );
+      if (enabled) window.setTimeout(loadIntegrations, 1500);
+    } catch (error) {
+      onNotice(
+        error instanceof Error
+          ? error.message
+          : 'Could not update integration.',
+      );
+    }
+  };
 
   const createAPIKey = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -5367,6 +5569,130 @@ function SystemSettingsView({
         <section className="ws-settings-group">
           <div className="ws-settings-heading ws-settings-heading-action">
             <div>
+              <h2>{t('Integrations')}</h2>
+              <p>{t('Connect this workspace to messaging platforms.')}</p>
+            </div>
+            <Button
+              onClick={() => openIntegrationDialog()}
+              disabled={agents.length === 0}
+            >
+              <Bot aria-hidden="true" />
+              {t('Connect Feishu')}
+            </Button>
+          </div>
+          <div className="ws-settings-list ws-integration-list">
+            {integrationsLoading ? (
+              <div className="ws-api-key-empty">
+                {t('Loading integrations…')}
+              </div>
+            ) : integrations.length === 0 ? (
+              <div className="ws-api-key-empty">
+                <Bot aria-hidden="true" />
+                <span>{t('No integrations yet.')}</span>
+              </div>
+            ) : (
+              integrations.map((item) => {
+                const boundAgent = agents.find(
+                  (agent) => agent.id === item.agentId,
+                );
+                return (
+                  <div
+                    className="ws-settings-row ws-integration-row"
+                    key={item.id}
+                  >
+                    <div className="ws-api-key-identity">
+                      <span className="ws-api-key-icon">
+                        <Bot aria-hidden="true" />
+                      </span>
+                      <div className="ws-settings-copy">
+                        <strong>{item.name}</strong>
+                        <p>
+                          {boundAgent?.name || t('Unknown Agent')}
+                          <span aria-hidden="true"> · </span>
+                          <span
+                            className={`ws-integration-status is-${item.status}`}
+                          >
+                            {t(
+                              item.status === 'connected'
+                                ? 'Connected'
+                                : item.status === 'connecting'
+                                  ? 'Connecting…'
+                                  : item.status === 'disabled'
+                                    ? 'Disabled'
+                                    : 'Needs attention',
+                            )}
+                          </span>
+                        </p>
+                        {item.lastError && (
+                          <p className="ws-integration-error">
+                            {item.lastError}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="ws-integration-actions">
+                      {item.enabled && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t('Reconnect')}
+                          title={t('Reconnect')}
+                          onClick={() => {
+                            void steer
+                              .reconnectIntegration(item.id)
+                              .then(() => {
+                                onNotice(t('Reconnecting Feishu…'));
+                                window.setTimeout(loadIntegrations, 1500);
+                              })
+                              .catch((error: unknown) =>
+                                onNotice(
+                                  error instanceof Error
+                                    ? error.message
+                                    : 'Could not reconnect integration.',
+                                ),
+                              );
+                          }}
+                        >
+                          <RefreshCw aria-hidden="true" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t('Edit')}
+                        title={t('Edit')}
+                        onClick={() => openIntegrationDialog(item)}
+                      >
+                        <Pencil aria-hidden="true" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          void setIntegrationActive(item, !item.enabled)
+                        }
+                      >
+                        {item.enabled ? t('Disable') : t('Enable')}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t('Delete')}
+                        title={t('Delete')}
+                        onClick={() => setDeletingIntegration(item)}
+                      >
+                        <Trash2 aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+        <section className="ws-settings-group">
+          <div className="ws-settings-heading ws-settings-heading-action">
+            <div>
               <h2>{t('API access')}</h2>
               <p>{t('Use API keys to submit Agent tasks from other tools.')}</p>
             </div>
@@ -5424,6 +5750,235 @@ function SystemSettingsView({
           </div>
         </section>
       </div>
+      <Dialog
+        open={integrationDialog}
+        onOpenChange={(open) => {
+          setIntegrationDialog(open);
+          if (!open) setEditingIntegration(null);
+        }}
+      >
+        <DialogContent className="ws-workspace-dialog ws-integration-dialog">
+          <DialogTitle>
+            {editingIntegration
+              ? t('Edit Feishu integration')
+              : t('Connect Feishu')}
+          </DialogTitle>
+          <DialogDescription>
+            {t(
+              'Connect a Feishu app bot to an Agent in this workspace. Choose a Project later with bot commands.',
+            )}
+          </DialogDescription>
+          <form onSubmit={(event) => void saveIntegration(event)}>
+            <section className="ws-integration-panel">
+              <div className="ws-integration-section-heading">
+                <div>
+                  <strong>{t('Bot configuration')}</strong>
+                  <span>
+                    {t(
+                      'Enter the credentials from the Feishu developer console.',
+                    )}
+                  </span>
+                </div>
+              </div>
+              <div className="ws-integration-fields">
+                <label
+                  className="ws-integration-name-field"
+                  aria-label={t('Integration name')}
+                >
+                  <span className="ws-integration-field-label">
+                    <span>{t('Integration name')}</span>
+                    <small>{t('Shown only in Steer')}</small>
+                  </span>
+                  <input
+                    required
+                    maxLength={80}
+                    value={integrationName}
+                    onChange={(event) => setIntegrationName(event.target.value)}
+                    placeholder={t('e.g. Engineering assistant')}
+                  />
+                </label>
+                <label>
+                  {t('Feishu App ID')}
+                  <input
+                    required
+                    value={integrationAppID}
+                    onChange={(event) =>
+                      setIntegrationAppID(event.target.value)
+                    }
+                    placeholder="cli_…"
+                    autoComplete="off"
+                  />
+                </label>
+                <label aria-label={t('Feishu App Secret')}>
+                  <span className="ws-integration-field-label">
+                    <span>{t('Feishu App Secret')}</span>
+                    {editingIntegration?.secretConfigured && (
+                      <small className="is-configured">{t('Configured')}</small>
+                    )}
+                  </span>
+                  <input
+                    required={!editingIntegration?.secretConfigured}
+                    type="password"
+                    value={integrationSecret}
+                    onChange={(event) =>
+                      setIntegrationSecret(event.target.value)
+                    }
+                    placeholder={
+                      editingIntegration?.secretConfigured ? '************' : ''
+                    }
+                    title={
+                      editingIntegration?.secretConfigured
+                        ? t('Leave blank to keep the current secret')
+                        : undefined
+                    }
+                    autoComplete="new-password"
+                  />
+                </label>
+              </div>
+            </section>
+            <section className="ws-integration-panel">
+              <div className="ws-integration-section-heading">
+                <div>
+                  <strong>{t('Task routing')}</strong>
+                  <span>
+                    {t(
+                      'Choose which Agent handles messages. Project is selected separately in Feishu.',
+                    )}
+                  </span>
+                </div>
+              </div>
+              <label className="ws-integration-agent-field">
+                {t('Agent')}
+                <Select
+                  value={integrationAgentID}
+                  onValueChange={(value) =>
+                    setIntegrationAgentID(String(value))
+                  }
+                >
+                  <SelectTrigger className="ws-integration-select">
+                    <span>
+                      {selectedIntegrationAgent?.name || t('Select Agent')}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent className="ws-select-popup">
+                    {agents.map((agent) => (
+                      <SelectItem key={agent.id} value={agent.id}>
+                        {agent.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <div className="ws-integration-project-note">
+                <p>{t('Choose a Project after connecting')}</p>
+                <div>
+                  <span>
+                    <code>/projects</code>
+                    {t('List available Projects')}
+                  </span>
+                  <span>
+                    <code>/project &lt;{t('Project name')}&gt;</code>
+                    {t('Bind this chat or thread')}
+                  </span>
+                </div>
+              </div>
+            </section>
+            <label
+              className="ws-integration-enabled"
+              aria-label={t('Enable after saving')}
+            >
+              <input
+                type="checkbox"
+                checked={integrationEnabled}
+                onChange={(event) =>
+                  setIntegrationEnabled(event.target.checked)
+                }
+              />
+              <span>
+                <strong>{t('Enable after saving')}</strong>
+                <small>
+                  {t('Start the bot connection immediately after saving.')}
+                </small>
+              </span>
+            </label>
+            <details className="ws-integration-guide">
+              <summary>
+                <span>
+                  <strong>{t('Required Feishu setup')}</strong>
+                  <small>
+                    {t('View the three required configuration steps.')}
+                  </small>
+                </span>
+                <ChevronDown aria-hidden="true" />
+              </summary>
+              <ol>
+                <li>
+                  {t('Enable Bot capability in the Feishu developer console.')}
+                </li>
+                <li>
+                  {t(
+                    'Grant private-message, group mention, send-as-bot, and message read permissions.',
+                  )}
+                </li>
+                <li>
+                  {t(
+                    'Subscribe to im.message.receive_v1 using long connection mode, then publish the app.',
+                  )}
+                </li>
+              </ol>
+            </details>
+            <div className="ws-form-actions">
+              <button type="button" onClick={() => setIntegrationDialog(false)}>
+                {t('Cancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  integrationSaving ||
+                  !integrationName.trim() ||
+                  !integrationAppID.trim() ||
+                  !integrationAgentID ||
+                  (!editingIntegration?.secretConfigured &&
+                    !integrationSecret.trim())
+                }
+              >
+                {integrationSaving ? t('Saving…') : t('Save')}
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog
+        open={Boolean(deletingIntegration)}
+        onOpenChange={(open) => !open && setDeletingIntegration(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('Delete Feishu integration?')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                'The bot will disconnect immediately. Existing Steer conversations will be kept.',
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={integrationSaving}>
+              {t('Cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={integrationSaving}
+              onClick={(event) => {
+                event.preventDefault();
+                void removeIntegration();
+              }}
+            >
+              {integrationSaving ? t('Deleting…') : t('Delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <Dialog
         open={apiKeyDialog}
         onOpenChange={(open) => {
@@ -5627,6 +6182,12 @@ function ProjectDialog({
   const [projectType, setProjectType] = useState<'local' | 'git'>(
     project?.workspaceKind === 'git' ? 'git' : 'local',
   );
+  const [projectRuntimeId, setProjectRuntimeId] = useState(
+    project?.runtimeId || defaultRuntimeId,
+  );
+  const projectRuntimeLabel = runtimes.find(
+    (runtime) => runtime.runtimeId === projectRuntimeId,
+  )?.label;
   return (
     <Dialog open={open} onOpenChange={(value) => !creating && onOpen(value)}>
       <DialogContent className="ws-agent-dialog ws-project-dialog">
@@ -5688,14 +6249,17 @@ function ProjectDialog({
                 <Select
                   key={defaultRuntimeId}
                   name="runtimeId"
-                  defaultValue={project?.runtimeId || defaultRuntimeId}
+                  value={projectRuntimeId}
+                  onValueChange={(value) =>
+                    setProjectRuntimeId(value == null ? '' : String(value))
+                  }
                   required
                 >
                   <SelectTrigger
                     className="ws-form-select"
                     aria-label="Runtime location"
                   >
-                    <SelectValue placeholder="Select a Runtime" />
+                    {projectRuntimeLabel || 'Select a Runtime'}
                   </SelectTrigger>
                   <SelectContent className="ws-select-popup">
                     {runtimes.length ? (
@@ -5704,7 +6268,7 @@ function ProjectDialog({
                           key={runtime.runtimeId}
                           value={runtime.runtimeId}
                         >
-                          {runtime.label} · {runtime.runtimeId}
+                          {runtime.label}
                         </SelectItem>
                       ))
                     ) : (
@@ -5974,11 +6538,14 @@ function RuntimeDialog({
   selectedRuntimeIDs,
   discovering,
   claiming,
+  enrollmentToken,
+  steerAPIURL,
   onOpen,
   onURL,
   onRefresh,
   onSelect,
   onClaim,
+  onCreateEnrollment,
 }: {
   open: boolean;
   connected: boolean;
@@ -5989,15 +6556,21 @@ function RuntimeDialog({
   selectedRuntimeIDs: string[];
   discovering: boolean;
   claiming: boolean;
+  enrollmentToken: string;
+  steerAPIURL: string;
   onOpen: (open: boolean) => void;
   onURL: (value: string) => void;
   onRefresh: () => void;
   onSelect: (runtimeIDs: string[]) => void;
   onClaim: () => void;
+  onCreateEnrollment: () => void;
 }) {
   const { t } = useI18n();
   const [commandCopied, setCommandCopied] = useState(false);
-  const command = `curl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh | RELAY_NODE_TOKEN='YOUR_NODE_TOKEN' sh -s -- --server ${publicURL || 'https://relay.example.com'} --install-service`;
+  const shellQuote = (value: string) => `'${value.replaceAll("'", `'"'"'`)}'`;
+  const command = enrollmentToken
+    ? `curl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh | RELAY_NODE_TOKEN='YOUR_NODE_TOKEN' sh -s -- --server ${shellQuote(publicURL || 'https://relay.example.com')} --steer-server ${shellQuote(steerAPIURL)} --enrollment-token ${shellQuote(enrollmentToken)} --install-service`
+    : '';
 
   async function copyInstallCommand() {
     const copied = await writeClipboard(command);
@@ -6007,10 +6580,18 @@ function RuntimeDialog({
   }
 
   function toggleRuntime(runtimeID: string) {
+    const selectedNode = nodes.find((node) =>
+      node.runtimes.some((runtime) => runtime.id === runtimeID),
+    );
     onSelect(
       selectedRuntimeIDs.includes(runtimeID)
         ? selectedRuntimeIDs.filter((id) => id !== runtimeID)
-        : [...selectedRuntimeIDs, runtimeID],
+        : [
+            ...selectedRuntimeIDs.filter((id) =>
+              selectedNode?.runtimes.some((runtime) => runtime.id === id),
+            ),
+            runtimeID,
+          ],
     );
   }
 
@@ -6050,30 +6631,45 @@ function RuntimeDialog({
           <section className="ws-runtime-step">
             <span>2</span>
             <div>
-              <h3>{t('Install Relay Node')}</h3>
+              <h3>{t('Install a new Relay Node')}</h3>
               <p>
                 {t(
-                  'Run this on the machine where Codex, Trae, or another Runtime is installed.',
+                  'Install once on the machine where Codex, Trae, or another Runtime is available. The installation will belong to your account.',
                 )}
               </p>
-              <div className="ws-runtime-command">
-                <pre>
-                  <code>{command}</code>
-                </pre>
+              {!enrollmentToken ? (
                 <button
                   type="button"
-                  aria-label={
-                    commandCopied
-                      ? t('Relay Node install command copied')
-                      : t('Copy Relay Node install command')
-                  }
-                  title={commandCopied ? t('Copied') : t('Copy command')}
-                  className={commandCopied ? 'is-copied' : undefined}
-                  onClick={() => void copyInstallCommand()}
+                  className="ws-runtime-enrollment-button"
+                  onClick={onCreateEnrollment}
                 >
-                  {commandCopied ? <Check /> : <Copy />}
+                  {t('Generate installation command')}
                 </button>
-              </div>
+              ) : (
+                <>
+                  <div className="ws-runtime-command">
+                    <pre>
+                      <code>{command}</code>
+                    </pre>
+                    <button
+                      type="button"
+                      aria-label={
+                        commandCopied
+                          ? t('Relay Node install command copied')
+                          : t('Copy Relay Node install command')
+                      }
+                      title={commandCopied ? t('Copied') : t('Copy command')}
+                      className={commandCopied ? 'is-copied' : undefined}
+                      onClick={() => void copyInstallCommand()}
+                    >
+                      {commandCopied ? <Check /> : <Copy />}
+                    </button>
+                  </div>
+                  <small>
+                    {t('This one-time enrollment token expires in 15 minutes.')}
+                  </small>
+                </>
+              )}
               <a
                 href="https://github.com/KDF5000/relay#deployment"
                 target="_blank"
@@ -6088,8 +6684,12 @@ function RuntimeDialog({
             <div>
               <div className="ws-runtime-discovery-heading">
                 <div>
-                  <h3>{t('Discovered Runtimes')}</h3>
-                  <p>{t('Select which Runtimes this workspace may use.')}</p>
+                  <h3>{t('Your Relay Nodes')}</h3>
+                  <p>
+                    {t(
+                      'Select Runtime instances to share with this workspace.',
+                    )}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -6109,7 +6709,7 @@ function RuntimeDialog({
               {!discovering && !discoveryError && nodes.length === 0 && (
                 <div className="ws-runtime-empty">
                   {t(
-                    'No unassigned Runtimes found. Start or restart Relay Node, then refresh.',
+                    'No Relay Nodes owned by your account were found. Install a Node, then refresh.',
                   )}
                 </div>
               )}
@@ -6119,7 +6719,7 @@ function RuntimeDialog({
                     <section key={node.id}>
                       <header>
                         <Server aria-hidden="true" />
-                        <strong>{node.id}</strong>
+                        <strong>{node.labels?.name || node.id}</strong>
                         <small>{node.state || 'unknown'}</small>
                       </header>
                       <div>

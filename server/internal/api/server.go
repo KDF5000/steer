@@ -2,6 +2,10 @@ package api
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,6 +37,8 @@ type Server struct {
 	allowedOrigins   map[string]bool
 	authEnabled      bool
 	sessionTTL       time.Duration
+	credentialCipher cipher.AEAD
+	integrations     *integrationManager
 }
 
 var errSystemAgentNotConfigured = errors.New("no system Agent is configured; choose one in System settings")
@@ -49,7 +55,48 @@ func New(st *store.Store, relayURL, relayToken, relayPublicURL, defaultWorkspace
 	for _, option := range options {
 		option(server)
 	}
+	server.integrations = newIntegrationManager(server)
 	return server
+}
+
+func WithCredentialEncryptionKey(key string) Option {
+	return func(server *Server) {
+		if strings.TrimSpace(key) == "" {
+			return
+		}
+		digest := sha256.Sum256([]byte(key))
+		block, err := aes.NewCipher(digest[:])
+		if err != nil {
+			return
+		}
+		server.credentialCipher, _ = cipher.NewGCM(block)
+	}
+}
+
+func (s *Server) encryptCredential(plaintext string) ([]byte, error) {
+	if s.credentialCipher == nil {
+		return nil, errors.New("credential encryption is not configured; set STEER_CREDENTIAL_ENCRYPTION_KEY")
+	}
+	nonce := make([]byte, s.credentialCipher.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+	return s.credentialCipher.Seal(nonce, nonce, []byte(plaintext), nil), nil
+}
+
+func (s *Server) decryptCredential(ciphertext []byte) (string, error) {
+	if s.credentialCipher == nil {
+		return "", errors.New("credential encryption is not configured; set STEER_CREDENTIAL_ENCRYPTION_KEY")
+	}
+	nonceSize := s.credentialCipher.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return "", errors.New("stored integration credential is invalid")
+	}
+	plaintext, err := s.credentialCipher.Open(nil, ciphertext[:nonceSize], ciphertext[nonceSize:], nil)
+	if err != nil {
+		return "", errors.New("could not decrypt integration credential")
+	}
+	return string(plaintext), nil
 }
 
 func (s *Server) Handler() http.Handler {
@@ -57,6 +104,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /health", s.health)
 	mux.HandleFunc("POST /api/v1/auth/register", s.register)
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
+	mux.HandleFunc("POST /api/v1/relay-node-enrollments/claim", s.claimRelayNodeEnrollment)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.logout)
 	mux.HandleFunc("GET /api/v1/auth/me", s.me)
 	mux.HandleFunc("GET /api/v1/workspaces", s.listWorkspaces)
@@ -64,8 +112,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/api-keys", s.listAPIKeys)
 	mux.HandleFunc("POST /api/v1/api-keys", s.createAPIKey)
 	mux.HandleFunc("DELETE /api/v1/api-keys/{id}", s.revokeAPIKey)
-	mux.HandleFunc("GET /api/v1/runtimes/available", s.availableRuntimes)
-	mux.HandleFunc("POST /api/v1/runtimes/claim-available", s.claimAvailableRuntimes)
+	mux.HandleFunc("GET /api/v1/integrations", s.listIntegrations)
+	mux.HandleFunc("POST /api/v1/integrations/feishu", s.createFeishuIntegration)
+	mux.HandleFunc("PUT /api/v1/integrations/{id}", s.updateIntegration)
+	mux.HandleFunc("DELETE /api/v1/integrations/{id}", s.deleteIntegration)
+	mux.HandleFunc("POST /api/v1/integrations/{id}/reconnect", s.reconnectIntegration)
+	mux.HandleFunc("POST /api/v1/relay-node-enrollments", s.createRelayNodeEnrollment)
+	mux.HandleFunc("GET /api/v1/relay-nodes", s.listOwnedRelayNodes)
+	mux.HandleFunc("POST /api/v1/relay-nodes/{id}/bindings", s.bindRelayNode)
+	mux.HandleFunc("DELETE /api/v1/runtime-bindings/{id}", s.disconnectRuntimeBinding)
 	mux.HandleFunc("PUT /api/v1/nodes/{id}/capacity", s.updateNodeCapacity)
 	mux.HandleFunc("GET /api/v1/bootstrap", s.bootstrap)
 	mux.HandleFunc("GET /api/v1/agents", s.listAgents)
@@ -593,18 +648,25 @@ func gitProjectWorkspaceInstruction() relay.InstructionFragment {
 }
 
 func (s *Server) runtimeProvider(ctx context.Context, workspaceID, runtimeID string) (string, error) {
-	nodes, err := s.workspaceNodes(ctx, workspaceID)
-	if err != nil {
-		return "", fmt.Errorf("resolve execution Runtime: %w", err)
-	}
-	for _, node := range nodes {
-		for _, runtime := range node.Runtimes {
-			if runtime.ID == runtimeID {
-				return runtime.Provider, nil
+	if !s.authEnabled {
+		nodes, err := s.relay.Nodes(ctx)
+		if err != nil {
+			return "", fmt.Errorf("resolve execution Runtime: %w", err)
+		}
+		for _, node := range nodes {
+			for _, runtime := range node.Runtimes {
+				if runtime.ID == runtimeID {
+					return runtime.Provider, nil
+				}
 			}
 		}
+		return "", fmt.Errorf("execution Runtime %q is unavailable", runtimeID)
 	}
-	return "", fmt.Errorf("execution Runtime %q is unavailable", runtimeID)
+	_, runtime, err := s.store.ResolveRuntimeBinding(ctx, workspaceID, runtimeID)
+	if err != nil {
+		return "", fmt.Errorf("execution Runtime %q is unavailable", runtimeID)
+	}
+	return runtime.Provider, nil
 }
 
 func (s *Server) firstWorkspaceRuntime(ctx context.Context, workspaceID, provider string) (string, error) {
@@ -627,15 +689,23 @@ func (s *Server) workspaceNodes(ctx context.Context, workspaceID string) ([]cont
 	if err != nil || !s.authEnabled {
 		return nodes, err
 	}
-	assigned, err := s.store.WorkspaceRuntimeIDs(ctx, workspaceID)
+	if err := s.reconcileRelayNodes(ctx); err != nil {
+		return nil, err
+	}
+	bindings, err := s.store.WorkspaceRuntimeBindings(ctx, workspaceID)
 	if err != nil {
 		return nil, err
+	}
+	bindingByRuntime := make(map[string]store.WorkspaceRuntimeBinding, len(bindings))
+	for _, binding := range bindings {
+		bindingByRuntime[binding.NodeRuntimeID] = binding
 	}
 	visible := make([]controlplane.Node, 0, len(nodes))
 	for _, node := range nodes {
 		filtered := node.Runtimes[:0:0]
 		for _, runtime := range node.Runtimes {
-			if assigned[runtime.ID] {
+			if binding, ok := bindingByRuntime[runtime.ID]; ok {
+				runtime.ID = binding.ID
 				filtered = append(filtered, runtime)
 			}
 		}
@@ -645,6 +715,17 @@ func (s *Server) workspaceNodes(ctx context.Context, workspaceID string) ([]cont
 		}
 	}
 	return visible, nil
+}
+
+func (s *Server) physicalRuntimeID(ctx context.Context, workspaceID, bindingID string) (string, error) {
+	if !s.authEnabled {
+		return bindingID, nil
+	}
+	_, runtime, err := s.store.ResolveRuntimeBinding(ctx, workspaceID, bindingID)
+	if err != nil {
+		return "", fmt.Errorf("execution Runtime %q is unavailable", bindingID)
+	}
+	return runtime.ID, nil
 }
 
 // submitRelayRun retries an ambiguous successful response once. Relay submissions
@@ -699,11 +780,15 @@ func (s *Server) submitSystemAgentRun(ctx context.Context, workspaceID, purpose,
 			return relay.Run{}, err
 		}
 	}
+	physicalRuntimeID, err := s.physicalRuntimeID(ctx, workspaceID, runtimeID)
+	if err != nil {
+		return relay.Run{}, err
+	}
 	request := relay.Request{
 		TenantID:       workspaceID,
 		AgentID:        agent.ID,
 		IdempotencyKey: uuid.NewString(),
-		Runtime:        relay.RuntimeRequirement{ID: runtimeID, Provider: agent.RuntimeProvider, Model: value(agent.Model)},
+		Runtime:        relay.RuntimeRequirement{ID: physicalRuntimeID, Provider: agent.RuntimeProvider, Model: value(agent.Model)},
 		Source:         relay.Source{Kind: "steer.system", ExternalID: purpose},
 		Input:          relay.Input{Type: "text", Version: "1", Prompt: prompt},
 		Principal:      relay.Principal{Type: "system", ID: "workspace:" + workspaceID},
@@ -1028,6 +1113,8 @@ func writeError(w http.ResponseWriter, err error) {
 	if errors.Is(err, store.ErrNotFound) {
 		status = http.StatusNotFound
 	} else if errors.Is(err, store.ErrConflict) {
+		status = http.StatusConflict
+	} else if errors.Is(err, store.ErrRuntimeBindingInUse) {
 		status = http.StatusConflict
 	} else if errors.Is(err, errSystemAgentNotConfigured) {
 		status = http.StatusConflict

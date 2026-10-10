@@ -199,7 +199,19 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 		}
 		project = &selected
 	}
-	if session.ExecutionRuntimeID != nil && strings.TrimSpace(*session.ExecutionRuntimeID) != "" {
+	// For directory Projects the Project's Runtime is the execution location
+	// (the workspace directory lives on that machine). Keep the Session's
+	// pinned Runtime in sync so editing the Project's Runtime later does not
+	// strand the conversation on the old machine.
+	if project != nil && project.WorkspaceKind == "local" && project.RuntimeID != nil && strings.TrimSpace(*project.RuntimeID) != "" {
+		executionRuntimeID = project.RuntimeID
+		if session.ExecutionRuntimeID == nil || *session.ExecutionRuntimeID != *project.RuntimeID {
+			if err := s.store.UpdateSessionRuntime(ctx, wid, conversationID, *project.RuntimeID); err != nil {
+				return submittedTask{}, false, err
+			}
+			session.ExecutionRuntimeID = project.RuntimeID
+		}
+	} else if session.ExecutionRuntimeID != nil && strings.TrimSpace(*session.ExecutionRuntimeID) != "" {
 		executionRuntimeID = session.ExecutionRuntimeID
 	}
 	if agent.RuntimeID != nil && executionRuntimeID != nil && *agent.RuntimeID != *executionRuntimeID {
@@ -213,6 +225,10 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 		if provider != agent.RuntimeProvider {
 			return submittedTask{}, false, taskRequestError{Status: http.StatusConflict, Message: "The selected Agent uses a provider that is unavailable on this conversation's Runtime."}
 		}
+	}
+	physicalRuntimeID, err := s.physicalRuntimeID(ctx, wid, value(executionRuntimeID))
+	if err != nil {
+		return submittedTask{}, false, err
 	}
 
 	release, err := s.store.TryConversationLock(ctx, wid, conversationID)
@@ -262,7 +278,7 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	request := relay.Request{
 		TenantID: wid, ProjectID: value(session.ProjectID), SessionID: conversationID, AgentID: agent.ID,
 		IdempotencyKey: relayIdempotencyKey,
-		Runtime:        relay.RuntimeRequirement{ID: value(executionRuntimeID), Provider: agent.RuntimeProvider, Model: value(agent.Model)},
+		Runtime:        relay.RuntimeRequirement{ID: physicalRuntimeID, Provider: agent.RuntimeProvider, Model: value(agent.Model)},
 		Source:         relay.Source{Kind: relaySourceKind, ExternalID: conversationID}, Input: input,
 		Principal: relay.Principal{Type: "user", ID: "workspace:" + wid},
 	}

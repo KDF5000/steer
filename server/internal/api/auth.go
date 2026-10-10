@@ -238,7 +238,84 @@ func (s *Server) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, key)
 }
 
-func (s *Server) claimAvailableRuntimes(w http.ResponseWriter, r *http.Request) {
+func (s *Server) createRelayNodeEnrollment(w http.ResponseWriter, r *http.Request) {
+	if _, ok := r.Context().Value(apiKeyContextKey).(store.WorkspaceAPIKey); ok {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "API keys cannot install Relay Nodes."})
+		return
+	}
+	random := make([]byte, 32)
+	if _, err := rand.Read(random); err != nil {
+		writeError(w, err)
+		return
+	}
+	rawToken := "steer_enr_" + base64.RawURLEncoding.EncodeToString(random)
+	expiresAt := time.Now().Add(15 * time.Minute)
+	if _, err := s.store.CreateRelayNodeEnrollment(r.Context(), userFromContext(r.Context()).ID, tokenHash(rawToken), expiresAt); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"token": rawToken, "expiresAt": expiresAt})
+}
+
+func (s *Server) claimRelayNodeEnrollment(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Token    string `json:"token"`
+		NodeID   string `json:"nodeId"`
+		Name     string `json:"name"`
+		Capacity int    `json:"capacity"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, err)
+		return
+	}
+	input.Token = strings.TrimSpace(input.Token)
+	input.NodeID = strings.TrimSpace(input.NodeID)
+	input.Name = strings.TrimSpace(input.Name)
+	if !strings.HasPrefix(input.Token, "steer_enr_") || input.NodeID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "A valid enrollment token and Node ID are required."})
+		return
+	}
+	if input.Name == "" {
+		input.Name = input.NodeID
+	}
+	if input.Capacity < 1 || input.Capacity > 32 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Concurrency must be between 1 and 32."})
+		return
+	}
+	node, err := s.store.EnrollRelayNode(r.Context(), tokenHash(input.Token), input.NodeID, input.Name, input.Capacity, "offline", time.Now().UTC())
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Enrollment token is invalid, expired, or already used."})
+			return
+		}
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, node)
+}
+
+func (s *Server) listOwnedRelayNodes(w http.ResponseWriter, r *http.Request) {
+	if _, ok := r.Context().Value(apiKeyContextKey).(store.WorkspaceAPIKey); ok {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "API keys cannot manage Relay Nodes."})
+		return
+	}
+	if err := s.reconcileRelayNodes(r.Context()); err != nil {
+		writeError(w, err)
+		return
+	}
+	nodes, err := s.ownedRelayNodes(r.Context(), userFromContext(r.Context()).ID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, nodes)
+}
+
+func (s *Server) bindRelayNode(w http.ResponseWriter, r *http.Request) {
+	if _, ok := r.Context().Value(apiKeyContextKey).(store.WorkspaceAPIKey); ok {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "API keys cannot manage Relay Nodes."})
+		return
+	}
 	var input struct {
 		RuntimeIDs []string `json:"runtimeIds"`
 	}
@@ -250,24 +327,11 @@ func (s *Server) claimAvailableRuntimes(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Select at least one Runtime to add."})
 		return
 	}
-	available, err := s.unassignedRuntimeNodes(r.Context())
-	if err != nil {
+	if err := s.reconcileRelayNodes(r.Context()); err != nil {
 		writeError(w, err)
 		return
 	}
-	known := map[string]bool{}
-	for _, node := range available {
-		for _, runtime := range node.Runtimes {
-			known[runtime.ID] = true
-		}
-	}
-	for _, runtimeID := range input.RuntimeIDs {
-		if !known[runtimeID] {
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "A selected Runtime is unavailable or already belongs to another workspace."})
-			return
-		}
-	}
-	if err := s.store.AssignRuntimes(r.Context(), s.workspace(r), input.RuntimeIDs); err != nil {
+	if err := s.store.BindRelayNodeRuntimes(r.Context(), s.workspace(r), userFromContext(r.Context()).ID, r.PathValue("id"), input.RuntimeIDs); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -279,38 +343,82 @@ func (s *Server) claimAvailableRuntimes(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, nodes)
 }
 
-func (s *Server) availableRuntimes(w http.ResponseWriter, r *http.Request) {
-	nodes, err := s.unassignedRuntimeNodes(r.Context())
-	if err != nil {
+func (s *Server) disconnectRuntimeBinding(w http.ResponseWriter, r *http.Request) {
+	if _, ok := r.Context().Value(apiKeyContextKey).(store.WorkspaceAPIKey); ok {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "API keys cannot manage Relay Nodes."})
+		return
+	}
+	if err := s.store.DisconnectRuntimeBinding(r.Context(), s.workspace(r), r.PathValue("id")); err != nil {
+		if errors.Is(err, store.ErrRuntimeBindingInUse) {
+			writeJSON(w, http.StatusConflict, map[string]string{
+				"error": "This Runtime is still used by an Agent, Project, or conversation. Remove those references before disconnecting it.",
+			})
+			return
+		}
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, nodes)
+	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) unassignedRuntimeNodes(ctx context.Context) ([]controlplane.Node, error) {
-	nodes, err := s.relay.Nodes(ctx)
+func (s *Server) ownedRelayNodes(ctx context.Context, userID string) ([]controlplane.Node, error) {
+	records, err := s.store.RelayNodesForOwner(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	availableNodes := make([]controlplane.Node, 0, len(nodes))
-	for _, node := range nodes {
-		available := node.Runtimes[:0:0]
-		for _, runtime := range node.Runtimes {
-			unassigned, err := s.store.UnassignedRuntime(ctx, runtime.ID)
-			if err != nil {
-				return nil, err
+	live, err := s.relay.Nodes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	liveByID := make(map[string]controlplane.Node, len(live))
+	for _, node := range live {
+		liveByID[node.ID] = node
+	}
+	nodes := make([]controlplane.Node, 0, len(records))
+	for _, record := range records {
+		if node, ok := liveByID[record.ID]; ok {
+			if node.Labels == nil {
+				node.Labels = map[string]string{}
 			}
-			if unassigned {
-				available = append(available, runtime)
-			}
+			node.Labels["name"] = record.Name
+			nodes = append(nodes, node)
+			continue
 		}
-		if len(available) > 0 {
-			node.Runtimes = available
-			availableNodes = append(availableNodes, node)
+		runtimes, runtimeErr := s.store.RelayNodeRuntimes(ctx, record.ID)
+		if runtimeErr != nil {
+			return nil, runtimeErr
+		}
+		node := controlplane.Node{NodeRegistration: controlplane.NodeRegistration{ID: record.ID, Capacity: record.Capacity, Labels: map[string]string{"name": record.Name}}, State: record.State}
+		for _, runtime := range runtimes {
+			node.Runtimes = append(node.Runtimes, controlplane.Runtime{ID: runtime.ID, Provider: runtime.Provider, Version: runtime.Version, State: runtime.State})
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes, nil
+}
+
+func (s *Server) reconcileRelayNodes(ctx context.Context) error {
+	nodes, err := s.relay.Nodes(ctx)
+	if err != nil {
+		return err
+	}
+	for _, node := range nodes {
+		record, lookupErr := s.store.RelayNodeByID(ctx, node.ID)
+		if lookupErr != nil {
+			if errors.Is(lookupErr, store.ErrNotFound) {
+				continue
+			}
+			return lookupErr
+		}
+		runtimes := make([]store.RelayNodeRuntime, 0, len(node.Runtimes))
+		for _, runtime := range node.Runtimes {
+			runtimes = append(runtimes, store.RelayNodeRuntime{ID: runtime.ID, NodeID: node.ID, Provider: runtime.Provider, Version: runtime.Version, State: runtime.State})
+		}
+		if err := s.store.SyncRelayNode(ctx, record.ID, record.Name, node.Capacity, node.State, node.LastSeen, runtimes); err != nil {
+			return err
 		}
 	}
-	return availableNodes, nil
+	return nil
 }
 
 func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user store.User) error {
@@ -351,7 +459,7 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/health" || r.URL.Path == "/api/v1/auth/register" || r.URL.Path == "/api/v1/auth/login" || (r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/shares/")) {
+		if r.URL.Path == "/health" || r.URL.Path == "/api/v1/auth/register" || r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/relay-node-enrollments/claim" || (r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/shares/")) {
 			next.ServeHTTP(w, r)
 			return
 		}

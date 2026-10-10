@@ -25,6 +25,9 @@ const zhCN: Record<string, string> = {
   'Add to log': '添加到日志',
   '⌘ / Ctrl + Enter to add': '⌘ / Ctrl + Enter 快速添加',
   'Add to workspace': '添加到工作区',
+  'Runtime disconnected from this workspace.': 'Runtime 已从当前工作区断开。',
+  'Disconnect Runtime from workspace': '从工作区断开 Runtime',
+  'Could not disconnect Runtime.': '无法断开 Runtime。',
   'AI & automation': 'AI 与自动化',
   'Agent workspace': '智能体工作台',
   Agent: '智能体',
@@ -91,6 +94,60 @@ const zhCN: Record<string, string> = {
   'API access': 'API 访问',
   'Use API keys to submit Agent tasks from other tools.':
     '使用 API Key 从其他工具提交 Agent 任务。',
+  Integrations: '集成',
+  'Connect this workspace to messaging platforms.':
+    '将当前工作区连接到消息平台。',
+  'Connect Feishu': '连接飞书',
+  'Loading integrations…': '正在加载集成…',
+  'No integrations yet.': '尚未配置集成。',
+  'Unknown Agent': '未知 Agent',
+  Connected: '已连接',
+  'Connecting…': '正在连接…',
+  Disabled: '已停用',
+  'Needs attention': '需要处理',
+  Reconnect: '重新连接',
+  Disable: '停用',
+  Enable: '启用',
+  'Edit Feishu integration': '编辑飞书集成',
+  'Connect a Feishu app bot to an Agent in this workspace. Choose a Project later with bot commands.':
+    '将飞书应用机器人绑定到当前工作区的 Agent，之后通过机器人指令选择项目。',
+  'Bot configuration': '机器人配置',
+  'Enter the credentials from the Feishu developer console.':
+    '填写飞书开发者后台中的应用凭证。',
+  'Task routing': '任务路由',
+  'Choose which Agent handles messages. Project is selected separately in Feishu.':
+    '选择由哪个 Agent 处理机器人消息；项目在飞书会话中单独选择。',
+  'In Feishu, send /projects to list projects and /project <project name> to bind the current chat or thread.':
+    '在飞书中发送 /projects 查看项目，发送 /project <项目名称> 为当前单聊或话题绑定项目。',
+  'Choose a Project after connecting': '连接后在飞书中选择项目',
+  'List available Projects': '查看可用项目',
+  'Project name': '项目名称',
+  'Bind this chat or thread': '绑定当前单聊或话题',
+  'Feishu App ID': '飞书 App ID',
+  'Feishu App Secret': '飞书 App Secret',
+  'Integration name': '集成名称',
+  'Shown only in Steer': '仅用于 Steer 内部识别',
+  'e.g. Engineering assistant': '例如：研发助手',
+  Configured: '已配置',
+  'Leave blank to keep the current secret': '留空以保留当前 Secret',
+  'Enable after saving': '保存后立即启用',
+  'Start the bot connection immediately after saving.':
+    '保存配置后立即建立机器人长连接。',
+  'Required Feishu setup': '飞书侧必要配置',
+  'View the three required configuration steps.':
+    '查看飞书后台的三项必要配置。',
+  'Enable Bot capability in the Feishu developer console.':
+    '在飞书开发者后台启用机器人能力。',
+  'Grant private-message, group mention, send-as-bot, and message read permissions.':
+    '开通单聊消息、群聊 @、机器人发消息和读取消息权限。',
+  'Subscribe to im.message.receive_v1 using long connection mode, then publish the app.':
+    '使用长连接订阅 im.message.receive_v1，然后发布应用。',
+  'Feishu integration saved.': '飞书集成已保存。',
+  'Feishu integration deleted.': '飞书集成已删除。',
+  'Reconnecting Feishu…': '正在重新连接飞书…',
+  'Delete Feishu integration?': '删除飞书集成？',
+  'The bot will disconnect immediately. Existing Steer conversations will be kept.':
+    '机器人将立即断开连接，已有 Steer 会话会被保留。',
   'Generate API key': '生成 API Key',
   'Loading API keys…': '正在加载 API Key…',
   'No API keys yet.': '尚未创建 API Key。',
@@ -172,12 +229,15 @@ const zhCN: Record<string, string> = {
   'Relay connected': 'Relay 已连接',
   'Relay not connected': 'Relay 未连接',
   'Public Relay address': 'Relay 公网地址',
-  'Install Relay Node': '安装 Relay Node',
-  'Discovered Runtimes': '发现的运行环境',
-  'Select which Runtimes this workspace may use.':
-    '选择此工作区可以使用的运行环境。',
-  'No unassigned Runtimes found. Start or restart Relay Node, then refresh.':
-    '未发现可分配的运行环境。请启动或重启 Relay Node 后刷新。',
+  'Install a new Relay Node': '安装新的 Relay Node',
+  'Generate installation command': '生成安装命令',
+  'This one-time enrollment token expires in 15 minutes.':
+    '此一次性认领令牌将在 15 分钟后过期。',
+  'Your Relay Nodes': '你的 Relay Node',
+  'Select Runtime instances to share with this workspace.':
+    '选择要共享给当前工作区的运行环境。',
+  'No Relay Nodes owned by your account were found. Install a Node, then refresh.':
+    '未找到属于当前账户的 Relay Node。安装 Node 后请刷新。',
   'Runtime nodes': '运行节点',
   Runtime: '运行环境',
   Model: '模型',
@@ -217,6 +277,8 @@ const zhCN: Record<string, string> = {
   'Steer Server can reach Relay.': 'Steer Server 可以访问 Relay。',
   'Run this on the machine where Codex, Trae, or another Runtime is installed.':
     '请在安装了 Codex、Trae 或其他运行环境的机器上执行此命令。',
+  'Install once on the machine where Codex, Trae, or another Runtime is available. The installation will belong to your account.':
+    '只需在可使用 Codex、Trae 或其他运行环境的机器上安装一次，安装后的 Node 将归属于你的账户。',
   'Relay deployment guide': 'Relay 部署指南',
   'Copy Relay Node install command': '复制 Relay Node 安装命令',
   'Relay Node install command copied': 'Relay Node 安装命令已复制',

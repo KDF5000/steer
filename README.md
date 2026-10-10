@@ -18,13 +18,13 @@ Steer Web → Steer Server → PostgreSQL
 - PostgreSQL stores Workspace-scoped Projects, Agents, conversations, Run projections, and artifact metadata.
 - Relay remains separately deployed infrastructure. Steer Server uses Relay's public Go SDK; the browser never receives a Relay token.
 
-See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), [Conversation Task API](docs/task-api.md), and [Chat-first product design](docs/chat-first-product.md).
+See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), [Conversation Task API](docs/task-api.md), [Feishu integration](docs/feishu-integration.md), and [Chat-first product design](docs/chat-first-product.md).
 
 ## Verified MVP flow
 
 The current build supports a real end-to-end path:
 
-1. Discover Nodes, Runtimes, and model catalogs from Relay.
+1. Enroll a Relay Node once, then share its physical Runtimes with one or more Workspaces through isolated logical Runtime Bindings.
 2. Create an Agent with automatic scheduling or a pinned Runtime instance.
 3. Add an existing-directory Project on a specific Runtime, or a Git Project backed by Relay's mirror and isolated-worktree provider.
 4. Start a conversation with an Agent. The Project, Runtime, and prepared workspace stay stable; compatible Agents can be switched from the composer between runs.
@@ -65,6 +65,8 @@ Open <http://localhost:3000>. The Steer API is available at <http://localhost:80
 
 To connect a Node from another machine, set `RELAY_BIND_ADDRESS=0.0.0.0`, set `RELAY_PUBLIC_URL` to this host's reachable LAN address or HTTPS domain, and replace both local development tokens in `.env`.
 
+Generate the Node's one-time installation command from **System → Runtimes → Add Runtime**. The Node belongs to the signed-in user; its Runtime instances can be connected independently to any Workspace that user owns, while the Node's concurrency limit is shared globally.
+
 ## Checks
 
 ```bash
@@ -85,19 +87,20 @@ These tests cover Projects, persistent conversations, Run projection, artifact d
 
 ## Configuration
 
-| Variable                     | Default                                  | Purpose                                            |
-| ---------------------------- | ---------------------------------------- | -------------------------------------------------- |
-| `DATABASE_URL`               | local Compose PostgreSQL                 | Steer business database                            |
-| `RELAY_BASE_URL`             | `http://relay-server:8787` in Compose    | Relay Server address                               |
-| `RELAY_PUBLIC_URL`           | same as `RELAY_BASE_URL` outside Compose | Relay address shown to machines connecting a Node  |
-| `RELAY_BIND_ADDRESS`         | `127.0.0.1`                              | Host interface used by bundled Relay               |
-| `RELAY_HOST_TOKEN`           | empty                                    | Relay host access token                            |
-| `RELAY_NODE_TOKEN`           | local development token                  | Token used by Nodes registering with bundled Relay |
-| `RELAY_VERSION`              | pinned Relay commit                      | Relay revision built by the bundled Compose stack  |
-| `STEER_ADDR`                 | `:8080`                                  | Steer Server listen address                        |
+| Variable                     | Default                                  | Purpose                                               |
+| ---------------------------- | ---------------------------------------- | ----------------------------------------------------- |
+| `DATABASE_URL`               | local Compose PostgreSQL                 | Steer business database                               |
+| `RELAY_BASE_URL`             | `http://relay-server:8787` in Compose    | Relay Server address                                  |
+| `RELAY_PUBLIC_URL`           | same as `RELAY_BASE_URL` outside Compose | Relay address shown to machines connecting a Node     |
+| `RELAY_BIND_ADDRESS`         | `127.0.0.1`                              | Host interface used by bundled Relay                  |
+| `RELAY_HOST_TOKEN`           | empty                                    | Relay host access token                               |
+| `RELAY_NODE_TOKEN`           | local development token                  | Token used by Nodes registering with bundled Relay    |
+| `RELAY_VERSION`              | pinned Relay commit                      | Relay revision built by the bundled Compose stack     |
+| `STEER_ADDR`                 | `:8080`                                  | Steer Server listen address                           |
 | `STEER_DEFAULT_WORKSPACE_ID` | `default`                                | Legacy Workspace adopted by the first registered user |
-| `STEER_ALLOWED_ORIGINS`      | local Web origin                         | Browser CORS allowlist                             |
-| `NEXT_PUBLIC_STEER_API_URL`  | `http://localhost:8080/api/v1`           | Web client API base URL                            |
-| `STEER_SERVER_PORT`          | `8080`                                   | Published Steer Server port                        |
-| `STEER_WEB_BIND_ADDRESS`     | `0.0.0.0`                                | Host interface used by Steer Web                   |
-| `STEER_WEB_PORT`             | `3000`                                   | Published Steer Web port                           |
+| `STEER_ALLOWED_ORIGINS`      | local Web origin                         | Browser CORS allowlist                                |
+| `STEER_CREDENTIAL_ENCRYPTION_KEY` | local development key              | Encrypts Workspace integration credentials at rest    |
+| `NEXT_PUBLIC_STEER_API_URL`  | `http://localhost:8080/api/v1`           | Web client API base URL                               |
+| `STEER_SERVER_PORT`          | `8080`                                   | Published Steer Server port                           |
+| `STEER_WEB_BIND_ADDRESS`     | `0.0.0.0`                                | Host interface used by Steer Web                      |
+| `STEER_WEB_PORT`             | `3000`                                   | Published Steer Web port                              |

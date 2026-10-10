@@ -1,7 +1,8 @@
 import type { RelayEvent, RelayNode, RelayRun } from '@/lib/domain';
 
-const baseURL =
+export const steerAPIBaseURL =
   process.env.NEXT_PUBLIC_STEER_API_URL ?? 'http://localhost:8080/api/v1';
+const baseURL = steerAPIBaseURL;
 
 let selectedWorkspaceId = '';
 
@@ -27,6 +28,36 @@ export type WorkspaceAPIKeyRecord = {
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
+};
+
+export type WorkspaceIntegrationRecord = {
+  id: string;
+  workspaceId: string;
+  provider: 'feishu';
+  name: string;
+  appId: string;
+  secretConfigured: boolean;
+  agentId: string;
+  projectId: string | null;
+  enabled: boolean;
+  status: 'connecting' | 'connected' | 'error' | 'disabled';
+  lastError: string | null;
+  lastConnectedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FeishuIntegrationInput = {
+  name: string;
+  appId: string;
+  appSecret?: string;
+  agentId: string;
+  enabled: boolean;
+};
+
+export type RelayNodeEnrollment = {
+  token: string;
+  expiresAt: string;
 };
 
 export class SteerHTTPError extends Error {
@@ -374,11 +405,42 @@ export const steer = {
     request<WorkspaceAPIKeyRecord>(`/api-keys/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     }),
-  availableRuntimes: () => request<RelayNode[]>('/runtimes/available'),
-  claimAvailableRuntimes: (runtimeIds: string[]) =>
-    request<RelayNode[]>('/runtimes/claim-available', {
+  integrations: () => request<WorkspaceIntegrationRecord[]>('/integrations'),
+  createFeishuIntegration: (input: FeishuIntegrationInput) =>
+    request<WorkspaceIntegrationRecord>('/integrations/feishu', {
       method: 'POST',
-      body: JSON.stringify({ runtimeIds }),
+      body: JSON.stringify(input),
+    }),
+  updateIntegration: (id: string, input: FeishuIntegrationInput) =>
+    request<WorkspaceIntegrationRecord>(
+      `/integrations/${encodeURIComponent(id)}`,
+      { method: 'PUT', body: JSON.stringify(input) },
+    ),
+  deleteIntegration: (id: string) =>
+    request<void>(`/integrations/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  reconnectIntegration: (id: string) =>
+    request<WorkspaceIntegrationRecord>(
+      `/integrations/${encodeURIComponent(id)}/reconnect`,
+      { method: 'POST' },
+    ),
+  createRelayNodeEnrollment: () =>
+    request<RelayNodeEnrollment>('/relay-node-enrollments', {
+      method: 'POST',
+    }),
+  relayNodes: () => request<RelayNode[]>('/relay-nodes'),
+  bindRelayNode: (nodeId: string, runtimeIds: string[]) =>
+    request<RelayNode[]>(
+      `/relay-nodes/${encodeURIComponent(nodeId)}/bindings`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ runtimeIds }),
+      },
+    ),
+  disconnectRuntimeBinding: (bindingId: string) =>
+    request<void>(`/runtime-bindings/${encodeURIComponent(bindingId)}`, {
+      method: 'DELETE',
     }),
   updateNodeCapacity: (nodeId: string, capacity: number) =>
     request<RelayNode>(`/nodes/${encodeURIComponent(nodeId)}/capacity`, {

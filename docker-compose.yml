@@ -80,6 +80,7 @@ services:
       RELAY_PUBLIC_URL: ${RELAY_PUBLIC_URL:-http://localhost:8787}
       RELAY_HOST_TOKEN: ${RELAY_HOST_TOKEN:-local-only-change-me-host-token}
       STEER_ALLOWED_ORIGINS: ${STEER_ALLOWED_ORIGINS:-http://localhost:3000}
+      STEER_CREDENTIAL_ENCRYPTION_KEY: ${STEER_CREDENTIAL_ENCRYPTION_KEY:-local-only-change-me-credential-key}
     ports:
       - "${STEER_SERVER_BIND_ADDRESS:-0.0.0.0}:${STEER_SERVER_PORT:-8080}:8080"
     depends_on:
