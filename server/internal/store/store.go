@@ -794,31 +794,15 @@ func (s *Store) LatestProjectRunID(ctx context.Context, wid, projectID string) (
 // ProjectRunLinks returns actual executions newest first. updated_at is not
 // suitable for choosing the newest run because ordinary status synchronization
 // also updates it and can make an older run appear newer than a later one.
-func (s *Store) ProjectRunLinks(ctx context.Context, wid, projectID string) ([]RunLink, error) {
-	rows, err := s.pool.Query(ctx, `SELECT run_links.relay_run_id,run_links.workspace_id,run_links.purpose,run_links.session_id,run_links.agent_id,run_links.status,run_links.summary,run_links.error,run_links.acknowledged_at,run_links.created_at,run_links.updated_at
-		FROM run_links
-		JOIN chat_sessions ON chat_sessions.workspace_id=run_links.workspace_id AND chat_sessions.id=run_links.session_id
-		WHERE run_links.workspace_id=$1 AND chat_sessions.project_id=$2 AND run_links.purpose='chat'
-		ORDER BY run_links.created_at DESC`, wid, projectID)
-	if err != nil {
-		return nil, err
+func (s *Store) LatestProjectAgentID(ctx context.Context, wid, projectID string) (string, error) {
+	var agentID string
+	err := s.pool.QueryRow(ctx, `SELECT agent_id FROM chat_sessions
+		WHERE workspace_id=$1 AND project_id=$2
+		ORDER BY created_at DESC LIMIT 1`, wid, projectID).Scan(&agentID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
 	}
-	defer rows.Close()
-	links := []RunLink{}
-	for rows.Next() {
-		var link RunLink
-		if err := rows.Scan(&link.RelayRunID, &link.WorkspaceID, &link.Purpose, &link.SessionID, &link.AgentID, &link.Status, &link.Summary, &link.Error, &link.AcknowledgedAt, &link.CreatedAt, &link.UpdatedAt); err != nil {
-			return nil, err
-		}
-		links = append(links, link)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if len(links) == 0 {
-		return nil, ErrNotFound
-	}
-	return links, nil
+	return agentID, err
 }
 
 func (s *Store) LatestUnacknowledgedSystemRun(ctx context.Context, wid, purpose string, from, to time.Time) (RunLink, error) {

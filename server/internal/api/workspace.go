@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/KDF5000/relay"
 	"github.com/KDF5000/steer/server/internal/store"
 )
 
@@ -50,11 +52,11 @@ func (s *Server) projectGitStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	runID, err := s.projectInspectionRunID(r.Context(), wid, project)
+	nodeID, err := s.projectInspectionNodeID(r.Context(), wid, project)
 	if err != nil {
 		if errors.Is(err, errProjectWorkspaceUnavailable) {
 			writeJSON(w, http.StatusConflict, map[string]string{
-				"error": "No workspace is available on the project's current Runtime yet. Run a task in this Project and try again.",
+				"error": "No current Runtime is available for this Project. Bind the Project or its Agent to a Runtime and try again.",
 				"code":  "project_workspace_unavailable",
 			})
 			return
@@ -62,32 +64,32 @@ func (s *Server) projectGitStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	r.SetPathValue("id", runID)
-	query := r.URL.Query()
-	query.Set("operation", "git-status")
-	query.Del("path")
-	r.URL.RawQuery = query.Encode()
-	s.inspectWorkspace(w, r)
+	workspace := relay.WorkspaceSpec{
+		Kind:      project.WorkspaceKind,
+		Source:    project.WorkspaceSource,
+		Ref:       value(project.WorkspaceRef),
+		Subdir:    value(project.WorkspaceSubdir),
+		Ephemeral: project.WorkspaceKind != "local",
+	}
+	s.inspectNodeWorkspace(w, r, nodeID, workspace, "git-status", "")
 }
 
 var errProjectWorkspaceUnavailable = errors.New("project workspace unavailable on current Runtime")
 
-// projectInspectionRunID keeps directory inspection on the Project's current
-// machine. A Relay workspace belongs to the Node that prepared its run, so a
-// historical run from a replaced/offline Node must never be used merely
-// because it was the Project's last execution.
-func (s *Server) projectInspectionRunID(ctx context.Context, wid string, project store.Project) (string, error) {
-	links, err := s.store.ProjectRunLinks(ctx, wid, project.ID)
-	if err != nil {
-		return "", err
-	}
-	if project.WorkspaceKind != "local" {
-		return links[0].RelayRunID, nil
-	}
-
+// projectInspectionNodeID resolves the current physical Node without relying
+// on an earlier Run. The Project binding is authoritative; legacy Projects
+// without one inherit the Runtime of their most recently created conversation.
+func (s *Server) projectInspectionNodeID(ctx context.Context, wid string, project store.Project) (string, error) {
 	runtimeID := strings.TrimSpace(value(project.RuntimeID))
 	if runtimeID == "" {
-		agent, agentErr := s.store.Agent(ctx, wid, links[0].AgentID)
+		agentID, agentErr := s.store.LatestProjectAgentID(ctx, wid, project.ID)
+		if agentErr != nil {
+			if errors.Is(agentErr, store.ErrNotFound) {
+				return "", errProjectWorkspaceUnavailable
+			}
+			return "", agentErr
+		}
+		agent, agentErr := s.store.Agent(ctx, wid, agentID)
 		if agentErr != nil {
 			return "", agentErr
 		}
@@ -100,24 +102,11 @@ func (s *Server) projectInspectionRunID(ctx context.Context, wid string, project
 	if err != nil {
 		return "", err
 	}
-	targetNodeID := runtimeNodeID(physicalRuntimeID)
-	if targetNodeID == "" {
+	nodeID := runtimeNodeID(physicalRuntimeID)
+	if nodeID == "" {
 		return "", errProjectWorkspaceUnavailable
 	}
-	for _, link := range links {
-		run, runErr := s.relay.GetRun(ctx, link.RelayRunID)
-		if runErr != nil {
-			return "", runErr
-		}
-		nodeID := strings.TrimSpace(run.Attempt.NodeID)
-		if nodeID == "" {
-			nodeID = runtimeNodeID(run.Runtime.ID)
-		}
-		if nodeID == targetNodeID {
-			return link.RelayRunID, nil
-		}
-	}
-	return "", errProjectWorkspaceUnavailable
+	return nodeID, nil
 }
 
 func runtimeNodeID(runtimeID string) string {
@@ -126,4 +115,30 @@ func runtimeNodeID(runtimeID string) string {
 		return ""
 	}
 	return runtimeID[:index]
+}
+
+func (s *Server) inspectNodeWorkspace(w http.ResponseWriter, r *http.Request, nodeID string, workspace relay.WorkspaceSpec, operation, path string) {
+	workspaceJSON, err := json.Marshal(workspace)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	endpoint := strings.TrimRight(s.relayHTTP.BaseURL, "/") + "/v1/nodes/" + url.PathEscape(nodeID) + "/workspace?operation=" + url.QueryEscape(operation) + "&path=" + url.QueryEscape(path) + "&workspace=" + url.QueryEscape(string(workspaceJSON))
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	request.Header.Set("Authorization", "Bearer "+s.relayHTTP.Token)
+	response, err := s.relayHTTP.HTTP.Do(request)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	defer response.Body.Close()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, _ = io.Copy(w, io.LimitReader(response.Body, 4<<20))
 }

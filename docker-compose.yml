@@ -38,8 +38,8 @@ services:
       context: .
       dockerfile: deploy/relay/Dockerfile
       args:
-        RELAY_VERSION: ${RELAY_VERSION:-v0.4.6}
-    image: steer-relay-server:${RELAY_VERSION:-v0.4.6}
+        RELAY_VERSION: ${RELAY_VERSION:-v0.4.7}
+    image: steer-relay-server:${RELAY_VERSION:-v0.4.7}
     restart: unless-stopped
     init: true
     environment:

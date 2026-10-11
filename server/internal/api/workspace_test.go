@@ -2,19 +2,20 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
+	"github.com/KDF5000/relay"
 	"github.com/KDF5000/steer/server/internal/store"
 	"github.com/google/uuid"
 )
 
-func TestProjectGitStatusUsesRunOnCurrentRuntimeNode(t *testing.T) {
+func TestProjectGitStatusInspectsCurrentRuntimeWithoutRun(t *testing.T) {
 	databaseURL := os.Getenv("STEER_TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("set STEER_TEST_DATABASE_URL for integration tests")
@@ -32,51 +33,23 @@ func TestProjectGitStatusUsesRunOnCurrentRuntimeNode(t *testing.T) {
 		t.Fatal(err)
 	}
 	runtimeID := "current-node/trae"
-	agent, err := st.CreateAgent(context.Background(), wid, store.Agent{Name: "Inspection Agent", RuntimeProvider: "trae", RuntimeID: &runtimeID})
-	if err != nil {
-		t.Fatal(err)
-	}
 	project, err := st.CreateProject(context.Background(), wid, store.Project{Name: "Local project", WorkspaceKind: "local", WorkspaceSource: "/workspace/project", ExecutionMode: "in_place", RuntimeID: &runtimeID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	projectID := project.ID
-	session, err := st.EnsureSession(context.Background(), wid, uuid.NewString(), "Inspect", agent.ID, &projectID, &runtimeID, nil, &project)
-	if err != nil {
-		t.Fatal(err)
-	}
-	currentRunID := "run-current-" + uuid.NewString()
-	staleRunID := "run-stale-" + uuid.NewString()
-	if _, _, err := st.SaveChatRun(context.Background(), wid, session.ID, agent.ID, "current", currentRunID, "succeeded"); err != nil {
-		t.Fatal(err)
-	}
-	time.Sleep(time.Millisecond)
-	if _, _, err := st.SaveChatRun(context.Background(), wid, session.ID, agent.ID, "stale", staleRunID, "succeeded"); err != nil {
-		t.Fatal(err)
-	}
 
-	var mu sync.Mutex
-	inspectedRuns := []string{}
-	relayServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/v1/runs/" + staleRunID:
-			writeJSON(w, http.StatusOK, map[string]any{"id": staleRunID, "runtime": map[string]string{"id": "old-node/trae"}, "attempt": map[string]string{"node_id": "old-node"}})
-		case "/v1/runs/" + currentRunID:
-			writeJSON(w, http.StatusOK, map[string]any{"id": currentRunID, "runtime": map[string]string{"id": runtimeID}, "attempt": map[string]string{"node_id": "current-node"}})
-		case "/v1/runs/" + currentRunID + "/workspace":
-			mu.Lock()
-			inspectedRuns = append(inspectedRuns, currentRunID)
-			mu.Unlock()
-			writeJSON(w, http.StatusOK, map[string]any{"root": "/workspace/project", "git": map[string]any{"repository": true, "branch": "main"}})
-		case "/v1/runs/" + staleRunID + "/workspace":
-			mu.Lock()
-			inspectedRuns = append(inspectedRuns, staleRunID)
-			mu.Unlock()
-			http.Error(w, "stale run must not be inspected", http.StatusInternalServerError)
-		default:
-			http.NotFound(w, r)
+	requestedNode := ""
+	requestedWorkspace := relay.WorkspaceSpec{}
+	relayMux := http.NewServeMux()
+	relayMux.HandleFunc("GET /v1/nodes/{nodeID}/workspace", func(w http.ResponseWriter, r *http.Request) {
+		requestedNode = r.PathValue("nodeID")
+		if err := json.Unmarshal([]byte(r.URL.Query().Get("workspace")), &requestedWorkspace); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
-	}))
+		writeJSON(w, http.StatusOK, map[string]any{"root": requestedWorkspace.Source, "git": map[string]any{"repository": true, "branch": "main"}})
+	})
+	relayServer := httptest.NewServer(relayMux)
 	defer relayServer.Close()
 
 	server := New(st, relayServer.URL, "", relayServer.URL, wid, nil)
@@ -85,14 +58,12 @@ func TestProjectGitStatusUsesRunOnCurrentRuntimeNode(t *testing.T) {
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"branch":"main"`) {
 		t.Fatalf("git status = %d %s", response.Code, response.Body.String())
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	if len(inspectedRuns) != 1 || inspectedRuns[0] != currentRunID {
-		t.Fatalf("inspected runs = %v, want only %s", inspectedRuns, currentRunID)
+	if requestedNode != "current-node" || requestedWorkspace.Kind != "local" || requestedWorkspace.Source != "/workspace/project" {
+		t.Fatalf("inspection target = node %q workspace %+v", requestedNode, requestedWorkspace)
 	}
 }
 
-func TestProjectGitStatusRejectsRunsFromReplacedNode(t *testing.T) {
+func TestProjectGitStatusUsesLatestConversationAgentRuntime(t *testing.T) {
 	databaseURL := os.Getenv("STEER_TEST_DATABASE_URL")
 	if databaseURL == "" {
 		t.Skip("set STEER_TEST_DATABASE_URL for integration tests")
@@ -105,39 +76,62 @@ func TestProjectGitStatusRejectsRunsFromReplacedNode(t *testing.T) {
 	if err := st.Migrate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	wid := "workspace-inspection-replaced-" + uuid.NewString()
-	if err := st.EnsureWorkspace(context.Background(), wid, "Replaced Node test"); err != nil {
+	wid := "workspace-inspection-agent-" + uuid.NewString()
+	if err := st.EnsureWorkspace(context.Background(), wid, "Workspace inspection agent fallback test"); err != nil {
 		t.Fatal(err)
 	}
-	runtimeID := "replacement-node/trae"
+	runtimeID := "agent-node/trae"
 	agent, err := st.CreateAgent(context.Background(), wid, store.Agent{Name: "Inspection Agent", RuntimeProvider: "trae", RuntimeID: &runtimeID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	project, err := st.CreateProject(context.Background(), wid, store.Project{Name: "Local project", WorkspaceKind: "local", WorkspaceSource: "/workspace/project", ExecutionMode: "in_place", RuntimeID: &runtimeID})
+	project, err := st.CreateProject(context.Background(), wid, store.Project{Name: "Legacy local project", WorkspaceKind: "local", WorkspaceSource: "/workspace/legacy", ExecutionMode: "in_place"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	projectID := project.ID
-	session, err := st.EnsureSession(context.Background(), wid, uuid.NewString(), "Inspect", agent.ID, &projectID, &runtimeID, nil, &project)
+	if _, err := st.EnsureSession(context.Background(), wid, uuid.NewString(), "Inspect", agent.ID, &projectID, &runtimeID, nil, &project); err != nil {
+		t.Fatal(err)
+	}
+
+	requestedNode := ""
+	relayMux := http.NewServeMux()
+	relayMux.HandleFunc("GET /v1/nodes/{nodeID}/workspace", func(w http.ResponseWriter, r *http.Request) {
+		requestedNode = r.PathValue("nodeID")
+		writeJSON(w, http.StatusOK, map[string]any{"git": map[string]any{"repository": true, "branch": "main"}})
+	})
+	relayServer := httptest.NewServer(relayMux)
+	defer relayServer.Close()
+	server := New(st, relayServer.URL, "", relayServer.URL, wid, nil)
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+project.ID+"/git-status", nil))
+	if response.Code != http.StatusOK || requestedNode != "agent-node" {
+		t.Fatalf("git status = %d %s, node=%q", response.Code, response.Body.String(), requestedNode)
+	}
+}
+
+func TestProjectGitStatusRequiresCurrentRuntime(t *testing.T) {
+	databaseURL := os.Getenv("STEER_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("set STEER_TEST_DATABASE_URL for integration tests")
+	}
+	st, err := store.Open(context.Background(), databaseURL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldRunID := "run-old-node-" + uuid.NewString()
-	if _, _, err := st.SaveChatRun(context.Background(), wid, session.ID, agent.ID, "old", oldRunID, "succeeded"); err != nil {
+	defer st.Close()
+	if err := st.Migrate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-
-	relayServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/runs/"+oldRunID {
-			writeJSON(w, http.StatusOK, map[string]any{"id": oldRunID, "runtime": map[string]string{"id": "old-node/trae"}, "attempt": map[string]string{"node_id": "old-node"}})
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	defer relayServer.Close()
-
-	server := New(st, relayServer.URL, "", relayServer.URL, wid, nil)
+	wid := "workspace-inspection-runtime-" + uuid.NewString()
+	if err := st.EnsureWorkspace(context.Background(), wid, "Workspace inspection runtime test"); err != nil {
+		t.Fatal(err)
+	}
+	project, err := st.CreateProject(context.Background(), wid, store.Project{Name: "Unbound project", WorkspaceKind: "local", WorkspaceSource: "/workspace/project", ExecutionMode: "in_place"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := New(st, "http://relay.invalid", "", "http://relay.invalid", wid, nil)
 	response := httptest.NewRecorder()
 	server.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/projects/"+project.ID+"/git-status", nil))
 	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), `"code":"project_workspace_unavailable"`) {
@@ -155,5 +149,28 @@ func TestRuntimeNodeID(t *testing.T) {
 		if got := runtimeNodeID(input); got != want {
 			t.Fatalf("runtimeNodeID(%q) = %q, want %q", input, got, want)
 		}
+	}
+}
+
+func TestInspectNodeWorkspaceEscapesWorkspaceQuery(t *testing.T) {
+	requested := ""
+	relayServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = r.URL.Query().Get("workspace")
+		writeJSON(w, http.StatusOK, map[string]any{"git": map[string]any{"repository": false}})
+	}))
+	defer relayServer.Close()
+	server := New(nil, relayServer.URL, "token", relayServer.URL, "workspace", nil)
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+	server.inspectNodeWorkspace(response, request, "node/id", relay.WorkspaceSpec{Kind: "local", Source: "/tmp/a & b"}, "git-status", "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("inspection = %d %s", response.Code, response.Body.String())
+	}
+	var workspace relay.WorkspaceSpec
+	if json.Unmarshal([]byte(requested), &workspace) != nil || workspace.Source != "/tmp/a & b" {
+		t.Fatalf("workspace query = %q", requested)
+	}
+	if _, err := url.ParseQuery("workspace=" + url.QueryEscape(requested)); err != nil {
+		t.Fatal(err)
 	}
 }
