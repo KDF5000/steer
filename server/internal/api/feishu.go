@@ -208,9 +208,6 @@ func (m *integrationManager) acceptMessage(ctx context.Context, integration stor
 func feishuPrompt(msg *channeltypes.NormalizedMessage) string {
 	prompt := strings.TrimSpace(msg.Content)
 	for _, mention := range msg.Mentions {
-		if !mention.IsBot {
-			continue
-		}
 		key := strings.TrimPrefix(mention.Key, "@")
 		if key != "" {
 			prompt = strings.ReplaceAll(prompt, "@"+key, "")

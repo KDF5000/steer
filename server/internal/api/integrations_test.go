@@ -116,6 +116,46 @@ func TestFeishuPromptRemovesBotMentionPlaceholder(t *testing.T) {
 	}
 }
 
+func TestFeishuPromptRemovesAllMentionsBeforeCommandMatching(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  channeltypes.NormalizedMessage
+		want string
+	}{
+		{
+			name: "current bot mention without identity marker",
+			msg: channeltypes.NormalizedMessage{Content: "@Store-Traex-Coder /status",
+				Mentions: []channeltypes.Mention{{Name: "Store-Traex-Coder"}}},
+			want: "/status",
+		},
+		{
+			name: "current and other bot mentions",
+			msg: channeltypes.NormalizedMessage{Content: "@OtherBot @Store-Traex-Coder /status",
+				Mentions: []channeltypes.Mention{{Name: "OtherBot"}, {Name: "Store-Traex-Coder", IsBot: true}}},
+			want: "/status",
+		},
+		{
+			name: "mention placeholders",
+			msg: channeltypes.NormalizedMessage{Content: "@_user_1 @_user_2 /projects",
+				Mentions: []channeltypes.Mention{{Key: "@_user_1"}, {Key: "@_user_2"}}},
+			want: "/projects",
+		},
+		{
+			name: "ordinary request mentioning command",
+			msg:  channeltypes.NormalizedMessage{Content: "@Store-Traex-Coder 请执行 /status 相关检查", Mentions: []channeltypes.Mention{{Name: "Store-Traex-Coder"}}},
+			want: "请执行 /status 相关检查",
+		},
+		{name: "command in ordinary message", msg: channeltypes.NormalizedMessage{Content: "普通消息中提到 /status"}, want: "普通消息中提到 /status"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := feishuPrompt(&test.msg); got != test.want {
+				t.Errorf("feishuPrompt(%q) = %q, want %q", test.msg.Content, got, test.want)
+			}
+		})
+	}
+}
+
 func TestFeishuProjectCommand(t *testing.T) {
 	tests := []struct {
 		prompt string
