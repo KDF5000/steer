@@ -1176,7 +1176,7 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusConflict
 	} else if errors.Is(err, store.ErrRuntimeBindingInUse) {
 		status = http.StatusConflict
-	} else if errors.Is(err, store.ErrRelayNodeOnline) || errors.Is(err, store.ErrRelayNodeInUse) {
+	} else if errors.Is(err, store.ErrRelayNodeOnline) || errors.Is(err, store.ErrRelayNodeInUse) || errors.Is(err, store.ErrRelayNodeReferenced) {
 		status = http.StatusConflict
 	} else if errors.Is(err, store.ErrAgentInUse) {
 		status = http.StatusConflict

@@ -1838,6 +1838,9 @@ export default function Fusion() {
       setAvailableRuntimeNodes((current) =>
         current.filter((node) => node.id !== deletingRelayNode.id),
       );
+      setRuntimeNodes((current) =>
+        current.filter((node) => node.id !== deletingRelayNode.id),
+      );
       setSelectedRuntimeIDs((current) =>
         current.filter((runtimeID) => !removedRuntimeIDs.has(runtimeID)),
       );
@@ -2526,6 +2529,7 @@ export default function Fusion() {
             onAddRuntime={openRuntimeDialog}
             onCapacity={updateRuntimeCapacity}
             onDisconnect={disconnectRuntime}
+            onRemoveNode={setDeletingRelayNode}
             onNotice={setNotice}
             onChat={(id) => {
               setChatAgent(id);
@@ -2756,9 +2760,9 @@ export default function Fusion() {
               Remove {deletingRelayNode?.labels?.name || 'this Relay Node'}?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the offline Node from Steer. It does not uninstall
-              the Relay Node service on the machine. A Node with Runtime
-              bindings cannot be removed.
+              {t(
+                'This removes the offline Node and its unused Runtime bindings from Steer. Conversation history is preserved and will select an available Runtime on its next turn. If an Agent or Project still uses this Node, migrate it first.',
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -5273,6 +5277,7 @@ function AgentsView({
   onAddRuntime,
   onCapacity,
   onDisconnect,
+  onRemoveNode,
   onNotice,
   onChat,
 }: {
@@ -5288,10 +5293,23 @@ function AgentsView({
   onAddRuntime: () => void;
   onCapacity: (nodeID: string, capacity: number) => Promise<void>;
   onDisconnect: (bindingID: string) => Promise<void>;
+  onRemoveNode: (node: RelayNode) => void;
   onNotice: (message: string) => void;
   onChat: (id: string) => void;
 }) {
-  const { t } = useI18n();
+  const { language, t } = useI18n();
+  const nodeStatus = (node: RelayNode) => {
+    const lastSeen = new Date(node.last_seen);
+    const heartbeat = Number.isNaN(lastSeen.getTime())
+      ? t('unknown time')
+      : new Intl.DateTimeFormat(language, {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }).format(lastSeen);
+    return node.state === 'offline'
+      ? t('Offline · last heartbeat {time}', { time: heartbeat })
+      : t('Online · last heartbeat {time}', { time: heartbeat });
+  };
   const runtimeName = (agent: AgentItem) => {
     if (!agent.runtimeId) return agent.runtime;
     for (const [node] of runtimes) {
@@ -5414,9 +5432,26 @@ function AgentsView({
           {runtimes.map(([node, location]) => (
             <div key={node.id}>
               <Server />
-              <span>
-                <strong title={node.id}>{node.labels?.name || node.id}</strong>
-                <small>{t('Online · heartbeat just now')}</small>
+              <span className="ws-runtime-node-identity">
+                <span>
+                  <strong title={node.id}>
+                    {node.labels?.name || node.id}
+                  </strong>
+                  <small className={`is-${node.state || 'unknown'}`}>
+                    {nodeStatus(node)}
+                  </small>
+                </span>
+                {node.state === 'offline' && (
+                  <button
+                    type="button"
+                    className="ws-runtime-remove-node"
+                    aria-label={t('Remove offline Relay Node')}
+                    title={t('Remove offline Relay Node')}
+                    onClick={() => onRemoveNode(node)}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </button>
+                )}
               </span>
               <span>{location}</span>
               <span className="ws-runtime-environments">

@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -81,6 +83,7 @@ var (
 	ErrRuntimeBindingInUse = errors.New("runtime binding is still used by an Agent, Project, or conversation")
 	ErrRelayNodeOnline     = errors.New("Relay Node must be offline before it can be removed")
 	ErrRelayNodeInUse      = errors.New("Relay Node still has Runtime bindings assigned to a workspace")
+	ErrRelayNodeReferenced = errors.New("Relay Node runtimes are still in use")
 )
 
 const userColumns = `id,email,display_name,password_hash,created_at,updated_at`
@@ -333,16 +336,47 @@ func (s *Store) DeleteOwnedRelayNode(ctx context.Context, userID, nodeID string)
 	if state != "offline" {
 		return ErrRelayNodeOnline
 	}
-	var bound bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(
-		SELECT 1 FROM workspace_runtime_bindings b
-		JOIN relay_node_runtimes r ON r.id=b.node_runtime_id
-		WHERE r.node_id=$1
-	)`, nodeID).Scan(&bound); err != nil {
+	var agentReferences, projectReferences int
+	if err := tx.QueryRow(ctx, `SELECT
+		(SELECT COUNT(*) FROM agents a
+			JOIN workspace_runtime_bindings b ON b.id=a.runtime_id AND b.workspace_id=a.workspace_id
+			JOIN relay_node_runtimes r ON r.id=b.node_runtime_id
+			WHERE r.node_id=$1),
+		(SELECT COUNT(*) FROM projects p
+			JOIN workspace_runtime_bindings b ON b.id=p.runtime_id AND b.workspace_id=p.workspace_id
+			JOIN relay_node_runtimes r ON r.id=b.node_runtime_id
+			WHERE r.node_id=$1 AND p.deleted_at IS NULL)
+	`, nodeID).Scan(&agentReferences, &projectReferences); err != nil {
 		return err
 	}
-	if bound {
-		return ErrRelayNodeInUse
+	referenceLabel := func(count int, singular string) string {
+		if count == 1 {
+			return fmt.Sprintf("1 %s", singular)
+		}
+		return fmt.Sprintf("%d %ss", count, singular)
+	}
+	usedBy := make([]string, 0, 2)
+	if agentReferences > 0 {
+		usedBy = append(usedBy, referenceLabel(agentReferences, "Agent"))
+	}
+	if projectReferences > 0 {
+		usedBy = append(usedBy, referenceLabel(projectReferences, "Project"))
+	}
+	if len(usedBy) > 0 {
+		return fmt.Errorf("%w by %s; migrate those references to another Runtime before removing the Node", ErrRelayNodeReferenced, strings.Join(usedBy, ", "))
+	}
+	// A conversation's execution Runtime is routing state, not conversation
+	// content. Preserve the history while allowing the next turn to resolve a
+	// current Runtime from its Project or Agent.
+	if _, err := tx.Exec(ctx, `UPDATE chat_sessions c SET execution_runtime_id=NULL,updated_at=now()
+		FROM workspace_runtime_bindings b,relay_node_runtimes r
+		WHERE c.execution_runtime_id=b.id AND b.node_runtime_id=r.id AND r.node_id=$1`, nodeID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM workspace_runtime_bindings b
+		USING relay_node_runtimes r
+		WHERE b.node_runtime_id=r.id AND r.node_id=$1`, nodeID); err != nil {
+		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM relay_node_runtimes WHERE node_id=$1`, nodeID); err != nil {
 		return err

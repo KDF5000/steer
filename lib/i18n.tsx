@@ -259,6 +259,9 @@ const zhCN: Record<string, string> = {
   'Agents define reusable behavior; Runtimes are execution processes on local or remote machines.':
     '智能体定义可复用的行为；运行环境是在本地或远程机器上执行任务的进程。',
   'Online · heartbeat just now': '在线 · 刚刚收到心跳',
+  'Online · last heartbeat {time}': '在线 · 最后心跳 {time}',
+  'Offline · last heartbeat {time}': '离线 · 最后心跳 {time}',
+  'unknown time': '时间未知',
   'Version unavailable': '版本不可用',
   'Create an Agent to start': '创建智能体后开始',
   'Connect a Runtime through Relay, then create an Agent.':
@@ -316,6 +319,8 @@ const zhCN: Record<string, string> = {
   'Choose an existing Node': '选择已有 Node',
   'Installed Node': '本次安装',
   'Remove offline Relay Node': '移除离线 Relay Node',
+  'This removes the offline Node and its unused Runtime bindings from Steer. Conversation history is preserved and will select an available Runtime on its next turn. If an Agent or Project still uses this Node, migrate it first.':
+    '这会从 Steer 中移除离线 Node 及其未使用的 Runtime 绑定。对话历史会保留，并在下次继续时选择可用的 Runtime。如果仍有智能体或项目使用此 Node，请先完成迁移。',
   'No other Relay Nodes are available for this account.':
     '当前账户没有其他可用的 Relay Node。',
   'Waiting for the installed Node to connect. Run the command, then refresh.':

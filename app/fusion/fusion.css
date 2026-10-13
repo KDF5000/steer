@@ -5526,6 +5526,45 @@ button.ws-chat-response-meta:focus-visible {
   gap: 6px;
 }
 
+.ws-runtime-node-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ws-runtime-node-identity > span {
+  min-width: 0;
+}
+
+.ws-runtime-node-identity small.is-offline {
+  color: var(--ws-negative);
+}
+
+.ws-runtime-remove-node {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ws-text-tertiary);
+}
+
+.ws-runtime-remove-node:hover {
+  background: var(--ws-negative-soft);
+  color: var(--ws-negative);
+}
+
+.ws-runtime-remove-node svg {
+  width: 14px;
+  height: 14px;
+}
+
 .ws-runtime-environment {
   display: inline-flex;
   min-width: 0;

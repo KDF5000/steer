@@ -60,9 +60,6 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.DeleteOwnedRelayNode(ctx, user.ID, nodeID); !errors.Is(err, store.ErrRelayNodeInUse) {
-		t.Fatalf("delete bound offline Node = %v, want %v", err, store.ErrRelayNodeInUse)
-	}
 	bindings, err := st.WorkspaceRuntimeBindings(ctx, workspace.ID)
 	if err != nil || len(bindings) != 1 {
 		t.Fatalf("bindings = %+v: %v", bindings, err)
@@ -73,6 +70,57 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if err := st.DeleteOwnedRelayNode(ctx, user.ID, nodeID); !errors.Is(err, store.ErrRelayNodeReferenced) {
+		t.Fatalf("delete referenced offline Node = %v, want %v", err, store.ErrRelayNodeReferenced)
+	}
+
+	removableEnrollment, err := st.CreateRelayNodeEnrollment(ctx, user.ID, "removable-"+suffix, time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	removableNodeID := "removable-node-" + suffix
+	removableNode, err := st.EnrollRelayNode(ctx, removableEnrollment.TokenHash, removableNodeID, "Removable Node", 1, "offline", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	removableRuntimeID := removableNodeID + "/codex"
+	if err := st.SyncRelayNode(ctx, removableNode.ID, removableNode.Name, removableNode.Capacity, "offline", time.Now(), []store.RelayNodeRuntime{{
+		ID: removableRuntimeID, NodeID: removableNodeID, Provider: "codex", State: "healthy",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.BindRelayNodeRuntimes(ctx, workspace.ID, user.ID, removableNodeID, []string{removableRuntimeID}); err != nil {
+		t.Fatal(err)
+	}
+	bindingsBeforeRemoval, err := st.WorkspaceRuntimeBindings(ctx, workspace.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var removableBindingID string
+	for _, binding := range bindingsBeforeRemoval {
+		if binding.NodeRuntimeID == removableRuntimeID {
+			removableBindingID = binding.ID
+			break
+		}
+	}
+	if removableBindingID == "" {
+		t.Fatal("removable Runtime binding was not created")
+	}
+	conversationID := "removable-conversation-" + suffix
+	if _, err := st.EnsureSession(ctx, workspace.ID, conversationID, "Preserved conversation", agent.ID, nil, &removableBindingID, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.DeleteOwnedRelayNode(ctx, user.ID, removableNodeID); err != nil {
+		t.Fatalf("delete offline Node referenced only by a conversation: %v", err)
+	}
+	remainingBindings, err := st.WorkspaceRuntimeBindings(ctx, workspace.ID)
+	if err != nil || len(remainingBindings) != 1 || remainingBindings[0].ID != bindingID {
+		t.Fatalf("bindings after removable Node deletion = %+v: %v", remainingBindings, err)
+	}
+	preservedConversation, err := st.Session(ctx, workspace.ID, conversationID)
+	if err != nil || preservedConversation.ExecutionRuntimeID != nil {
+		t.Fatalf("conversation after Runtime removal = %+v: %v", preservedConversation, err)
 	}
 
 	var mu sync.Mutex
