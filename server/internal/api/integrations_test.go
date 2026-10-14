@@ -66,6 +66,35 @@ func TestFeishuParentMessageContext(t *testing.T) {
 	}
 }
 
+func TestParseFeishuReceivedRichText(t *testing.T) {
+	direct := `{"title":"排查结果","content":[[{"tag":"text","text":"错误来自 "},{"tag":"a","text":"日志","href":"https://example.test/log"}],[{"tag":"img","image_key":"img_v2_test"}]]}`
+	content, resources := parseFeishuMessageContent("post", direct)
+	if !strings.Contains(content, "排查结果") || !strings.Contains(content, "错误来自") || !strings.Contains(content, "[日志](https://example.test/log)") {
+		t.Fatalf("direct received post content = %q", content)
+	}
+	if len(resources) != 1 || resources[0].Type != "image" || resources[0].FileKey != "img_v2_test" {
+		t.Fatalf("direct received post resources = %+v", resources)
+	}
+
+	localized := `{"zh_cn":{"title":"本地化消息","content":[[{"tag":"text","text":"正文"}]]}}`
+	content, _ = parseFeishuMessageContent("post", localized)
+	if !strings.Contains(content, "本地化消息") || !strings.Contains(content, "正文") {
+		t.Fatalf("localized post content = %q", content)
+	}
+}
+
+func TestNormalizeFeishuIncomingRichText(t *testing.T) {
+	messageType := "post"
+	rawContent := `{"title":"引用内容","content":[[{"tag":"text","text":"请检查这里"}]]}`
+	event := &larkim.P2MessageReceiveV1{Event: &larkim.P2MessageReceiveV1Data{Message: &larkim.EventMessage{MessageType: &messageType, Content: &rawContent}}}
+	msg := &channeltypes.NormalizedMessage{Content: "[rich text message]", RawContentType: "post", RawEvent: event}
+
+	normalized := normalizeFeishuIncomingMessage(msg)
+	if !strings.Contains(normalized.Content, "引用内容") || !strings.Contains(normalized.Content, "请检查这里") {
+		t.Fatalf("normalized incoming post content = %q", normalized.Content)
+	}
+}
+
 func TestFeishuTaskCard(t *testing.T) {
 	card := feishuTaskCard("succeeded", "完成内容")
 	var payload map[string]any

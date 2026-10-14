@@ -187,6 +187,8 @@ func (m *integrationManager) acceptMessage(ctx context.Context, integration stor
 	if msg == nil || msg.MessageID == "" || msg.ChatID == "" {
 		return nil
 	}
+	normalized := normalizeFeishuIncomingMessage(msg)
+	msg = &normalized
 	prompt := feishuPrompt(msg)
 	threadKey := feishuThreadKey(msg)
 	eventID := msg.EventID
@@ -217,6 +219,70 @@ func feishuPrompt(msg *channeltypes.NormalizedMessage) string {
 		}
 	}
 	return strings.TrimSpace(prompt)
+}
+
+// normalizeFeishuIncomingMessage reparses the raw event because received post
+// messages use a direct {title,content} body, while the SDK's generic parser
+// expects the locale-wrapped shape used when sending a post. Keeping this at
+// the integration boundary also gives replies and direct rich-text messages
+// the same representation.
+func normalizeFeishuIncomingMessage(msg *channeltypes.NormalizedMessage) channeltypes.NormalizedMessage {
+	normalized := *msg
+	event, ok := msg.RawEvent.(*larkim.P2MessageReceiveV1)
+	if !ok || event.Event == nil || event.Event.Message == nil {
+		return normalized
+	}
+	raw := event.Event.Message
+	if raw.MessageType == nil || raw.Content == nil {
+		return normalized
+	}
+	normalized.RawContentType = *raw.MessageType
+	content, resources := parseFeishuMessageContent(*raw.MessageType, *raw.Content)
+	if strings.TrimSpace(content) != "" {
+		normalized.Content = content
+	}
+	normalized.Resources = resources
+	return normalized
+}
+
+func parseFeishuMessageContent(messageType, content string) (string, []channeltypes.Resource) {
+	if messageType != "post" {
+		return normalize.ParseContent(messageType, content)
+	}
+
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(content), &payload); err != nil {
+		return normalize.ParseContent(messageType, content)
+	}
+	body := json.RawMessage(content)
+	if _, directContent := payload["content"]; !directContent {
+		if _, directContentV2 := payload["content_v2"]; !directContentV2 {
+			body = nil
+			for _, locale := range []string{"zh_cn", "en_us", "ja_jp"} {
+				if candidate := payload[locale]; len(candidate) > 0 {
+					body = candidate
+					break
+				}
+			}
+			if len(body) == 0 {
+				for _, candidate := range payload {
+					var candidateBody map[string]json.RawMessage
+					if json.Unmarshal(candidate, &candidateBody) == nil && (len(candidateBody["content"]) > 0 || len(candidateBody["content_v2"]) > 0) {
+						body = candidate
+						break
+					}
+				}
+			}
+		}
+	}
+	if len(body) == 0 {
+		return normalize.ParseContent(messageType, content)
+	}
+	wrapper, err := json.Marshal(map[string]json.RawMessage{"body": body})
+	if err != nil {
+		return normalize.ParseContent(messageType, content)
+	}
+	return normalize.ParseContent(messageType, string(wrapper))
 }
 
 func (m *integrationManager) startWorker(ctx context.Context, integration store.WorkspaceIntegration, apiClient *lark.Client, bot channeltypes.Channel, msg *channeltypes.NormalizedMessage, eventID, threadKey, prompt string) {
@@ -304,7 +370,7 @@ func fetchFeishuMessageContext(ctx context.Context, client *lark.Client, message
 		result.SenderName = strings.TrimSpace(*message.Sender.SenderName)
 	}
 	if message.MsgType != nil && message.Body != nil && message.Body.Content != nil {
-		result.Content, result.Resources = normalize.ParseContent(*message.MsgType, *message.Body.Content)
+		result.Content, result.Resources = parseFeishuMessageContent(*message.MsgType, *message.Body.Content)
 	}
 	return result, nil
 }
