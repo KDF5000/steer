@@ -983,10 +983,12 @@ export default function Fusion() {
     const controller = new AbortController();
     let stopped = false;
     let retryTimer = 0;
+    let recoveryTimer = 0;
     let renderTimer = 0;
     let renderFrame = 0;
     let events: RelayEvent[] = [];
     let lastSequence = 0;
+    let retryDelay = 600;
 
     const flushEvents = () => {
       renderFrame = 0;
@@ -1016,6 +1018,15 @@ export default function Fusion() {
       }, 32);
     };
 
+    const scheduleReconnect = () => {
+      if (stopped || activeRun.current !== activeRunID || retryTimer) return;
+      retryTimer = window.setTimeout(() => {
+        retryTimer = 0;
+        void connect();
+      }, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 5_000);
+    };
+
     const connect = async () => {
       try {
         const receiveEvent = (event: RelayEvent) => {
@@ -1038,40 +1049,66 @@ export default function Fusion() {
             controller.signal,
             receiveEvent,
           );
-        if (!stopped) await pollRun(activeRunID);
+        if (stopped) return;
+        const latest = await pollRun(activeRunID);
+        if (
+          !latest ||
+          (!isTerminalStatus(latest.run.status) &&
+            activeRun.current === activeRunID)
+        )
+          scheduleReconnect();
       } catch {
         if (stopped || controller.signal.aborted) return;
         const latest = await pollRun(activeRunID);
         if (
           stopped ||
-          !latest ||
-          isTerminalStatus(latest.run.status) ||
+          (latest && isTerminalStatus(latest.run.status)) ||
           activeRun.current !== activeRunID
         )
           return;
-        events = latest.events;
-        lastSequence = events.at(-1)?.sequence || lastSequence;
-        retryTimer = window.setTimeout(() => void connect(), 600);
+        if (latest) {
+          events = latest.events;
+          lastSequence = events.at(-1)?.sequence || lastSequence;
+        }
+        scheduleReconnect();
       }
     };
+
+    const recoverRun = () => {
+      if (stopped || activeRun.current !== activeRunID || !navigator.onLine)
+        return;
+      void pollRun(activeRunID);
+    };
+
+    const recoverVisibleRun = () => {
+      if (document.visibilityState === 'visible') recoverRun();
+    };
+
+    window.addEventListener('online', recoverRun);
+    document.addEventListener('visibilitychange', recoverVisibleRun);
+    recoveryTimer = window.setInterval(recoverRun, 5_000);
 
     void pollRun(activeRunID).then((initial) => {
       if (
         stopped ||
-        !initial ||
-        isTerminalStatus(initial.run.status) ||
+        (initial && isTerminalStatus(initial.run.status)) ||
         activeRun.current !== activeRunID
       )
         return;
-      events = initial.events;
-      lastSequence = events.at(-1)?.sequence || 0;
+      if (initial) {
+        events = initial.events;
+        lastSequence = events.at(-1)?.sequence || 0;
+      }
       void connect();
     });
 
     return () => {
       stopped = true;
       controller.abort();
+      window.removeEventListener('online', recoverRun);
+      document.removeEventListener('visibilitychange', recoverVisibleRun);
       window.clearTimeout(retryTimer);
+      window.clearInterval(recoveryTimer);
       window.clearTimeout(renderTimer);
       if (renderFrame) window.cancelAnimationFrame(renderFrame);
     };
