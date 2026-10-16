@@ -386,14 +386,24 @@ function subscribeInterfaceLanguage(onChange: () => void) {
   const update = () => onChange();
   window.addEventListener(languageEvent, update);
   window.addEventListener('storage', update);
+  window.addEventListener('languagechange', update);
   return () => {
     window.removeEventListener(languageEvent, update);
     window.removeEventListener('storage', update);
+    window.removeEventListener('languagechange', update);
   };
 }
 
 function serverInterfaceLanguageSnapshot(): InterfaceLanguage {
   return 'auto';
+}
+
+function resolvedLanguageSnapshot(): ResolvedLanguage {
+  return resolveLanguage(interfaceLanguageSnapshot());
+}
+
+function serverResolvedLanguageSnapshot(): ResolvedLanguage {
+  return 'en';
 }
 
 type I18nContextValue = {
@@ -415,7 +425,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     serverInterfaceLanguageSnapshot,
   );
 
-  const language = resolveLanguage(setting);
+  // Match the server's initial language during hydration, then resolve the
+  // browser preference. Reading navigator during hydration can mismatch SSR.
+  const language = useSyncExternalStore(
+    subscribeInterfaceLanguage,
+    resolvedLanguageSnapshot,
+    serverResolvedLanguageSnapshot,
+  );
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
