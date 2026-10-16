@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Steer 和 Relay 是面向 AI Agent 工作流的开源工作空间与分布式执行基础设施。">
+  <title>Steer / Relay — Agent work, anywhere</title>
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    :root{--black:#101010;--acid:#eaff55;--violet:#7558ff;--paper:#f7f6f1;--line:#cac9c1;--muted:#65655f}
+    body{background:var(--paper);color:var(--black)}
+    .shell{width:min(1220px,calc(100% - 44px));margin:auto}
+    header{height:76px;display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--black)}
+    .slash-brand{font:700 18px var(--mono);letter-spacing:-.06em;text-decoration:none}.slash-brand span{color:var(--violet)}
+    nav{display:flex;align-items:center;gap:25px}nav a{font:600 12px var(--mono);text-decoration:none;text-transform:uppercase}nav a:hover{text-decoration:underline;text-underline-offset:4px}.github{padding:10px 13px;background:var(--black);color:white}
+    .hero{display:grid;grid-template-columns:1.1fr .9fr;min-height:680px;border-bottom:2px solid var(--black)}
+    .hero-copy{padding:85px 55px 70px 0;border-right:2px solid var(--black)}.tag{display:inline-block;padding:7px 10px;border:1px solid var(--black);font:700 10px var(--mono);text-transform:uppercase;box-shadow:4px 4px 0 var(--acid)}
+    h1{margin:40px 0 28px;font-size:clamp(60px,8.2vw,108px);line-height:.85;letter-spacing:-.08em;text-transform:uppercase}h1 span{display:block;color:var(--violet)}.hero-copy p{max-width:610px;margin:0;color:#50504b;font-size:17px;line-height:1.7}.hero-actions{display:flex;gap:11px;margin-top:34px}.hard{border-radius:0;background:var(--black);color:#fff;box-shadow:5px 5px 0 var(--violet)}.outline{border:2px solid var(--black);border-radius:0;background:transparent;color:var(--black)}
+    .hero-demo{position:relative;display:grid;place-items:center;padding:50px 0 50px 55px;background:repeating-linear-gradient(0deg,transparent,transparent 39px,#deddd6 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,#deddd6 40px)}
+    .terminal{width:100%;max-width:500px;border:2px solid var(--black);background:var(--black);color:#e8e8df;box-shadow:11px 11px 0 var(--acid);transform:rotate(-1.5deg)}.terminal-top{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid #373737;color:#8d8d85;font:10px var(--mono)}.terminal pre{min-height:330px;margin:0;padding:25px 22px;font:12px/1.9 var(--mono);white-space:pre-wrap}.cmd{color:var(--acid)}.ok{color:#72df8d}.violet{color:#a893ff}.cursor{display:inline-block;width:8px;height:14px;background:var(--acid);vertical-align:-2px;animation:blink 1s steps(1) infinite}@keyframes blink{50%{opacity:0}}
+    .ticker{overflow:hidden;border-bottom:2px solid var(--black);background:var(--acid)}.ticker-track{display:flex;width:max-content;animation:run 22s linear infinite}.ticker span{padding:16px 24px;font:700 11px var(--mono);text-transform:uppercase}.ticker span::after{content:"✦";margin-left:48px}@keyframes run{to{transform:translateX(-50%)}}
+    .manifesto{display:grid;grid-template-columns:.7fr 1.3fr;padding:120px 0;border-bottom:2px solid var(--black)}.section-label{font:700 11px var(--mono);text-transform:uppercase}.manifesto h2{margin:0;font-size:clamp(45px,6.2vw,79px);line-height:.95;letter-spacing:-.065em}.manifesto h2 mark{padding:0 .08em;background:var(--acid)}
+    .architecture{padding:90px 0;border-bottom:2px solid var(--black)}.arch-head{display:flex;align-items:end;justify-content:space-between;margin-bottom:50px}.arch-head h2{max-width:760px;margin:15px 0 0;font-size:55px;line-height:1;letter-spacing:-.06em}.arch-head p{max-width:360px;margin:0;color:var(--muted);font-size:13px;line-height:1.6}.pipeline{display:grid;grid-template-columns:1fr 65px 1fr 65px 1fr;border:2px solid var(--black);background:var(--black);gap:2px}.pipe-card{min-height:275px;padding:27px;background:var(--paper)}.pipe-card.dark{background:#1a1a1a;color:#fff}.pipe-card.acid{background:var(--acid)}.pipe-number{font:10px var(--mono);opacity:.55}.pipe-card h3{margin:80px 0 11px;font-size:30px;letter-spacing:-.05em}.pipe-card p{margin:0;color:#686862;font-size:12px;line-height:1.6}.dark p{color:#9e9e97}.pipe-arrow{display:grid;place-items:center;background:var(--black);color:#fff;font:24px var(--mono)}
+    .products{display:grid;grid-template-columns:1fr 1fr;border-bottom:2px solid var(--black)}.product{min-height:570px;padding:70px 50px}.product:first-child{border-right:2px solid var(--black)}.product-head{display:flex;align-items:center;justify-content:space-between}.product-name{font-size:58px;font-weight:800;letter-spacing:-.07em}.product-type{font:10px var(--mono);text-transform:uppercase}.product>p{max-width:490px;margin:22px 0 35px;color:var(--muted);font-size:15px;line-height:1.7}.bullet{display:grid;grid-template-columns:36px 1fr;min-height:58px;align-items:center;border-top:1px solid var(--line);font-size:13px}.bullet:last-of-type{border-bottom:1px solid var(--line)}.bullet code{font:10px var(--mono);color:#888780}.product-link{display:inline-flex;margin-top:30px;padding-bottom:4px;border-bottom:2px solid;text-decoration:none;font:700 12px var(--mono);text-transform:uppercase}.relay-product{background:var(--violet);color:white}.relay-product>p,.relay-product .bullet code{color:#d4ccff}.relay-product .bullet{border-color:#9b88ff}.relay-product .product-link{color:white}
+    .install{padding:110px 0}.install-grid{display:grid;grid-template-columns:.85fr 1.15fr;gap:80px}.install h2{margin:14px 0 23px;font-size:55px;line-height:1;letter-spacing:-.06em}.install p{color:var(--muted);line-height:1.7}.code-block{align-self:center;border:2px solid var(--black);background:#171717;color:#e8e8df;box-shadow:9px 9px 0 var(--acid)}.code-top{padding:12px 16px;border-bottom:1px solid #393939;color:#92928b;font:10px var(--mono)}.code-block pre{margin:0;padding:22px;overflow-wrap:anywhere;color:#dcdbd4;font:12px/1.8 var(--mono);white-space:pre-wrap}
+    .closing{padding:100px 0;background:var(--black);color:white;text-align:center}.closing h2{margin:0 auto 36px;max-width:900px;font-size:clamp(50px,7vw,92px);line-height:.9;letter-spacing:-.075em;text-transform:uppercase}.closing h2 span{color:var(--acid)}.closing .outline{border-color:#fff;color:#fff}footer{padding:27px 0;background:var(--black);color:#777;border-top:1px solid #353535}.foot{display:flex;justify-content:space-between;font:10px var(--mono);text-transform:uppercase}
+    @media(max-width:900px){nav a:not(.github){display:none}.hero{grid-template-columns:1fr}.hero-copy{border-right:0;border-bottom:2px solid var(--black);padding-right:0}.hero-demo{padding:60px 30px}.manifesto,.install-grid{grid-template-columns:1fr;gap:38px}.pipeline{grid-template-columns:1fr}.pipe-arrow{min-height:55px}.products{grid-template-columns:1fr}.product:first-child{border-right:0;border-bottom:2px solid var(--black)}.arch-head{display:block}.arch-head p{margin-top:25px}}
+    @media(max-width:560px){.shell{width:calc(100% - 26px)}header{height:66px}.github{padding:8px}.hero-copy{padding-top:60px}.hero-actions{flex-direction:column}.hero-demo{padding:45px 5px 55px}.terminal pre{min-height:300px;padding:18px 14px;font-size:10px}.manifesto,.architecture,.install{padding:75px 0}.arch-head h2,.install h2{font-size:43px}.products{display:block}.product{min-height:auto;padding:65px 20px}.product-name{font-size:48px}.foot{gap:15px;flex-direction:column}}
+  </style>
+</head>
+<body>
+  <header class="shell"><a class="slash-brand" href="#">STEER<span>/</span>RELAY</a><nav><a href="#architecture">Architecture</a><a href="#products">Projects</a><a href="#install">Quick start</a><a class="github" href="https://github.com/KDF5000/steer">GitHub ↗</a></nav></header>
+  <main>
+    <section class="hero shell"><div class="hero-copy"><span class="tag">Open-source agent system</span><h1>Agent work.<span>Anywhere.</span></h1><p>用 Steer 组织工作，用 Relay 在任意机器上执行。一个面向真实项目、持续对话和多 Runtime 的开放系统。</p><div class="hero-actions"><a class="button hard" href="#install">开始部署</a><a class="button outline" href="#architecture">查看架构</a></div></div><div class="hero-demo"><div class="terminal"><div class="terminal-top"><span>relay-node / live</span><span>● connected</span></div><pre><span class="cmd">$ relayctl nodes list</span>
+
+NODE          RUNTIMES          STATUS
+mac-studio    trae, codex       <span class="ok">online</span>
+linux-dev     claude, pi        <span class="ok">online</span>
+
+<span class="cmd">$ steer task run --project api</span>
+<span class="violet">→</span> workspace prepared on linux-dev
+<span class="violet">→</span> assigned to claude
+<span class="ok">✓</span> run streaming to conversation
+
+<span class="cursor"></span></pre></div></div></section>
+    <div class="ticker"><div class="ticker-track"><span>Codex</span><span>Trae</span><span>Claude Code</span><span>Pi</span><span>Multi-machine</span><span>Durable runs</span><span>Codex</span><span>Trae</span><span>Claude Code</span><span>Pi</span><span>Multi-machine</span><span>Durable runs</span></div></div>
+
+    <section class="manifesto shell"><span class="section-label">// The premise</span><h2>AI Agent 不该困在单个页面或单台机器里。<mark>工作需要连续。</mark></h2></section>
+
+    <section class="architecture shell" id="architecture"><div class="arch-head"><div><span class="section-label">// Architecture</span><h2>体验与执行解耦，各自保持简单。</h2></div><p>Steer 拥有业务状态和用户体验；Relay 提供稳定、可嵌入的执行边界。</p></div><div class="pipeline"><article class="pipe-card"><span class="pipe-number">01 / HOST</span><h3>Steer</h3><p>Workspace · Agent · Project · Conversation</p></article><div class="pipe-arrow">→</div><article class="pipe-card dark"><span class="pipe-number">02 / CONTROL</span><h3>Relay Server</h3><p>Scheduling · Leases · Events · Artifacts</p></article><div class="pipe-arrow">→</div><article class="pipe-card acid"><span class="pipe-number">03 / EXECUTION</span><h3>Relay Node</h3><p>Codex · Trae · Claude · Pi · Custom</p></article></div></section>
+
+    <section class="products" id="products"><article class="product"><div class="product-head"><span class="product-name">Steer</span><span class="product-type">Chat-first workspace</span></div><p>为人与 Agent 的长期协作而设计。对话不是一次性 Prompt，而是项目工作持续发生的地方。</p><div class="bullet"><code>01</code><span>Workspace 级 Agent、Project 与 Runtime 管理</span></div><div class="bullet"><code>02</code><span>持久 Conversation 与跨 Run 上下文</span></div><div class="bullet"><code>03</code><span>Web、飞书与 Conversation Task API</span></div><div class="bullet"><code>04</code><span>Artifact 预览、下载与重新访问</span></div><a class="product-link" href="https://github.com/KDF5000/steer">View Steer ↗</a></article><article class="product relay-product"><div class="product-head"><span class="product-name">Relay</span><span class="product-type">Execution infrastructure</span></div><p>面向应用的分布式 Agent Runtime 层。Host 保留业务逻辑，Relay 只把执行这件事做稳。</p><div class="bullet"><code>01</code><span>Node 注册、心跳、容量与 Runtime 发现</span></div><div class="bullet"><code>02</code><span>租约、重试、取消、超时与有序事件</span></div><div class="bullet"><code>03</code><span>本地目录、临时目录与 Git Worktree</span></div><div class="bullet"><code>04</code><span>Go SDK、HTTP API 与自定义 Capability</span></div><a class="product-link" href="https://github.com/KDF5000/relay">View Relay ↗</a></article></section>
+
+    <section class="install shell" id="install"><div class="install-grid"><div><span class="section-label">// Quick start</span><h2>从一台机器开始。</h2><p>使用 Docker Compose 启动 Steer 与 Relay Server，再把已有 AI CLI 的机器连接为 Relay Node。服务和工作目录始终由你控制。</p><a class="button outline" href="https://github.com/KDF5000/steer">阅读部署文档 ↗</a></div><div class="code-block"><div class="code-top">terminal — connect a node</div><pre><span class="cmd">curl</span> -fsSL https://raw.githubusercontent.com/
+KDF5000/relay/main/install.sh \
+  | RELAY_NODE_TOKEN='••••••••' \
+    sh -s -- --server https://relay.example.com \
+    --install-service</pre></div></div></section>
+
+    <section class="closing"><div class="shell"><h2>Build where you want.<br><span>Run where you need.</span></h2><div class="hero-actions" style="justify-content:center"><a class="button hard" style="background:var(--acid);color:#111;box-shadow:5px 5px 0 var(--violet)" href="https://github.com/KDF5000/steer">Get Steer ↗</a><a class="button outline" href="https://github.com/KDF5000/relay">Explore Relay ↗</a></div></div></section>
+  </main>
+  <footer><div class="shell foot"><span>Steer / Relay · Open source</span><span>Built for agent work · 2026</span></div></footer>
+  <div class="prototype-switcher" aria-label="切换设计方案"><a href="index.html">全部</a><a href="concept-a.html">A</a><a href="concept-b.html">B</a><a class="active" href="concept-c.html">C</a></div>
+</body>
+</html>

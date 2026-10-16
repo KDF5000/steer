@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Steer 是一个面向 AI Agent 的 Chat-first 工作空间，由 Relay 提供多机器执行能力。">
+  <title>Steer — Make AI work feel simple</title>
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    :root { --ink:#252522; --muted:#6e6d67; --paper:#f5f1e9; --purple:#7764ed; --green:#cce7cc; --line:#dedbd2; }
+    body { background: var(--paper); color: var(--ink); }
+    .shell { width:min(1180px, calc(100% - 44px)); margin:auto; }
+    header { height:82px; display:flex; align-items:center; justify-content:space-between; }
+    nav { display:flex; align-items:center; gap:30px; }
+    nav a { color:#55554f; font-size:13px; font-weight:550; text-decoration:none; }
+    nav a:hover { color:var(--ink); }
+    .nav-github { padding:10px 15px; border:1px solid #cfccc3; border-radius:10px; background:#fff8; }
+    .hero { min-height:760px; display:grid; grid-template-columns:1.03fr .97fr; align-items:center; gap:54px; padding:56px 0 90px; }
+    .eyebrow { display:inline-flex; align-items:center; gap:9px; margin-bottom:25px; color:#66645d; font-size:12px; font-weight:650; }
+    .eyebrow::before { content:""; width:8px; height:8px; border-radius:50%; background:#53a66d; box-shadow:0 0 0 4px #53a66d1b; }
+    h1 { max-width:690px; margin:0; font-size:clamp(58px, 7.1vw, 91px); line-height:.92; letter-spacing:-.075em; }
+    h1 em { color:var(--purple); font-family:Georgia,serif; font-weight:400; }
+    .hero-copy>p { max-width:570px; margin:30px 0 32px; color:var(--muted); font-size:17px; line-height:1.7; }
+    .hero-actions { display:flex; flex-wrap:wrap; gap:11px; }
+    .primary { background:var(--ink); color:#fff; }
+    .secondary { border-color:#d5d1c8; background:#fff8; color:var(--ink); }
+    .proof { display:flex; align-items:center; gap:10px; margin-top:33px; color:#7c7a73; font-size:12px; }
+    .proof-stack { display:flex; }
+    .proof-stack i { width:25px; height:25px; display:grid; place-items:center; margin-left:-4px; border:2px solid var(--paper); border-radius:50%; background:#ddd9d0; color:#57564f; font-size:9px; font-style:normal; font-weight:800; }
+    .product-scene { position:relative; min-height:560px; }
+    .glow { position:absolute; inset:5% -5% 2% 3%; border-radius:50%; background:radial-gradient(circle at center,#a999ff55,transparent 68%); filter:blur(20px); }
+    .app-window { position:absolute; top:30px; right:0; width:min(650px,100%); height:470px; overflow:hidden; border:1px solid #d7d3ca; border-radius:20px; background:#fff; box-shadow:0 28px 70px #47433a22; transform:rotate(1.3deg); }
+    .window-bar { height:45px; display:flex; align-items:center; gap:6px; padding:0 15px; border-bottom:1px solid #eceae5; background:#fbfbf9; }
+    .window-bar i { width:7px; height:7px; border-radius:50%; background:#d5d3cc; }
+    .app-body { height:calc(100% - 45px); display:grid; grid-template-columns:128px 1fr; }
+    .side { padding:18px 12px; border-right:1px solid #efeee9; background:#f8f8f5; }
+    .side-brand { display:flex; align-items:center; gap:7px; margin-bottom:22px; font-size:11px; font-weight:750; }
+    .mini-logo { width:20px; height:20px; display:grid; place-items:center; border-radius:6px; background:#2f3038; color:white; font-size:10px; }
+    .side-item { margin:5px 0; padding:8px 9px; border-radius:7px; color:#96958f; font-size:9px; }
+    .side-item.active { background:#eeece7; color:#3b3a36; }
+    .chat { display:flex; flex-direction:column; padding:28px 30px 21px; }
+    .chat-label { color:#aaa8a1; font-size:9px; font-weight:650; letter-spacing:.08em; text-transform:uppercase; }
+    .message { max-width:82%; margin-top:24px; color:#45443f; font-size:11px; line-height:1.65; }
+    .message.user { align-self:flex-end; padding:10px 13px; border-radius:12px 4px 12px 12px; background:#f2f1ed; }
+    .agent-line { display:flex; gap:8px; }
+    .agent-avatar { width:22px; height:22px; flex:none; display:grid; place-items:center; border-radius:7px; background:#e1dff8; color:#6655ca; font-size:8px; font-weight:800; }
+    .activity { margin-top:13px; color:#929088; font-size:9px; }
+    .composer { margin-top:auto; padding:14px; border:1px solid #e3e1da; border-radius:13px; color:#aaa8a1; font-size:10px; box-shadow:0 6px 20px #35322a09; }
+    .artifact { position:absolute; right:-20px; bottom:22px; width:225px; padding:17px; border:1px solid #d5d1c8; border-radius:16px; background:#fdfdfb; box-shadow:0 18px 45px #38342c21; transform:rotate(-2.2deg); }
+    .artifact small { color:#99978f; font-size:9px; }
+    .artifact strong { display:block; margin:8px 0 14px; font-size:12px; }
+    .artifact-preview { height:72px; display:grid; place-items:center; border-radius:9px; background:#e8e4f9; color:#7764ed; font-size:9px; }
+    .section { padding:115px 0; }
+    .section-head { display:grid; grid-template-columns:.72fr 1.28fr; gap:40px; margin-bottom:55px; }
+    .kicker { color:#77756e; font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+    h2 { max-width:760px; margin:0; font-size:clamp(38px,5vw,61px); line-height:1; letter-spacing:-.06em; }
+    .features { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    .feature { min-height:310px; padding:27px; border:1px solid var(--line); border-radius:18px; background:#faf8f3; }
+    .feature-num { color:#a09e96; font:11px var(--mono); }
+    .feature-visual { height:108px; display:flex; align-items:center; justify-content:center; margin:26px 0; }
+    .orbit { position:relative; width:110px; height:70px; border:1px dashed #b9b5ab; border-radius:50%; }
+    .orbit::before,.orbit::after { content:""; position:absolute; width:30px; height:30px; display:grid; place-items:center; border-radius:9px; background:#dcd8f7; }
+    .orbit::before { top:-10px; left:8px; } .orbit::after { right:5px; bottom:-8px; background:#d8ead6; }
+    .threads { width:150px; }
+    .threads i { display:block; height:9px; margin:8px 0; border-radius:9px; background:#e3e0da; }
+    .threads i:nth-child(2){width:78%;background:#d9d5f4}.threads i:nth-child(3){width:62%}
+    .file-stack { position:relative; width:96px; height:75px; }
+    .file-stack i { position:absolute; inset:0; border:1px solid #cfcac0; border-radius:10px; background:#fff; }
+    .file-stack i:first-child { transform:rotate(-8deg); background:#d9ead7; }.file-stack i:last-child { transform:rotate(5deg); background:#e8e5f8; }
+    .feature h3 { margin:0 0 10px; font-size:18px; letter-spacing:-.03em; }
+    .feature p { margin:0; color:var(--muted); font-size:13px; line-height:1.65; }
+    .relay-band { overflow:hidden; margin:20px 0 0; border-radius:26px; background:#20211f; color:#f6f4ed; }
+    .relay-inner { display:grid; grid-template-columns:.8fr 1.2fr; min-height:520px; }
+    .relay-copy { padding:70px 62px; }
+    .relay-badge { display:inline-flex; padding:6px 10px; border:1px solid #ffffff24; border-radius:99px; color:#b7b6af; font-size:10px; }
+    .relay-copy h2 { margin-top:28px; font-size:51px; }
+    .relay-copy p { color:#aaa9a3; font-size:15px; line-height:1.7; }
+    .relay-copy a { color:#fff; text-underline-offset:5px; }
+    .relay-map { display:grid; place-items:center; padding:45px; background:radial-gradient(circle,#393a35 0,transparent 65%); }
+    .map { width:100%; max-width:500px; display:grid; grid-template-columns:1fr 70px 1fr; align-items:center; gap:8px; }
+    .map-core,.map-node { padding:19px; border:1px solid #ffffff1b; border-radius:14px; background:#292a27; }
+    .map-core { box-shadow:0 0 0 5px #7764ed14; }
+    .map strong { display:block; font-size:13px; }.map small { color:#8e9088; font-size:9px; }
+    .map-line { height:1px; background:linear-gradient(90deg,#7764ed,#7ac78d); }
+    .nodes { display:grid; gap:9px; }.map-node { display:flex; justify-content:space-between; }.online { color:#74d28b!important; }
+    footer { padding:35px 0 55px; border-top:1px solid var(--line); }
+    .footer-row { display:flex; justify-content:space-between; color:#77756e; font-size:12px; }
+    @media(max-width:900px){ nav a:not(.nav-github){display:none}.hero{grid-template-columns:1fr;padding-top:60px}.product-scene{min-height:530px}.section-head,.relay-inner{grid-template-columns:1fr}.features{grid-template-columns:1fr}.relay-copy{padding:45px 30px}.relay-map{min-height:380px}.hero{min-height:auto} }
+    @media(max-width:560px){.shell{width:min(100% - 26px,1180px)}header{height:68px}.wordmark-copy small{display:none}.hero{gap:15px}.product-scene{min-height:430px}.app-window{height:390px}.app-body{grid-template-columns:88px 1fr}.chat{padding:20px 15px}.artifact{right:-4px;width:185px}.section{padding:80px 0}.map{grid-template-columns:1fr}.map-line{height:35px;width:1px;justify-self:center}.footer-row{gap:20px;flex-direction:column}}
+  </style>
+</head>
+<body>
+  <header class="shell">
+    <a class="wordmark" href="#"><span class="wordmark-mark">S</span><span class="wordmark-copy">Steer <small>with Relay</small></span></a>
+    <nav><a href="#workspace">工作空间</a><a href="#relay">Relay</a><a href="#open-source">文档</a><a class="nav-github" href="https://github.com/KDF5000/steer">GitHub ↗</a></nav>
+  </header>
+  <main>
+    <section class="hero shell">
+      <div class="hero-copy">
+        <span class="eyebrow">Open-source · Chat-first workspace</span>
+        <h1>让 AI 工作，<br>回归<em>简单</em>。</h1>
+        <p>在一个工作空间里与 Agent 对话、连接项目、跨机器执行任务，并把真正有价值的结果沉淀下来。</p>
+        <div class="hero-actions">
+          <a class="button primary" href="https://github.com/KDF5000/steer">开始使用 <span>↗</span></a>
+          <a class="button secondary" href="#workspace">了解如何工作</a>
+        </div>
+        <div class="proof"><span class="proof-stack"><i>Co</i><i>Tr</i><i>Cl</i><i>Pi</i></span>原生连接 Codex、Trae、Claude Code 与 Pi</div>
+      </div>
+      <div class="product-scene" aria-label="Steer 产品界面示意图">
+        <div class="glow"></div>
+        <div class="app-window">
+          <div class="window-bar"><i></i><i></i><i></i></div>
+          <div class="app-body">
+            <aside class="side"><div class="side-brand"><span class="mini-logo">S</span>Steer</div><div class="side-item active">New conversation</div><div class="side-item">Projects</div><div class="side-item">Agents</div><div class="side-item">Artifacts</div></aside>
+            <div class="chat"><span class="chat-label">Steer project · Trae</span><div class="message user">检查当前分支，整理这次发布的变更。</div><div class="message agent-line"><span class="agent-avatar">AI</span><span>我会先检查工作区与提交记录，然后生成一份简洁的发布说明。</span></div><div class="activity">● 正在读取项目结构与 Git 历史…</div><div class="composer">继续对话，或描述下一项工作</div></div>
+          </div>
+        </div>
+        <div class="artifact"><small>Durable artifact</small><strong>release-notes.md</strong><div class="artifact-preview">✓ Ready to preview</div></div>
+      </div>
+    </section>
+
+    <section class="section shell" id="workspace">
+      <div class="section-head"><span class="kicker">一个连续的工作空间</span><h2>从一句话，到跨机器执行，再到可复用的成果。</h2></div>
+      <div class="features">
+        <article class="feature"><span class="feature-num">01</span><div class="feature-visual"><div class="threads"><i></i><i></i><i></i><i></i></div></div><h3>对话就是工作入口</h3><p>Conversation、Project 和 Agent 始终保持关联。刷新页面、切换终端，任务上下文依然连续。</p></article>
+        <article class="feature"><span class="feature-num">02</span><div class="feature-visual"><div class="orbit"></div></div><h3>在合适的机器上执行</h3><p>固定到一台 Runtime，或让 Relay 自动调度。开发机、服务器与远程节点都可以成为执行环境。</p></article>
+        <article class="feature"><span class="feature-num">03</span><div class="feature-visual"><div class="file-stack"><i></i><i></i></div></div><h3>留下真正有用的结果</h3><p>对话负责过程，Artifact 负责交付。预览、下载并重新打开 Agent 生成的持久文件。</p></article>
+      </div>
+    </section>
+
+    <section class="relay-band shell" id="relay">
+      <div class="relay-inner">
+        <div class="relay-copy"><span class="relay-badge">Powered by Relay</span><h2>你的 Agent，运行在你的机器上。</h2><p>Relay 负责 Runtime 发现、调度、工作区准备、事件流与可靠执行；Steer 专注于对话、项目与协作体验。</p><p><a href="https://github.com/KDF5000/relay">探索 Relay 基础设施 ↗</a></p></div>
+        <div class="relay-map"><div class="map"><div class="map-core"><small>CONTROL PLANE</small><strong>Relay Server</strong></div><div class="map-line"></div><div class="nodes"><div class="map-node"><span><small>MAC STUDIO</small><strong>Trae</strong></span><small class="online">● online</small></div><div class="map-node"><span><small>LINUX SERVER</small><strong>Codex · Claude</strong></span><small class="online">● online</small></div><div class="map-node"><span><small>LAPTOP</small><strong>Pi</strong></span><small class="online">● online</small></div></div></div></div>
+      </div>
+    </section>
+  </main>
+  <footer class="shell" id="open-source"><div class="footer-row"><a class="wordmark" href="#"><span class="wordmark-mark">S</span><span class="wordmark-copy">Steer</span></a><span>Open source · Built with Relay · 2026</span></div></footer>
+  <div class="prototype-switcher" aria-label="切换设计方案"><a href="index.html">全部</a><a class="active" href="concept-a.html">A</a><a href="concept-b.html">B</a><a href="concept-c.html">C</a></div>
+</body>
+</html>

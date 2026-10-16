@@ -1,0 +1,83 @@
+:root {
+  color-scheme: light;
+  --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+button, a { font: inherit; }
+a { color: inherit; }
+svg { display: block; }
+
+.prototype-switcher {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 50;
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid rgba(120, 120, 120, .2);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .9);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, .12);
+  backdrop-filter: blur(16px);
+}
+
+.prototype-switcher a {
+  min-width: 34px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: #666;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+.prototype-switcher a:hover,
+.prototype-switcher a.active { background: #191919; color: #fff; }
+
+.wordmark { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; }
+.wordmark-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: #2f3038;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -.04em;
+}
+.wordmark-copy { font-size: 19px; font-weight: 720; letter-spacing: -.04em; }
+.wordmark-copy small { color: inherit; font-size: .56em; font-weight: 500; opacity: .46; }
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 46px;
+  padding: 0 19px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1;
+  text-decoration: none;
+  transition: transform .18s ease, background .18s ease, border-color .18s ease;
+}
+.button:hover { transform: translateY(-1px); }
+.button svg { width: 16px; height: 16px; }
+
+@media (max-width: 720px) {
+  .prototype-switcher { right: 10px; bottom: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}

@@ -18,6 +18,10 @@ Steer Web → Steer Server → PostgreSQL
 
 详细说明见[架构设计](docs/architecture.md)、[部署拓扑](docs/deployment.md)、[Conversation Task API](docs/task-api.md)、[飞书集成](docs/feishu-integration.md)和[Chat-first 产品设计](docs/chat-first-product.md)。
 
+## 产品官网
+
+独立静态官网位于 [`website/`](website/README.md)，构建中英文 HTML 页面，可单独发布到 Vercel，不依赖 Steer 后端或数据库。执行 `cd website && npm ci && npm run dev` 即可预览。
+
 ## 当前可验证链路
 
 1. 一次性注册 Relay Node，并通过独立的逻辑 Runtime Binding 将同一个物理 Runtime 共享给一个或多个 Workspace；

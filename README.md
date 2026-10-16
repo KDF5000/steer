@@ -20,6 +20,10 @@ Steer Web → Steer Server → PostgreSQL
 
 See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), [Conversation Task API](docs/task-api.md), [Feishu integration](docs/feishu-integration.md), and [Chat-first product design](docs/chat-first-product.md).
 
+## Product website
+
+The independent static marketing site lives in [`website/`](website/README.md). It builds English and Chinese HTML pages and can be deployed to Vercel without the Steer backend or database. Run `cd website && npm ci && npm run dev` to preview it.
+
 ## Verified MVP flow
 
 The current build supports a real end-to-end path:
