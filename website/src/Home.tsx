@@ -1,7 +1,5 @@
 import { homeZhCN, type HomeMessage } from './i18n';
 import {
-  Activity,
-  Settings2,
   ArrowRight,
   ArrowUpRight,
   Blocks,
@@ -20,64 +18,25 @@ import {
   Terminal,
 } from 'lucide-react';
 
-const features = [
-  {
-    icon: Settings2,
-    title: 'Agents configured for the job',
-    copy: 'Set instructions, choose a model, and attach skills to each agent. Keep separate profiles for coding, review, or documentation.',
-    label: 'Instructions, models & skills',
-  },
-  {
-    icon: Activity,
-    title: 'Progress you can inspect',
-    copy: 'Watch output arrive, expand the execution details, and cancel a task when the plan changes. Return to the conversation to review what happened.',
-    label: 'Streaming & task control',
-  },
-  {
-    icon: MessageSquare,
-    title: 'Keep the conversation going',
-    copy: 'Follow up in the same conversation with its history, project, and execution environment intact. Return later to review the work or take the next step.',
-    label: 'Persistent conversations',
-  },
-  {
-    icon: FolderGit2,
-    title: 'Local directories or Git worktrees',
-    copy: 'Work directly in an existing directory on a selected machine, or give each conversation its own Git worktree for separate changes.',
-    label: 'Local & Git projects',
-  },
-  {
-    icon: Network,
-    title: 'Choose the tool and the machine',
-    copy: 'Bind an agent to a runtime on a specific node, or select automatically by provider. Once a conversation starts, its execution environment stays pinned.',
-    label: 'Flexible runtime routing',
-  },
-  {
-    icon: FileText,
-    title: 'Preview the files your agent produces',
-    copy: 'Open generated documents beside the conversation, inspect session files and code changes, or download artifacts to use elsewhere.',
-    label: 'Durable artifacts',
-  },
-] as const;
-
 const channels = [
   {
     icon: Monitor,
     title: 'Steer Web',
-    copy: 'Send text or images, follow execution, and review files beside the conversation.',
+    copy: 'Send a message or image, follow progress, and view the results beside your conversation.',
     href: '/fusion',
     label: 'Open workspace',
   },
   {
     icon: MessageSquare,
     title: 'Feishu bot',
-    copy: 'Connect a bot in Settings. Choose projects in chat, continue in a thread, and check progress with /status.',
+    copy: 'Connect a bot in Settings. Switch projects in chat, follow up in the same thread, and use /status to check progress.',
     href: 'https://github.com/KDF5000/steer/blob/main/docs/feishu-integration.md',
     label: 'Explore the Feishu integration',
   },
   {
     icon: Code2,
     title: 'Conversation Task API',
-    copy: 'Create or continue conversations with an API key. Stream events, retrieve artifacts, and cancel tasks.',
+    copy: 'Connect your app or workflow. Start or continue a conversation, stream progress, download results, and cancel tasks.',
     href: 'https://github.com/KDF5000/steer/blob/main/docs/task-api.md',
     label: 'Read the API docs',
   },
@@ -104,6 +63,7 @@ export default function HomeContent({
   const language = locale === 'zh' ? 'zh-CN' : 'en';
   const screenshot =
     locale === 'zh' ? '/steer-workspace-zh' : '/steer-workspace';
+  const handoffScreenshot = `/steer-handoff-${locale}.png`;
   const t = (key: HomeMessage) => (language === 'zh-CN' ? homeZhCN[key] : key);
   return (
     <main className="website_page" lang={language}>
@@ -158,19 +118,22 @@ export default function HomeContent({
         <div className="website_heroCopy">
           <p className="website_eyebrow">
             <span className="website_statusDot" />
-            {t('An open-source workspace for your agent tools')}
+            {t('An open-source workspace for your agents')}
           </p>
           <h1 id="hero-title">
-            {t('Agent work. ')}
-            <br className="website_mobileBreak" />
-            {t('Pick up ')}
-            <span>{t('where you left off.')}</span>
+            <span className="website_heroFirstLine">
+              <span>{t('Different machines.')}</span>
+              <span>{t('Different agents.')}</span>
+            </span>
+            <span className="website_heroConclusion">
+              {t('One workspace.')}
+            </span>
           </h1>
           <p className="website_lead">
             {t('Bring Codex, Trae, Claude Code, and Pi into one workspace.')}
             <br />
             {t(
-              'Work in your own projects and on your own machines. Keep the conversation, progress, and files together.',
+              'Run tasks on local or remote machines. Organize your work through projects and conversations.',
             )}
           </p>
           <div className="website_actions">
@@ -239,9 +202,7 @@ export default function HomeContent({
           </div>
           <figcaption>
             <span>
-              {t(
-                'A project, a conversation, and the generated document side by side.',
-              )}
+              {t('Projects, conversations, and documents in one view.')}
             </span>
             <span>
               {t('Real Steer interface · example task')}{' '}
@@ -274,7 +235,7 @@ export default function HomeContent({
           </h2>
           <p>
             {t(
-              'Review changes, investigate a bug, or write a guide. Start with the repository and tools you already use.',
+              'Start with a task. Review the result, ask follow-up questions, and keep going.',
             )}
           </p>
         </div>
@@ -305,11 +266,7 @@ export default function HomeContent({
               <span>01</span>
               <h3>{t('Choose a project and an agent')}</h3>
             </div>
-            <p>
-              {t(
-                'Select a local or Git project and an agent with the right instructions, model, and skills. Send a goal, a question, or an image.',
-              )}
-            </p>
+            <p>{t('Choose a project and an agent, then describe the task.')}</p>
           </article>
           <article>
             <div className="website_miniVisual website_executionVisual">
@@ -342,9 +299,7 @@ export default function HomeContent({
               <h3>{t('Follow the task as it runs')}</h3>
             </div>
             <p>
-              {t(
-                'Relay prepares the workspace and sends the task to the chosen runtime. Follow streaming output, inspect the process, or cancel when needed.',
-              )}
+              {t('Follow progress in real time and stop a task when needed.')}
             </p>
           </article>
           <article>
@@ -372,7 +327,7 @@ export default function HomeContent({
             </div>
             <p>
               {t(
-                'Read the answer, inspect code changes, and preview any generated files. Continue in the same conversation when the work needs another pass.',
+                'Review files and changes. Keep going in the same conversation.',
               )}
             </p>
           </article>
@@ -383,17 +338,104 @@ export default function HomeContent({
         className="website_features website_shell"
         aria-label={t('Workspace capabilities')}
       >
-        <div className="website_featureGrid">
-          {features.map(({ icon: Icon, title, copy, label }) => (
-            <article key={t(title)}>
-              <Icon size={21} strokeWidth={1.5} />
-              <div>
-                <h3>{t(title)}</h3>
-                <p>{t(copy)}</p>
-                <span>{t(label)}</span>
+        <div className="website_highlights">
+          <article className="website_handoff">
+            <p className="website_highlightLabel">
+              {t('ONE CONVERSATION. DIFFERENT AGENTS.')}
+            </p>
+            <h2>{t('Switch agents. Keep going.')}</h2>
+            <p className="website_highlightCopy">
+              {t(
+                'Switch agents in the same conversation and keep the previous messages as context. Go from coding to review without explaining the task again.',
+              )}
+            </p>
+            <div
+              className="website_handoffRoles"
+              aria-label={t('An example agent handoff')}
+            >
+              <span>
+                <Code2 size={15} />
+                {t('Coding agent')}
+              </span>
+              <ArrowRight size={15} aria-hidden="true" />
+              <span>
+                <CheckCheck size={15} />
+                {t('Review agent')}
+              </span>
+              <small>{t('Same conversation')}</small>
+            </div>
+            <figure className="website_handoffFigure">
+              <a
+                href={handoffScreenshot}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={t('View the agent handoff screenshot in a new tab')}
+              >
+                <img
+                  src={handoffScreenshot}
+                  width={1680}
+                  height={1320}
+                  loading="lazy"
+                  decoding="async"
+                  alt={t(
+                    'Real Steer conversation with completed implementation, the review agent selected, and a follow-up ready to send',
+                  )}
+                />
+              </a>
+              <figcaption>
+                {t('Real interface · example conversation, ready for review')}
+              </figcaption>
+            </figure>
+            <p className="website_handoffNote">
+              {t(
+                'Switch between agents compatible with the conversation’s runtime.',
+              )}
+            </p>
+          </article>
+          <div className="website_supportingHighlights">
+            <article>
+              <Network size={23} strokeWidth={1.5} />
+              <h3>{t('Run on your own machines.')}</h3>
+              <p>
+                {t(
+                  'Use an existing local directory, or create a separate Git worktree for each conversation.',
+                )}
+              </p>
+              <div className="website_projectOptions">
+                <span>
+                  <FolderGit2 size={17} />
+                  <span>
+                    {t('Local directory')}
+                    <small>{t('Work where your files live')}</small>
+                  </span>
+                </span>
+                <span>
+                  <GitBranch size={17} />
+                  <span>
+                    {t('Git worktree')}
+                    <small>{t('Separate changes for each conversation')}</small>
+                  </span>
+                </span>
               </div>
             </article>
-          ))}
+            <article>
+              <FileText size={23} strokeWidth={1.5} />
+              <h3>{t('See the process. Keep the result.')}</h3>
+              <p>
+                {t(
+                  'Follow the task, review code changes, and open generated documents beside the conversation.',
+                )}
+              </p>
+              <div className="website_resultPreview">
+                <FileText size={25} strokeWidth={1.3} />
+                <span>
+                  <strong>release-notes.md</strong>
+                  <small>{t('Preview, download, revisit')}</small>
+                </span>
+                <CheckCheck size={17} />
+              </div>
+            </article>
+          </div>
         </div>
       </section>
 
@@ -407,7 +449,7 @@ export default function HomeContent({
           </h2>
           <p>
             {t(
-              'Steer gives you projects, agent profiles, and conversations. Relay discovers runtimes, prepares workspaces, dispatches tasks, and returns events and artifacts. Deploy Relay independently, or use its API and SDK in your own application.',
+              'Steer organizes your agents, projects, and conversations. Relay runs tasks on local or remote machines and brings back progress and files. Use Relay with Steer, or connect it to your own app through its API and SDK.',
             )}
           </p>
           <a
@@ -485,7 +527,7 @@ export default function HomeContent({
           <p>
             {t('Start a task from the web, your team chat, or your own app. ')}
             <br className="website_desktopBreak" />
-            {t('Use the agents and projects already configured in Steer.')}
+            {t('Work with the agents and projects you already have in Steer.')}
           </p>
         </div>
         <div className="website_channelGrid">
@@ -543,7 +585,7 @@ export default function HomeContent({
         <div className="website_footerTop">
           <div>
             <Brand locale={locale} label={t('Steer home')} />
-            <p>{t('A place to return to. A way to keep going.')}</p>
+            <p>{t('Your agents and machines, brought together.')}</p>
           </div>
           <div className="website_footerLinks">
             <a href="https://github.com/KDF5000/steer">

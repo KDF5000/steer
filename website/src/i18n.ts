@@ -1,7 +1,8 @@
 // English source keys and Chinese homepage copy.
 export const homeZhCN = {
-  'Steer — Pick up where you left off': 'Steer — Agent 工作，从这里继续',
-  'Open workspace': '打开工作空间',
+  'Steer — Different machines. Different agents. One workspace.':
+    'Steer — 不同机器，不同 Agent。同一个工作台。',
+  'Open workspace': '打开工作台',
   'Feishu bot': '飞书机器人',
   'Explore the Feishu integration': '了解飞书接入',
   'Read the API docs': '阅读 API 文档',
@@ -10,14 +11,14 @@ export const homeZhCN = {
   Product: '产品体验',
   Integrations: '接入方式',
   'Open Steer': '打开 Steer',
-  'Agent work. ': 'Agent 工作，',
-  'Pick up ': '从这里',
-  'where you left off.': '继续。',
-  'Enter workspace': '进入工作空间',
+  'Different machines.': '不同机器，',
+  'Different agents.': '不同 Agent。',
+  'One workspace.': '同一个工作台。',
+  'Enter workspace': '进入工作台',
   'Self-hosted': '自主部署',
   'Open source': '开源',
-  'Bring your own runtimes': '连接你自己的 Runtime',
-  'Your workspace. Your infrastructure.': '你的工作空间，你的基础设施',
+  'Bring your own runtimes': '连接已有 Runtime',
+  'Your workspace. Your infrastructure.': '自己的工作台，自己的机器',
   'View the full Steer workspace screenshot in a new tab':
     '在新标签页查看完整的 Steer 工作空间截图',
   'View full image': '查看原图',
@@ -33,12 +34,12 @@ export const homeZhCN = {
   'Release notes · Markdown': '发布说明 · Markdown',
   'Artifact saved': '成果已保存',
   'Revisit anytime': '随时回顾',
-  'Workspace capabilities': '工作空间能力',
-  'One place to work.': '体验集中在一处。',
-  'Many places to run.': '执行，可以在任何一端。',
+  'Workspace capabilities': '工作台功能',
+  'One place to work.': '一个工作台，',
+  'Many places to run.': '连接多台机器。',
   'Explore Relay': '了解 Relay',
   'Multiple runtimes': '多 Runtime',
-  'Independent integration': '独立集成',
+  'Independent integration': '可独立接入',
   'Architecture diagram: Steer connects to local and remote runtimes through Relay':
     'Steer 经由 Relay 连接本地与远程 Runtime 的架构示意',
   Workspace: '工作空间',
@@ -55,74 +56,76 @@ export const homeZhCN = {
   'starts here.': '从这里开始。',
   'Get started with Steer': '开始使用 Steer',
   'Read the deployment guide': '阅读部署文档',
-  'A place to return to. A way to keep going.':
-    '让每一次 Agent 工作，都有处可续。',
   Docs: '文档',
-  'Explore the product': '回顾产品',
-  'Persistent conversations': '持续对话',
-  'Local & Git projects': '本地与 Git 项目',
-  'Flexible runtime routing': '灵活的 Runtime 调度',
-  'Durable artifacts': '持久保存的成果',
+  'Explore the product': '了解产品',
   'Steer Web': 'Steer Web',
   'Conversation Task API': 'Conversation Task API',
-  'An open-source workspace for your agent tools':
-    '连接 Agent 工具的开源工作台',
+  'An open-source workspace for your agents': '统一管理多个 Agent 的开源工作台',
   'Bring Codex, Trae, Claude Code, and Pi into one workspace.':
     '把 Codex、Trae、Claude Code 和 Pi 接入同一个工作台。',
-  'Work in your own projects and on your own machines. Keep the conversation, progress, and files together.':
-    '让 Agent 在自己的项目和机器上执行，把对话、进度和产出留在一起。',
-  'Steer is an open-source workspace for Codex, Trae, Claude Code, and Pi. Connect local or Git projects, run tasks on your own machines through Relay, and work from the web, Feishu, or the Task API.':
-    'Steer 是连接 Codex、Trae、Claude Code 和 Pi 的开源工作台。接入本地或 Git 项目，通过 Relay 在自己的机器上执行，并从网页、飞书或 Task API 发起任务。',
-  'Keep the conversation going': '同一对话，接着上次继续',
-  'Follow up in the same conversation with its history, project, and execution environment intact. Return later to review the work or take the next step.':
-    '在同一对话中继续追问，保留历史消息、项目和执行环境。下次打开，可以回顾过程，也可以接着推进。',
-  'Local directories or Git worktrees': '本地目录，或独立 Git 工作区',
-  'Work directly in an existing directory on a selected machine, or give each conversation its own Git worktree for separate changes.':
-    '直接操作指定机器上的现有目录；也可以连接 Git 仓库，为每段对话准备独立 worktree，分别推进改动。',
-  'Choose the tool and the machine': '选好工具，也选好执行机器',
-  'Bind an agent to a runtime on a specific node, or select automatically by provider. Once a conversation starts, its execution environment stays pinned.':
-    '将 Agent 绑定到指定节点上的 Runtime，或按 Provider 自动选择。对话开始后固定执行环境，让后续任务接着使用同一工作区。',
-  'Preview the files your agent produces': '产出文件，直接预览和下载',
-  'Open generated documents beside the conversation, inspect session files and code changes, or download artifacts to use elsewhere.':
-    '在对话右侧预览生成的文档，查看工作区文件和代码改动，也可以下载产物，在其他工具中继续使用。',
+  'Run tasks on local or remote machines. Organize your work through projects and conversations.':
+    '在本地或远程机器上执行任务，通过项目和会话统一管理工作。',
+  'Steer brings agents and runtimes across your machines into one open-source workspace. Connect Codex, Trae, Claude Code, and Pi, run tasks locally or remotely, and organize work through projects and conversations.':
+    'Steer 将不同机器上的 Agent 和 Runtime 接入同一个开源工作台。连接 Codex、Trae、Claude Code 和 Pi，在本地或远程执行任务，通过项目和会话统一管理工作。',
   'Choose a project. ': '选好项目，',
   'Give your agent a task.': '把具体任务交给 Agent。',
-  'Review changes, investigate a bug, or write a guide. Start with the repository and tools you already use.':
-    '检查改动、排查问题、整理文档。从正在使用的项目和工具开始，不必再搭一套工作流程。',
   'Choose a project and an agent': '选择项目和 Agent',
-  'Select a local or Git project and an agent with the right instructions, model, and skills. Send a goal, a question, or an image.':
-    '选择本地或 Git 项目，再选配置好指令、模型和 Skills 的 Agent。发出目标、问题或图片，即可开始。',
-  'Follow the task as it runs': '在自己的机器上执行',
-  'Relay prepares the workspace and sends the task to the chosen runtime. Follow streaming output, inspect the process, or cancel when needed.':
-    'Relay 准备工作区并将任务交给对应 Runtime。实时查看输出，展开执行过程，必要时取消任务。',
+  'Follow the task as it runs': '跟进任务进度',
   'Review the result. Follow up.': '查看结果，接着追问',
-  'Read the answer, inspect code changes, and preview any generated files. Continue in the same conversation when the work needs another pass.':
-    '阅读回答、检查代码改动、预览生成的文件。需要补充或调整时，直接在同一对话里继续。',
-  'Steer gives you projects, agent profiles, and conversations. Relay discovers runtimes, prepares workspaces, dispatches tasks, and returns events and artifacts. Deploy Relay independently, or use its API and SDK in your own application.':
-    'Steer 提供项目、Agent 配置和对话界面。Relay 负责 Runtime 发现、工作区准备、任务调度，以及事件和产物回传。Relay 可独立部署，也可通过 API 和 SDK 接入自己的应用。',
-  'Send text or images, follow execution, and review files beside the conversation.':
-    '发送文字或图片，跟进执行过程，在对话右侧查看文件和产物。',
-  'Connect a bot in Settings. Choose projects in chat, continue in a thread, and check progress with /status.':
-    '在设置页绑定机器人，在聊天中切换项目；同一话题持续对话，用 /status 查看进度。',
-  'Create or continue conversations with an API key. Stream events, retrieve artifacts, and cancel tasks.':
-    '用 API Key 创建或继续对话，订阅 SSE 输出，获取产物或取消任务。',
-  'Use the agents and projects already configured in Steer.':
-    '复用 Steer 中已经配置好的 Agent 和项目。',
   'Connect a runtime, add a project, and start your first conversation.':
-    '连接一个 Runtime，添加一个项目，开始第一段对话。',
-  'A project, a conversation, and the generated document side by side.':
-    '项目、对话和生成的文档，在同一处查看。',
+    '连接运行环境，添加项目，开始第一段对话。',
   'Real Steer interface · example task': '真实 Steer 界面 · 示例任务',
   'The real Steer interface with an example project conversation and a generated getting-started guide in the document preview panel':
     '真实 Steer 工作台：左侧管理项目，中间展示示例任务对话，右侧预览生成的上手指南',
-  'Agents configured for the job': '按任务配置你的 Agent',
-  'Set instructions, choose a model, and attach skills to each agent. Keep separate profiles for coding, review, or documentation.':
-    '为 Agent 设置指令、选择模型并关联 Skills。可以分别建立编程、代码审查或文档整理的专用配置。',
-  'Instructions, models & skills': '指令、模型与 Skills',
-  'Progress you can inspect': '执行过程，随时可查',
-  'Watch output arrive, expand the execution details, and cancel a task when the plan changes. Return to the conversation to review what happened.':
-    '实时接收输出，展开查看执行细节，计划变化时可以取消任务。之后仍可回到对话，回顾这次工作的过程。',
-  'Streaming & task control': '流式输出与任务控制',
+  'Review files and changes. Keep going in the same conversation.':
+    '查看文件和改动，在同一段对话里继续。',
+  'ONE CONVERSATION. DIFFERENT AGENTS.': '同一会话，切换 Agent',
+  'Switch agents. Keep going.': '换个 Agent，接着做。',
+  'An example agent handoff': '切换 Agent 示例',
+  'Coding agent': '编程 Agent',
+  'Review agent': '审查 Agent',
+  'Same conversation': '同一会话',
+  'View the agent handoff screenshot in a new tab':
+    '在新标签页查看切换 Agent 的截图',
+  'Real Steer conversation with completed implementation, the review agent selected, and a follow-up ready to send':
+    '真实 Steer 对话：保留已完成的实现，选中审查 Agent，准备发送后续检查请求',
+  'Real interface · example conversation, ready for review':
+    '真实界面 · 切换 Agent 后继续追问的示例',
+  'Switch between agents compatible with the conversation’s runtime.':
+    '可选择的 Agent 需与当前会话的运行环境兼容。',
+  'Local directory': '本地目录',
+  'Work where your files live': '直接使用已有项目文件',
+  'Git worktree': 'Git 工作区',
+  'Separate changes for each conversation': '不同会话的改动互不干扰',
+  'See the process. Keep the result.': '过程看得见，结果留得住。',
+  'Preview, download, revisit': '可预览、下载，方便日后查看',
+  'Switch agents in the same conversation and keep the previous messages as context. Go from coding to review without explaining the task again.':
+    '在同一会话里切换 Agent，保留对话上下文。先写代码，再做审查，不必重新交代背景。',
+  'Start with a task. Review the result, ask follow-up questions, and keep going.':
+    '提出任务、查看结果，再接着追问和调整。',
+  'Choose a project and an agent, then describe the task.':
+    '选好项目和 Agent，说说你要做什么。',
+  'Follow progress in real time and stop a task when needed.':
+    '实时查看进度，需要时随时停止。',
+  'Run on your own machines.': '在自己的机器上运行。',
+  'Use an existing local directory, or create a separate Git worktree for each conversation.':
+    '直接使用本地目录，也可以为每段会话创建独立的 Git 工作区。',
+  'Follow the task, review code changes, and open generated documents beside the conversation.':
+    '查看执行过程和代码改动，在对话右侧预览生成的文档。',
+  'Steer organizes your agents, projects, and conversations. Relay runs tasks on local or remote machines and brings back progress and files. Use Relay with Steer, or connect it to your own app through its API and SDK.':
+    'Steer 管理 Agent、项目和会话，Relay 负责在本地或远程机器上执行任务，返回进度和文件。Relay 也可独立使用，通过 API 和 SDK 接入自己的应用。',
+  'Send a message or image, follow progress, and view the results beside your conversation.':
+    '发送文字或图片，查看任务进度，在对话右侧查看结果。',
+  'Connect a bot in Settings. Switch projects in chat, follow up in the same thread, and use /status to check progress.':
+    '在设置中绑定飞书机器人，即可在聊天里切换项目、在同一话题下继续追问，用 /status 查看进度。',
+  'Connect your app or workflow. Start or continue a conversation, stream progress, download results, and cancel tasks.':
+    '接入自己的应用或自动化流程，发起或继续对话，实时获取进度、下载结果，也可以取消任务。',
+  'Work with the agents and projects you already have in Steer.':
+    '使用 Steer 中已有的 Agent 和项目。',
+  'Projects, conversations, and documents in one view.':
+    '项目、对话和文档，一屏查看。',
+  'Your agents and machines, brought together.':
+    '把你的 Agent 和机器，连接在一起。',
 } as const;
 
 export type HomeMessage = keyof typeof homeZhCN;

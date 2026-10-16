@@ -11,14 +11,20 @@ test('both languages are complete HTML documents before JavaScript runs', async 
   const en = await read('en/index.html');
   assert.match(zh, /<html lang="zh-CN">/);
   assert.match(en, /<html lang="en">/);
-  assert.match(zh, /<title>Steer — Agent 工作，从这里继续<\/title>/);
-  assert.match(en, /<title>Steer — Pick up where you left off<\/title>/);
-  assert.match(zh, /本地目录，或独立 Git 工作区/);
-  assert.match(en, /Local directories or Git worktrees/);
-  assert.match(zh, /<meta name="description" content="Steer 是连接/);
+  assert.match(
+    zh,
+    /<title>Steer — 不同机器，不同 Agent。同一个工作台。<\/title>/,
+  );
   assert.match(
     en,
-    /<meta name="description" content="Steer is an open-source workspace/,
+    /<title>Steer — Different machines. Different agents. One workspace.<\/title>/,
+  );
+  assert.match(zh, /换个 Agent，接着做。/);
+  assert.match(en, /Switch agents. Keep going./);
+  assert.match(zh, /<meta name="description" content="Steer 将不同机器/);
+  assert.match(
+    en,
+    /<meta name="description" content="Steer brings agents and runtimes/,
   );
   for (const html of [zh, en]) {
     assert.equal((html.match(/<h1\b/g) || []).length, 1);
@@ -41,7 +47,7 @@ test('both languages are complete HTML documents before JavaScript runs', async 
     }
     assert.ok(!/(_next\/|\/api\/|localhost:8080)/.test(html));
     for (const [, path] of html.matchAll(
-      /(?:src|href)="(\/(?:assets\/[^" ]+|favicon\.svg|steer-workspace(?:-zh)?(?:-1x)?\.png))"/g,
+      /(?:src|href)="(\/(?:assets\/[^" ]+|favicon\.svg|steer-handoff-(?:en|zh)\.png|steer-workspace(?:-zh)?(?:-1x)?\.png))"/g,
     )) {
       assert.ok((await readFile(resolve(dist, path.slice(1)))).length > 0);
     }
@@ -50,7 +56,7 @@ test('both languages are complete HTML documents before JavaScript runs', async 
 
 test('the root is readable without JavaScript and language links are real URLs', async () => {
   const root = await read('index.html');
-  assert.match(root, /Local directories or Git worktrees/);
+  assert.match(root, /Switch agents. Keep going./);
   assert.match(root, /href="\/zh\/"/);
   assert.match(root, /href="\/en\/"/);
 });
