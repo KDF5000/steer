@@ -6998,6 +6998,9 @@ function RuntimeDialog({
   const installedNode = enrollmentNodeID
     ? nodes.find((node) => node.id === enrollmentNodeID)
     : undefined;
+  const installedNodeReady =
+    installedNode?.state === 'online' &&
+    Boolean(installedNode.runtimes?.length);
   const existingNodes = nodes.filter((node) => node.id !== enrollmentNodeID);
 
   useEffect(() => {
@@ -7009,7 +7012,12 @@ function RuntimeDialog({
   }, [discovering]);
 
   useEffect(() => {
-    if (!open || nodeView !== 'installed' || !enrollmentNodeID || installedNode)
+    if (
+      !open ||
+      nodeView !== 'installed' ||
+      !enrollmentNodeID ||
+      installedNodeReady
+    )
       return;
     const refreshIfIdle = () => {
       if (!discoveringRef.current) refreshRef.current();
@@ -7017,7 +7025,7 @@ function RuntimeDialog({
     refreshIfIdle();
     const interval = window.setInterval(refreshIfIdle, 4_000);
     return () => window.clearInterval(interval);
-  }, [enrollmentNodeID, installedNode, nodeView, open]);
+  }, [enrollmentNodeID, installedNodeReady, nodeView, open]);
 
   async function copyInstallCommand() {
     const copied = await writeClipboard(command);
