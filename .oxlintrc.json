@@ -24,7 +24,6 @@
   },
   "ignorePatterns": [
     ".next/**",
-    ".vinext/**",
     "out/**",
     "build/**",
     "dist/**",

@@ -1,6 +1,6 @@
 # Steer × Relay 官网
 
-独立的 Vite + React 静态工程，复用 Steer 官网设计与真实产品截图。React 只在开发或构建时渲染 HTML；发布产物不包含 React 运行时，不需要 Next.js、vinext、Cloudflare、数据库或业务后端。
+独立的 Vite + React 静态工程，复用 Steer 官网设计与真实产品截图。React 只在开发或构建时渲染 HTML；发布产物不包含 React 运行时，不需要 Next.js、数据库或业务后端。
 
 ## 本地开发
 

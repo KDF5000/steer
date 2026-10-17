@@ -1,0 +1,14 @@
+.env
+.env.*
+.git
+.next
+.relay
+.vercel
+node_modules
+website
+server
+deploy
+docs
+outputs
+work
+*.tsbuildinfo
