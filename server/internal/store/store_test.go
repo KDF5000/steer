@@ -36,18 +36,21 @@ func TestUsersWorkspacesAndRuntimeIsolation(t *testing.T) {
 	if _, err := s.Agent(ctx, secondWorkspace.ID, agent.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("agent crossed workspace boundary: %v", err)
 	}
-	enrollment, err := s.CreateRelayNodeEnrollment(ctx, first.ID, "enrollment-"+suffix, time.Now().Add(time.Hour))
+	enrollment, err := s.CreateRelayNodeEnrollment(ctx, first.ID, "enrollment-"+suffix, "node-"+suffix, time.Now().Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := s.EnrollRelayNode(ctx, enrollment.TokenHash, "wrong-"+suffix, "Wrong Node", 2, "online", time.Now()); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("enrollment accepted a different Node ID: %v", err)
 	}
 	node, err := s.EnrollRelayNode(ctx, enrollment.TokenHash, "node-"+suffix, "Shared machine", 2, "online", time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.EnrollRelayNode(ctx, enrollment.TokenHash, "another-"+suffix, "Replay", 2, "online", time.Now()); !errors.Is(err, ErrNotFound) {
+	if _, err := s.EnrollRelayNode(ctx, enrollment.TokenHash, "node-"+suffix, "Replay", 2, "online", time.Now()); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("one-time enrollment token was reused: %v", err)
 	}
-	expired, err := s.CreateRelayNodeEnrollment(ctx, first.ID, "expired-"+suffix, time.Now().Add(-time.Minute))
+	expired, err := s.CreateRelayNodeEnrollment(ctx, first.ID, "expired-"+suffix, "expired-"+suffix, time.Now().Add(-time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}

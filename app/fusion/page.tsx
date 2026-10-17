@@ -639,6 +639,7 @@ export default function Fusion() {
   const [runtimeClaiming, setRuntimeClaiming] = useState(false);
   const [runtimeDiscoveryError, setRuntimeDiscoveryError] = useState('');
   const [relayEnrollmentToken, setRelayEnrollmentToken] = useState('');
+  const [relayEnrollmentNodeToken, setRelayEnrollmentNodeToken] = useState('');
   const [relayEnrollmentNodeID, setRelayEnrollmentNodeID] = useState('');
   const [deletingRelayNode, setDeletingRelayNode] = useState<RelayNode | null>(
     null,
@@ -1809,6 +1810,7 @@ export default function Fusion() {
   const openRuntimeDialog = () => {
     setRuntimeDialog(true);
     setRelayEnrollmentToken('');
+    setRelayEnrollmentNodeToken('');
     setRelayEnrollmentNodeID('');
     void discoverRuntimes();
   };
@@ -1854,6 +1856,7 @@ export default function Fusion() {
       const enrollment = await steer.createRelayNodeEnrollment();
       setSelectedRuntimeIDs([]);
       setRelayEnrollmentToken(enrollment.token);
+      setRelayEnrollmentNodeToken(enrollment.nodeToken);
       setRelayEnrollmentNodeID(enrollment.nodeId);
     } catch (error) {
       setRuntimeDiscoveryError(
@@ -1883,6 +1886,7 @@ export default function Fusion() {
       );
       if (relayEnrollmentNodeID === deletingRelayNode.id) {
         setRelayEnrollmentToken('');
+        setRelayEnrollmentNodeToken('');
         setRelayEnrollmentNodeID('');
       }
       setDeletingRelayNode(null);
@@ -2775,6 +2779,7 @@ export default function Fusion() {
         discovering={runtimeDiscoveryLoading}
         claiming={runtimeClaiming}
         enrollmentToken={relayEnrollmentToken}
+        enrollmentNodeToken={relayEnrollmentNodeToken}
         enrollmentNodeID={relayEnrollmentNodeID}
         steerAPIURL={steerAPIBaseURL}
         onOpen={setRuntimeDialog}
@@ -6936,6 +6941,7 @@ function RuntimeDialog({
   discovering,
   claiming,
   enrollmentToken,
+  enrollmentNodeToken,
   enrollmentNodeID,
   steerAPIURL,
   onOpen,
@@ -6956,6 +6962,7 @@ function RuntimeDialog({
   discovering: boolean;
   claiming: boolean;
   enrollmentToken: string;
+  enrollmentNodeToken: string;
   enrollmentNodeID: string;
   steerAPIURL: string;
   onOpen: (open: boolean) => void;
@@ -6985,8 +6992,8 @@ function RuntimeDialog({
         : steerAPIURL
   ).replace(/\/$/, '');
   const command =
-    enrollmentToken && enrollmentNodeID
-      ? `RELAY_NODE_ID=${shellQuote(enrollmentNodeID)}\nRELAY_MACHINE_NAME_JSON=$(hostname | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')\ncurl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh | RELAY_NODE_TOKEN='YOUR_NODE_TOKEN' sh -s -- --server ${shellQuote(publicURL || 'https://relay.example.com')} --node-id "$RELAY_NODE_ID" --force --install-service && \\\n  curl -fsS -X POST ${shellQuote(`${publicSteerAPIURL}/relay-node-enrollments/claim`)} -H 'Content-Type: application/json' --data-binary "{\\"token\\":\\"${enrollmentToken}\\",\\"nodeId\\":\\"$RELAY_NODE_ID\\",\\"name\\":\\"$RELAY_MACHINE_NAME_JSON\\",\\"capacity\\":2}"`
+    enrollmentToken && enrollmentNodeID && enrollmentNodeToken
+      ? `RELAY_NODE_ID=${shellQuote(enrollmentNodeID)}\nRELAY_MACHINE_NAME_JSON=$(hostname | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')\ncurl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh | RELAY_NODE_TOKEN=${shellQuote(enrollmentNodeToken)} sh -s -- --server ${shellQuote(publicURL || 'https://relay.example.com')} --node-id "$RELAY_NODE_ID" --force --install-service && \\\n  curl -fsS -X POST ${shellQuote(`${publicSteerAPIURL}/relay-node-enrollments/claim`)} -H 'Content-Type: application/json' --data-binary "{\\"token\\":\\"${enrollmentToken}\\",\\"nodeId\\":\\"$RELAY_NODE_ID\\",\\"name\\":\\"$RELAY_MACHINE_NAME_JSON\\",\\"capacity\\":2}"`
       : '';
   const installedNode = enrollmentNodeID
     ? nodes.find((node) => node.id === enrollmentNodeID)

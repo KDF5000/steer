@@ -37,7 +37,7 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	enrollment, err := st.CreateRelayNodeEnrollment(ctx, user.ID, "enrollment-"+suffix, time.Now().Add(time.Hour))
+	enrollment, err := st.CreateRelayNodeEnrollment(ctx, user.ID, "enrollment-"+suffix, "node_"+suffix, time.Now().Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 		t.Fatalf("delete referenced offline Node = %v, want %v", err, store.ErrRelayNodeReferenced)
 	}
 
-	removableEnrollment, err := st.CreateRelayNodeEnrollment(ctx, user.ID, "removable-"+suffix, time.Now().Add(time.Hour))
+	removableEnrollment, err := st.CreateRelayNodeEnrollment(ctx, user.ID, "removable-"+suffix, "removable-node-"+suffix, time.Now().Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,6 +127,14 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 	var submitted relay.Request
 	relayServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/node-credentials":
+			var input struct {
+				NodeID string `json:"nodeId"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+				t.Error(err)
+			}
+			writeJSON(w, http.StatusCreated, map[string]string{"nodeId": input.NodeID, "nodeToken": "relay_node_v1.test-scoped-credential"})
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/nodes":
 			writeJSON(w, http.StatusOK, []map[string]any{{
 				"id": nodeID, "state": "online", "capacity": 2,
@@ -167,17 +175,23 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 		return response
 	}
 	var generatedEnrollment struct {
+		NodeToken string    `json:"nodeToken"`
 		Token     string    `json:"token"`
 		NodeID    string    `json:"nodeId"`
 		ExpiresAt time.Time `json:"expiresAt"`
 	}
-	if err := json.Unmarshal(call(http.MethodPost, "/relay-node-enrollments", "", http.StatusCreated).Body.Bytes(), &generatedEnrollment); err != nil {
+	enrollmentResponse := call(http.MethodPost, "/relay-node-enrollments", "", http.StatusCreated)
+	if enrollmentResponse.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("credential response may be cached")
+	}
+	if err := json.Unmarshal(enrollmentResponse.Body.Bytes(), &generatedEnrollment); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(generatedEnrollment.Token, "steer_enr_") || !strings.HasPrefix(generatedEnrollment.NodeID, "node_") || generatedEnrollment.ExpiresAt.Before(time.Now()) {
+	if generatedEnrollment.NodeToken != "relay_node_v1.test-scoped-credential" || !strings.HasPrefix(generatedEnrollment.Token, "steer_enr_") || !strings.HasPrefix(generatedEnrollment.NodeID, "node_") || generatedEnrollment.ExpiresAt.Before(time.Now()) {
 		t.Fatalf("invalid generated enrollment: %+v", generatedEnrollment)
 	}
 	claimBody := `{"token":"` + generatedEnrollment.Token + `","nodeId":"` + generatedEnrollment.NodeID + `","name":"Claimed Node","capacity":2}`
+	call(http.MethodPost, "/relay-node-enrollments/claim", strings.Replace(claimBody, generatedEnrollment.NodeID, nodeID, 1), http.StatusUnauthorized)
 	publicRequest := httptest.NewRequest(http.MethodPost, "/api/v1/relay-node-enrollments/claim", strings.NewReader(claimBody))
 	publicRequest.Header.Set("Content-Type", "application/json")
 	publicResponse := httptest.NewRecorder()

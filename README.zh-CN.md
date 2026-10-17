@@ -11,10 +11,10 @@ Steer Web → Steer Server → PostgreSQL
                          → Relay Server → Relay Nodes → Agent Runtimes
 ```
 
-- `app/`：Vinext/React Web 前端；
+- `app/`：Next.js/React Web 前端；
 - `server/`：独立 Go 业务后端；
 - PostgreSQL：保存按 Workspace 隔离的 Project、Agent、对话、Run 投影和成果索引；
-- Relay：独立部署的执行基础设施。Steer Server 通过 Relay Go SDK 接入，浏览器不会接触 Relay Token。
+- Relay：独立部署的执行基础设施。Steer Server 通过 Relay Go SDK 接入，浏览器不会接触 Relay Host Token 或 Node 签名根密钥。
 
 详细说明见[架构设计](docs/architecture.md)、[部署拓扑](docs/deployment.md)、[Conversation Task API](docs/task-api.md)、[飞书集成](docs/feishu-integration.md)和[Chat-first 产品设计](docs/chat-first-product.md)。
 
@@ -71,3 +71,11 @@ npm run lint
 npm run build
 cd server && go test ./... && go vet ./...
 ```
+
+## Vercel 部署
+
+同一仓库创建两个 Vercel 项目：官网 Root Directory 选 `website`，工作台选仓库根目录（Next.js）。
+工作台设置 `STEER_API_ORIGIN` 为 Steer Server 的公网源地址（不带 `/api/v1`），
+`NEXT_PUBLIC_STEER_API_URL` 保持 `/api/v1`，通过同源转发支持登录。
+Go 后端和 PostgreSQL 仍独立部署。长期使用建议配置同站点域名，让流式请求直连后端。
+详见[部署与 R2 存储配置](docs/deployment.md#vercel-frontends-and-persistent-backends)。

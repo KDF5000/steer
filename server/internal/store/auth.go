@@ -42,6 +42,7 @@ type Workspace struct {
 }
 
 type RelayNodeEnrollment struct {
+	NodeID      string
 	ID          string
 	OwnerUserID string
 	TokenHash   string
@@ -203,10 +204,10 @@ func (s *Store) CreateWorkspace(ctx context.Context, userID, name string) (Works
 		uuid.NewString(), name, userID))
 }
 
-func (s *Store) CreateRelayNodeEnrollment(ctx context.Context, userID, hash string, expiresAt time.Time) (RelayNodeEnrollment, error) {
-	enrollment := RelayNodeEnrollment{ID: uuid.NewString(), OwnerUserID: userID, TokenHash: hash, ExpiresAt: expiresAt}
-	_, err := s.pool.Exec(ctx, `INSERT INTO relay_node_enrollments(id,owner_user_id,token_hash,expires_at) VALUES($1,$2,$3,$4)`,
-		enrollment.ID, enrollment.OwnerUserID, enrollment.TokenHash, enrollment.ExpiresAt)
+func (s *Store) CreateRelayNodeEnrollment(ctx context.Context, userID, hash, nodeID string, expiresAt time.Time) (RelayNodeEnrollment, error) {
+	enrollment := RelayNodeEnrollment{ID: uuid.NewString(), OwnerUserID: userID, TokenHash: hash, NodeID: nodeID, ExpiresAt: expiresAt}
+	_, err := s.pool.Exec(ctx, `INSERT INTO relay_node_enrollments(id,owner_user_id,token_hash,expires_at,node_id) VALUES($1,$2,$3,$4,$5)`,
+		enrollment.ID, enrollment.OwnerUserID, enrollment.TokenHash, enrollment.ExpiresAt, enrollment.NodeID)
 	return enrollment, err
 }
 
@@ -219,7 +220,7 @@ func (s *Store) EnrollRelayNode(ctx context.Context, tokenHash, nodeID, name str
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	var ownerID string
-	err = tx.QueryRow(ctx, `UPDATE relay_node_enrollments SET consumed_at=now() WHERE token_hash=$1 AND consumed_at IS NULL AND expires_at>now() RETURNING owner_user_id`, tokenHash).Scan(&ownerID)
+	err = tx.QueryRow(ctx, `UPDATE relay_node_enrollments SET consumed_at=now() WHERE token_hash=$1 AND node_id=$2 AND consumed_at IS NULL AND expires_at>now() RETURNING owner_user_id`, tokenHash, nodeID).Scan(&ownerID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return RelayNode{}, ErrNotFound
 	}

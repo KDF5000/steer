@@ -38,8 +38,8 @@ services:
       context: .
       dockerfile: deploy/relay/Dockerfile
       args:
-        RELAY_VERSION: ${RELAY_VERSION:-v0.4.7}
-    image: steer-relay-server:${RELAY_VERSION:-v0.4.7}
+        RELAY_VERSION: ${RELAY_VERSION:-v0.5.2}
+    image: steer-relay-server:${RELAY_VERSION:-v0.5.2}
     restart: unless-stopped
     init: true
     environment:
@@ -92,7 +92,8 @@ services:
       context: .
       dockerfile: deploy/web/Dockerfile
       args:
-        NEXT_PUBLIC_STEER_API_URL: ${NEXT_PUBLIC_STEER_API_URL:-http://localhost:8080/api/v1}
+        NEXT_PUBLIC_STEER_API_URL: ${NEXT_PUBLIC_STEER_API_URL:-/api/v1}
+        STEER_API_ORIGIN: http://steer-server:8080
     image: steer-web:latest
     restart: unless-stopped
     ports:

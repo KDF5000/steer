@@ -240,6 +240,7 @@ func (s *Server) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) createRelayNodeEnrollment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	if _, ok := r.Context().Value(apiKeyContextKey).(store.WorkspaceAPIKey); ok {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "API keys cannot install Relay Nodes."})
 		return
@@ -251,12 +252,17 @@ func (s *Server) createRelayNodeEnrollment(w http.ResponseWriter, r *http.Reques
 	}
 	rawToken := "steer_enr_" + base64.RawURLEncoding.EncodeToString(random)
 	nodeID := "node_" + uuid.NewString()
+	nodeToken, err := s.issueRelayNodeCredential(r.Context(), nodeID)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
 	expiresAt := time.Now().Add(15 * time.Minute)
-	if _, err := s.store.CreateRelayNodeEnrollment(r.Context(), userFromContext(r.Context()).ID, tokenHash(rawToken), expiresAt); err != nil {
+	if _, err := s.store.CreateRelayNodeEnrollment(r.Context(), userFromContext(r.Context()).ID, tokenHash(rawToken), nodeID, expiresAt); err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"token": rawToken, "nodeId": nodeID, "expiresAt": expiresAt})
+	writeJSON(w, http.StatusCreated, map[string]any{"token": rawToken, "nodeId": nodeID, "nodeToken": nodeToken, "expiresAt": expiresAt})
 }
 
 func (s *Server) claimRelayNodeEnrollment(w http.ResponseWriter, r *http.Request) {

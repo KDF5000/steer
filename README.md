@@ -13,10 +13,10 @@ Steer Web → Steer Server → PostgreSQL
                          → Relay Server → Relay Nodes → Agent Runtimes
 ```
 
-- `app/` contains the Vinext/React web client.
+- `app/` contains the Next.js/React web client.
 - `server/` contains the standalone Go business API.
 - PostgreSQL stores Workspace-scoped Projects, Agents, conversations, Run projections, and artifact metadata.
-- Relay remains separately deployed infrastructure. Steer Server uses Relay's public Go SDK; the browser never receives a Relay token.
+- Relay remains separately deployed infrastructure. Steer Server uses Relay's public Go SDK; the browser never receives the Relay host token or shared Node signing root.
 
 See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), [Conversation Task API](docs/task-api.md), [Feishu integration](docs/feishu-integration.md), and [Chat-first product design](docs/chat-first-product.md).
 
@@ -91,20 +91,27 @@ These tests cover Projects, persistent conversations, Run projection, artifact d
 
 ## Configuration
 
-| Variable                     | Default                                  | Purpose                                               |
-| ---------------------------- | ---------------------------------------- | ----------------------------------------------------- |
-| `DATABASE_URL`               | local Compose PostgreSQL                 | Steer business database                               |
-| `RELAY_BASE_URL`             | `http://relay-server:8787` in Compose    | Relay Server address                                  |
-| `RELAY_PUBLIC_URL`           | same as `RELAY_BASE_URL` outside Compose | Relay address shown to machines connecting a Node     |
-| `RELAY_BIND_ADDRESS`         | `127.0.0.1`                              | Host interface used by bundled Relay                  |
-| `RELAY_HOST_TOKEN`           | empty                                    | Relay host access token                               |
-| `RELAY_NODE_TOKEN`           | local development token                  | Token used by Nodes registering with bundled Relay    |
-| `RELAY_VERSION`              | pinned Relay commit                      | Relay revision built by the bundled Compose stack     |
-| `STEER_ADDR`                 | `:8080`                                  | Steer Server listen address                           |
-| `STEER_DEFAULT_WORKSPACE_ID` | `default`                                | Legacy Workspace adopted by the first registered user |
-| `STEER_ALLOWED_ORIGINS`      | local Web origin                         | Browser CORS allowlist                                |
-| `STEER_CREDENTIAL_ENCRYPTION_KEY` | local development key              | Encrypts Workspace integration credentials at rest    |
-| `NEXT_PUBLIC_STEER_API_URL`  | `http://localhost:8080/api/v1`           | Web client API base URL                               |
-| `STEER_SERVER_PORT`          | `8080`                                   | Published Steer Server port                           |
-| `STEER_WEB_BIND_ADDRESS`     | `0.0.0.0`                                | Host interface used by Steer Web                      |
-| `STEER_WEB_PORT`             | `3000`                                   | Published Steer Web port                              |
+| Variable                          | Default                                  | Purpose                                               |
+| --------------------------------- | ---------------------------------------- | ----------------------------------------------------- |
+| `DATABASE_URL`                    | local Compose PostgreSQL                 | Steer business database                               |
+| `RELAY_BASE_URL`                  | `http://relay-server:8787` in Compose    | Relay Server address                                  |
+| `RELAY_PUBLIC_URL`                | same as `RELAY_BASE_URL` outside Compose | Relay address shown to machines connecting a Node     |
+| `RELAY_BIND_ADDRESS`              | `127.0.0.1`                              | Host interface used by bundled Relay                  |
+| `RELAY_HOST_TOKEN`                | empty                                    | Relay host access token                               |
+| `RELAY_NODE_TOKEN`                | local development token                  | Server-side root for scoped Node credentials          |
+| `RELAY_VERSION`                   | pinned Relay commit                      | Relay revision built by the bundled Compose stack     |
+| `STEER_ADDR`                      | `:8080`                                  | Steer Server listen address                           |
+| `STEER_DEFAULT_WORKSPACE_ID`      | `default`                                | Legacy Workspace adopted by the first registered user |
+| `STEER_ALLOWED_ORIGINS`           | local Web origin                         | Browser CORS allowlist                                |
+| `STEER_CREDENTIAL_ENCRYPTION_KEY` | local development key                    | Encrypts Workspace integration credentials at rest    |
+| `NEXT_PUBLIC_STEER_API_URL`       | `/api/v1`                                | Web client API base URL                               |
+| `STEER_SERVER_PORT`               | `8080`                                   | Published Steer Server port                           |
+| `STEER_WEB_BIND_ADDRESS`          | `0.0.0.0`                                | Host interface used by Steer Web                      |
+| `STEER_WEB_PORT`                  | `3000`                                   | Published Steer Web port                              |
+
+### Vercel
+
+Deploy the static website with Root Directory `website`, and the Next.js workbench
+as a separate project with the repository root. Set `STEER_API_ORIGIN` on the
+workbench to the public Steer Server origin; keep the browser API URL `/api/v1`.
+Go services and PostgreSQL run separately. See [deployment and R2 storage](docs/deployment.md#vercel-frontends-and-persistent-backends).
