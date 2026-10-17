@@ -3,7 +3,7 @@ module github.com/KDF5000/steer/server
 go 1.26
 
 require (
-	github.com/KDF5000/relay v0.5.2
+	github.com/KDF5000/relay v0.5.3
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/larksuite/oapi-sdk-go/v3 v3.12.0
