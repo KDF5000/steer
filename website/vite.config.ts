@@ -50,6 +50,7 @@ export default defineConfig(({ mode }) => {
       root,
       configFile: false,
       envFile: false,
+      css: { postcss: { plugins: [] } },
       plugins: [react()],
       appType: 'custom',
       logLevel: 'error',
@@ -64,6 +65,7 @@ export default defineConfig(({ mode }) => {
   return {
     root,
     appType: 'mpa',
+    css: { postcss: { plugins: [] } },
     plugins: [
       react(),
       {
