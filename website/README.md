@@ -47,7 +47,7 @@ sitemap.xml            # 配置官网地址后生成
 
 | 构建变量             | 说明                                                                                                                              |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `VITE_STEER_APP_URL` | “打开 Steer”等全部工作台入口的完整地址，默认 `https://steer.byted.org/fusion`。可以包含路径。                                     |
+| `VITE_STEER_APP_URL` | “打开 Steer”等全部工作台入口的完整地址，默认 `https://steer-console.pcursor.run`。可以包含路径。                                     |
 | `VITE_SITE_URL`      | 官网正式 origin，例如 `https://steer.example.com`，用于 canonical、hreflang、分享图片及 sitemap。不能包含子路径、查询参数或片段。 |
 
 两项均为公开地址，不要填写凭据。更改后需要重新构建。

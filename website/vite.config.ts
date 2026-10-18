@@ -36,7 +36,7 @@ function httpUrl(value: string, name: string, originOnly = false) {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, root, 'VITE_');
   const appUrl = httpUrl(
-    env.VITE_STEER_APP_URL || 'https://steer.byted.org/fusion',
+    env.VITE_STEER_APP_URL || 'https://steer-console.pcursor.run',
     'VITE_STEER_APP_URL',
   );
   const vercelDomain =
