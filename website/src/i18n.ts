@@ -61,12 +61,13 @@ export const homeZhCN = {
   'Steer Web': 'Steer Web',
   'Conversation Task API': 'Conversation Task API',
   'An open-source workspace for your agents': '统一管理多个 Agent 的开源工作台',
-  'Bring Codex, Trae, Claude Code, and Pi into one workspace.':
-    '把 Codex、Trae、Claude Code 和 Pi 接入同一个工作台。',
+  'Bring Codex, Trae, Claude Code, Pi, Qoder, and QwenWork into one workspace.':
+    '把 Codex、Trae、Claude Code、Pi、Qoder 和千问办公接入同一个工作台。',
+  QwenWork: '千问办公',
   'Run tasks on local or remote machines. Organize your work through projects and conversations.':
     '在本地或远程机器上执行任务，通过项目和会话统一管理工作。',
-  'Steer brings agents and runtimes across your machines into one open-source workspace. Connect Codex, Trae, Claude Code, and Pi, run tasks locally or remotely, and organize work through projects and conversations.':
-    'Steer 将不同机器上的 Agent 和 Runtime 接入同一个开源工作台。连接 Codex、Trae、Claude Code 和 Pi，在本地或远程执行任务，通过项目和会话统一管理工作。',
+  'Steer brings agents and runtimes across your machines into one open-source workspace. Connect Codex, Trae, Claude Code, Pi, Qoder, and QwenWork, run tasks locally or remotely, and organize work through projects and conversations.':
+    'Steer 将不同机器上的 Agent 和 Runtime 接入同一个开源工作台。连接 Codex、Trae、Claude Code、Pi、Qoder 和千问办公，在本地或远程执行任务，通过项目和会话统一管理工作。',
   'Choose a project. ': '选好项目，',
   'Give your agent a task.': '把具体任务交给 Agent。',
   'Choose a project and an agent': '选择项目和 Agent',

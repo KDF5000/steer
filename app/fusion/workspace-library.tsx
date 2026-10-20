@@ -34,6 +34,7 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { runtimeProviderName } from '@/lib/domain';
 import { useI18n } from '@/lib/i18n';
 import {
   Dialog,
@@ -532,7 +533,7 @@ export function AssetsView({
                     <span>
                       <strong>{agent.name}</strong>
                       <small>
-                        {agent.runtimeProvider} ·{' '}
+                        {t(runtimeProviderName(agent.runtimeProvider))} ·{' '}
                         {agent.runtimeId || 'Automatic Runtime'}
                       </small>
                     </span>

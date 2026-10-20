@@ -286,8 +286,9 @@ const zhCN: Record<string, string> = {
     '请在安装了 Codex、Trae 或其他运行环境的机器上执行此命令。',
   'Install once on the machine where Codex, Trae, or another Runtime is available. The installation will belong to your account.':
     '只需在可使用 Codex、Trae 或其他运行环境的机器上安装一次，安装后的 Node 将归属于你的账户。',
-  'Install once on the machine where Codex, Trae, or another Runtime is available,':
-    '在可使用 Codex、Trae 或其他运行环境的机器上执行一次安装，',
+  'Install once on the machine where Codex, Trae, Qoder, QwenWork, or another Runtime is available,':
+    '在可使用 Codex、Trae、Qoder、千问办公或其他运行环境的机器上执行一次安装，',
+  QwenWork: '千问办公',
   'Already have a Relay Node?': '已有 Relay Node？',
   'Back to adding a Runtime': '返回添加运行环境',
   'Choose Runtime instances from Relay Nodes owned by your account.':

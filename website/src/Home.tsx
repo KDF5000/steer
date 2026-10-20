@@ -130,7 +130,9 @@ export default function HomeContent({
             </span>
           </h1>
           <p className="website_lead">
-            {t('Bring Codex, Trae, Claude Code, and Pi into one workspace.')}
+            {t(
+              'Bring Codex, Trae, Claude Code, Pi, Qoder, and QwenWork into one workspace.',
+            )}
             <br />
             {t(
               'Run tasks on local or remote machines. Organize your work through projects and conversations.',
@@ -220,6 +222,10 @@ export default function HomeContent({
             <strong>Claude Code</strong>
             <i />
             <strong>Pi</strong>
+            <i />
+            <strong>Qoder</strong>
+            <i />
+            <strong>{t('QwenWork')}</strong>
           </div>
           <span className="website_runtimePowered">Connected by Relay</span>
         </div>
