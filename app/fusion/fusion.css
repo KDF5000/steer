@@ -4929,6 +4929,12 @@ button.ws-chat-response-meta:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.ws-code-review-columns.is-files-hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+.ws-code-review-files[hidden] {
+  display: none;
+}
 .ws-code-review-files {
   display: flex;
   min-width: 0;
@@ -4973,7 +4979,8 @@ button.ws-chat-response-meta:focus-visible {
   background: #f1f1f3;
   color: var(--ws-text);
 }
-.ws-changed-files-tree button > span:nth-child(2) {
+.ws-changed-files-tree button > span:nth-child(2),
+.ws-changed-files-tree .ws-change-directory-header > span {
   flex: 1;
   min-width: 0;
   overflow: hidden;

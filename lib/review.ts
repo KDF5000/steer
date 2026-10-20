@@ -1,6 +1,7 @@
 import type { RelayEvent } from './domain';
 
 export function runFileChanges(events?: RelayEvent[] | null) {
+  let workspaceDiff = '';
   const files = new Map<
     string,
     {
@@ -95,12 +96,17 @@ export function runFileChanges(events?: RelayEvent[] | null) {
       event.type.toLowerCase().includes('diff.updated') &&
       typeof data.diff === 'string'
     ) {
-      files.set('Workspace diff', {
-        id: 'workspace-diff',
-        path: 'Workspace diff',
-        diff: data.diff,
-      });
+      workspaceDiff = data.diff;
     }
+  }
+  for (const change of splitWorkspaceDiff(workspaceDiff)) {
+    const matchingPaths = [...files.keys()].filter((path) => {
+      const normalized = path.replace(/^file:\/\//, '').replace(/\\/g, '/');
+      return (
+        normalized === change.path || normalized.endsWith(`/${change.path}`)
+      );
+    });
+    if (!matchingPaths.length) files.set(change.path, change);
   }
   return [...files.values()].map(({ id, path, diff, snapshot }) => ({
     id,
@@ -108,6 +114,28 @@ export function runFileChanges(events?: RelayEvent[] | null) {
     diff,
     snapshot,
   }));
+}
+
+export function splitWorkspaceDiff(diff: string) {
+  const changes: Array<{ id: string; path: string; diff: string }> = [];
+  let path = '';
+  let lines: string[] = [];
+  const flush = () => {
+    if (path && lines.length)
+      changes.push({ id: path, path, diff: lines.join('\n') });
+  };
+  for (const line of diff.split('\n')) {
+    const match = line.match(/^diff --git a\/(.+) b\/(.+)$/);
+    if (match) {
+      flush();
+      path = match[2];
+      lines = [line];
+    } else if (path) {
+      lines.push(line);
+    }
+  }
+  flush();
+  return changes;
 }
 
 function addedFileDiff(path: string, content: string) {

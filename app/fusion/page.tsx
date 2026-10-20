@@ -29,6 +29,8 @@ import {
   GitBranch,
   MoreHorizontal,
   PanelLeft,
+  PanelRightClose,
+  PanelRightOpen,
   ChevronDown,
   ChevronLeft,
   Pencil,
@@ -110,7 +112,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select';
-import { runFileChanges } from '@/lib/review';
+import { runFileChanges, splitWorkspaceDiff } from '@/lib/review';
 import { setInterfaceLanguage, useI18n } from '@/lib/i18n';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type {
@@ -3612,10 +3614,9 @@ function ChatView({
                                   title={change.path}
                                   onClick={() =>
                                     openWorkspaceTab(
-                                      'files',
+                                      'changes',
                                       message.runId,
                                       change.path,
-                                      change.snapshot,
                                     )
                                   }
                                 >
@@ -4644,28 +4645,6 @@ type ReviewChange = {
   snapshot?: string;
 };
 
-function splitWorkspaceDiff(diff: string): ReviewChange[] {
-  const changes: ReviewChange[] = [];
-  let path = '';
-  let lines: string[] = [];
-  const flush = () => {
-    if (path && lines.length)
-      changes.push({ id: path, path, diff: lines.join('\n') });
-  };
-  for (const line of diff.split('\n')) {
-    const match = line.match(/^diff --git a\/(.+) b\/(.+)$/);
-    if (match) {
-      flush();
-      path = match[2];
-      lines = [line];
-    } else if (path) {
-      lines.push(line);
-    }
-  }
-  flush();
-  return changes;
-}
-
 function mergeWorkspaceChanges(
   liveChanges: ReviewChange[],
   reportedChanges: ReviewChange[],
@@ -4720,6 +4699,8 @@ function CodeReview({
   const [workspaceChanges, setWorkspaceChanges] = useState<
     ReviewChange[] | null
   >(null);
+  const [workspaceRoot, setWorkspaceRoot] = useState('');
+  const [filesVisible, setFilesVisible] = useState(true);
   const [loading, setLoading] = useState(Boolean(runId));
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
@@ -4734,15 +4715,16 @@ function CodeReview({
       .catch(() => setGitStatus(undefined));
     void steer
       .inspectWorkspace(runId, 'diff')
-      .then((result) =>
+      .then((result) => {
+        setWorkspaceRoot(result.root);
         setWorkspaceChanges(
           mergeWorkspaceChanges(
             splitWorkspaceDiff(result.content),
             reportedChanges,
             result.root,
           ),
-        ),
-      )
+        );
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [reportedChanges, runId]);
@@ -4758,7 +4740,8 @@ function CodeReview({
     void steer
       .inspectWorkspace(runId, 'diff')
       .then((result) => {
-        if (!cancelled)
+        if (!cancelled) {
+          setWorkspaceRoot(result.root);
           setWorkspaceChanges(
             mergeWorkspaceChanges(
               splitWorkspaceDiff(result.content),
@@ -4766,6 +4749,7 @@ function CodeReview({
               result.root,
             ),
           );
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(err.message);
@@ -4779,7 +4763,11 @@ function CodeReview({
   }, [reportedChanges, runId]);
   const changes = workspaceChanges?.length ? workspaceChanges : reportedChanges;
   const current =
-    changes.find((change) => change.path === selectedPath) || changes[0];
+    changes.find(
+      (change) =>
+        change.path === selectedPath ||
+        change.path === workspaceRelativePath(selectedPath, workspaceRoot),
+    ) || changes[0];
   const totals = changes.reduce(
     (value, change) => {
       const stats = changeStats(change);
@@ -4822,6 +4810,22 @@ function CodeReview({
           <Button
             variant="ghost"
             size="icon"
+            aria-label={
+              filesVisible ? 'Hide changed files' : 'Show changed files'
+            }
+            title={filesVisible ? 'Hide changed files' : 'Show changed files'}
+            aria-expanded={filesVisible}
+            onClick={() => setFilesVisible((visible) => !visible)}
+          >
+            {filesVisible ? (
+              <PanelRightClose aria-hidden="true" />
+            ) : (
+              <PanelRightOpen aria-hidden="true" />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             aria-label="Refresh workspace diff"
             title="Refresh workspace diff"
             disabled={!runId || loading}
@@ -4842,7 +4846,9 @@ function CodeReview({
         </output>
       )}
       {changes.length ? (
-        <div className="ws-code-review-columns">
+        <div
+          className={`ws-code-review-columns${filesVisible ? '' : ' is-files-hidden'}`}
+        >
           <section className="ws-code-review-preview" aria-label="Code diff">
             {current ? (
               <>
@@ -4861,7 +4867,11 @@ function CodeReview({
               </>
             ) : null}
           </section>
-          <nav className="ws-code-review-files" aria-label="Changed files">
+          <nav
+            className="ws-code-review-files"
+            aria-label="Changed files"
+            hidden={!filesVisible}
+          >
             <input
               className="ws-workspace-filter"
               aria-label="Filter changed files"
@@ -4915,6 +4925,9 @@ function ChangedFilesTree({
   selected: string;
   onSelect: (path: string) => void;
 }) {
+  const [collapsedDirectories, setCollapsedDirectories] = useState<Set<string>>(
+    () => new Set(),
+  );
   const root: ChangeTreeNode = {
     name: '',
     path: '',
@@ -4950,22 +4963,37 @@ function ChangedFilesTree({
     return (
       <div className="ws-change-directory" key={node.path || 'root'}>
         {node.path && (
-          <div
+          <Button
+            variant="ghost"
             className="ws-change-directory-header"
             style={{ paddingLeft: 8 + depth * 14 }}
+            aria-expanded={!collapsedDirectories.has(node.path)}
+            onClick={() =>
+              setCollapsedDirectories((current) => {
+                const next = new Set(current);
+                if (next.has(node.path)) next.delete(node.path);
+                else next.add(node.path);
+                return next;
+              })
+            }
           >
-            <ChevronDown aria-hidden="true" />
+            {collapsedDirectories.has(node.path) ? (
+              <ChevronRight aria-hidden="true" />
+            ) : (
+              <ChevronDown aria-hidden="true" />
+            )}
             <Folder aria-hidden="true" />
-            <span>{node.name}</span>
-          </div>
+            <span title={node.path}>{node.name}</span>
+          </Button>
         )}
-        {[...node.children.values()]
-          .sort(
-            (a, b) =>
-              Number(Boolean(a.change)) - Number(Boolean(b.change)) ||
-              a.name.localeCompare(b.name),
-          )
-          .map((child) => renderNode(child, node.path ? depth + 1 : depth))}
+        {!collapsedDirectories.has(node.path) &&
+          [...node.children.values()]
+            .sort(
+              (a, b) =>
+                Number(Boolean(a.change)) - Number(Boolean(b.change)) ||
+                a.name.localeCompare(b.name),
+            )
+            .map((child) => renderNode(child, node.path ? depth + 1 : depth))}
       </div>
     );
   };
