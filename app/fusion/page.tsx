@@ -55,7 +55,7 @@ import {
 } from 'lucide-react';
 import hljs from 'highlight.js/lib/common';
 import 'highlight.js/styles/github.css';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   Sidebar,
@@ -293,6 +293,7 @@ function workspaceLinkPath(href: string) {
       return '';
     }
   }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//')) return '';
   try {
     return decodeURIComponent(href.split(/[?#]/, 1)[0]);
   } catch {
@@ -311,6 +312,14 @@ const Markdown = memo(function Markdown({
     <div className="ws-markdown">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        urlTransform={(url, key, node) =>
+          onOpenWorkspaceFile &&
+          key === 'href' &&
+          node.tagName === 'a' &&
+          url.startsWith('file://')
+            ? url
+            : defaultUrlTransform(url)
+        }
         components={{
           a: ({ children: linkChildren, href = '', title }) => {
             const text = markdownLinkText(linkChildren).trim();
@@ -4234,6 +4243,7 @@ function WorkspaceFiles({
   const [directory, setDirectory] = useState('');
   const [filePath, setFilePath] = useState('');
   const [content, setContent] = useState<string | null>(null);
+  const [imageSource, setImageSource] = useState('');
   const [listing, setListing] = useState(true);
   const [reading, setReading] = useState(false);
   const [error, setError] = useState('');
@@ -4271,6 +4281,7 @@ function WorkspaceFiles({
       setReading(true);
       setFilePath(path);
       setContent(null);
+      setImageSource('');
       setError('');
       setSnapshotNotice('');
       void steer
@@ -4278,6 +4289,7 @@ function WorkspaceFiles({
         .then((result) => {
           if (current !== readSequence.current) return;
           setContent(result.content);
+          setImageSource(workspaceImageSource(result));
           setSnapshotNotice('');
         })
         .catch((err) => {
@@ -4345,6 +4357,7 @@ function WorkspaceFiles({
         if (current !== readSequence.current) return;
         setFilePath(normalizedPath);
         setContent(result.content);
+        setImageSource(workspaceImageSource(result));
         setError('');
         setSnapshotNotice('');
       })
@@ -4361,6 +4374,7 @@ function WorkspaceFiles({
         }
         setError(err instanceof Error ? err.message : 'Workspace unavailable');
         setContent(null);
+        setImageSource('');
         setSnapshotNotice('');
       });
   }, [data, fallbackSnapshot, filePath, initialPath, runId]);
@@ -4424,7 +4438,9 @@ function WorkspaceFiles({
       <div className="ws-workspace-columns">
         <section className="ws-workspace-preview" aria-label="File preview">
           {content !== null ? (
-            filePath.toLowerCase().endsWith('.md') ? (
+            imageSource ? (
+              <WorkspaceImagePreview source={imageSource} path={filePath} />
+            ) : filePath.toLowerCase().endsWith('.md') ? (
               <Markdown>{content}</Markdown>
             ) : (
               <HighlightedFile path={filePath} content={content} />
@@ -4479,6 +4495,58 @@ function WorkspaceFiles({
   );
 }
 type WorkspaceEntry = { name: string; directory: boolean; size: number };
+function workspaceImageSource(result: {
+  content: string;
+  encoding?: string;
+  content_type?: string;
+}) {
+  return result.encoding === 'base64' &&
+    /^image\/(png|jpeg|gif|webp)$/.test(result.content_type || '')
+    ? `data:${result.content_type};base64,${result.content}`
+    : '';
+}
+
+function WorkspaceImagePreview({
+  source,
+  path,
+}: {
+  source: string;
+  path: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const name = path.split('/').at(-1) || 'Image';
+  return (
+    <div className="ws-workspace-image-preview">
+      <div className="ws-workspace-image-actions">
+        <Button variant="ghost" onClick={() => setExpanded(true)}>
+          View full image
+        </Button>
+        <a href={source} download={name}>
+          <Download aria-hidden="true" />
+          Download
+        </a>
+      </div>
+      <button
+        type="button"
+        aria-label={`Expand ${name}`}
+        onClick={() => setExpanded(true)}
+      >
+        {/* oxlint-disable-next-line next/no-img-element -- authenticated image read from the remote workspace */}
+        <img src={source} alt={name} />
+      </button>
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        <DialogContent className="ws-image-preview-dialog">
+          <DialogTitle className="sr-only">{name}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Full-size workspace image preview.
+          </DialogDescription>
+          {/* oxlint-disable-next-line next/no-img-element -- image data already loaded from the remote workspace */}
+          <img src={source} alt={name} />
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
 function FileTypeIcon({ path }: { path: string }) {
   const ext = path.split('.').at(-1)?.toLowerCase() || '';
   if (['json', 'yaml', 'yml', 'toml'].includes(ext))

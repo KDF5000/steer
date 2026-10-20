@@ -7599,3 +7599,34 @@ button.ws-chat-response-meta:focus-visible {
     animation-iteration-count: 1 !important;
   }
 }
+
+.ws-workspace-image-preview {
+  padding: 12px;
+}
+.ws-workspace-image-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+.ws-workspace-image-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ws-workspace-image-actions svg {
+  width: 14px;
+  height: 14px;
+}
+.ws-workspace-image-preview > button {
+  display: block;
+  width: 100%;
+  cursor: zoom-in;
+}
+.ws-workspace-image-preview > button > img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+}

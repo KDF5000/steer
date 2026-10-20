@@ -464,6 +464,8 @@ export const steer = {
       root: string;
       path: string;
       content: string;
+      encoding?: string;
+      content_type?: string;
       entries: Array<{ name: string; directory: boolean; size: number }>;
       git?: WorkspaceGitStatus;
     }>(
