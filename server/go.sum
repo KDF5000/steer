@@ -1,5 +1,5 @@
-github.com/KDF5000/relay v0.5.5 h1:NCPyCxb6tAXbYSyounLutns4BL6JCRpK+316Uz+i+kU=
-github.com/KDF5000/relay v0.5.5/go.mod h1:PsVggeYfaYTe3NO7NQnZFM/J5EOQ98siVV4K1Eh7gyg=
+github.com/KDF5000/relay v0.5.6 h1:ODRl8opNW8oMwGGb661vYc0Q8hRvazVMyOi/Pv+gb3s=
+github.com/KDF5000/relay v0.5.6/go.mod h1:PsVggeYfaYTe3NO7NQnZFM/J5EOQ98siVV4K1Eh7gyg=
 github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
 github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
