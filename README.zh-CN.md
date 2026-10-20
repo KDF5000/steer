@@ -62,6 +62,8 @@ docker compose up -d --build postgres steer-server
 
 在 Steer 的 **System → Runtimes → Add Runtime** 中生成带有 15 分钟有效期的一次性 enrollment token 的 Relay Node 安装命令。Node 归生成命令的登录用户所有；安装一次后，可以把同一个物理 Runtime 分别连接到该用户拥有的多个 Workspace。各 Workspace 使用独立的逻辑 Binding，Node 并发容量仍由整台机器全局共享。
 
+Node 运行包含 Qoder 适配器的 Relay 版本后，Qoder（`qodercli`）和千问办公（`qoderclicn`）会以 `qoder`、`qwenwork` 两个 Runtime provider 出现。需要以 Node 的系统用户先执行一次 `qodercli login` 或 `qoderclicn login`，并在 Node 配置中设置无头权限策略，例如 `"args": ["--permission-mode", "accept_edits"]`，否则 Qoder 会拒绝写文件和执行命令。
+
 如需从其他机器连接 Node，请在 `.env` 中设置 `RELAY_BIND_ADDRESS=0.0.0.0`，将 `RELAY_PUBLIC_URL` 设置为本机可访问的局域网地址或 HTTPS 域名，并更换默认开发 Token。
 
 ## 检查

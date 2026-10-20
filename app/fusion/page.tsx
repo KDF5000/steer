@@ -121,6 +121,7 @@ import type {
   RelayNode,
   RuntimeSummary,
 } from '@/lib/domain';
+import { runtimeProviderName } from '@/lib/domain';
 import {
   steer,
   steerAPIBaseURL,
@@ -222,7 +223,9 @@ function projectRunError(
 function agentFromRecord(agent: AgentRecord): AgentItem {
   return {
     ...agent,
-    runtime: agent.runtimeId || `Automatic / ${agent.runtimeProvider}`,
+    runtime:
+      agent.runtimeId ||
+      `Automatic / ${runtimeProviderName(agent.runtimeProvider)}`,
     model: agent.model || 'Runtime default',
     state: 'Idle',
   };
@@ -683,7 +686,7 @@ export default function Fusion() {
   const runtimeChoices = runtimeNodes.flatMap((node) =>
     (node.runtimes || []).map((runtime) => ({
       value: `${runtime.provider}::${runtime.id}`,
-      label: `${node.labels?.name || node.id} / ${runtime.provider}`,
+      label: `${node.labels?.name || node.id} / ${t(runtimeProviderName(runtime.provider))}`,
       provider: runtime.provider,
       runtimeId: runtime.id,
       models: runtime.models || [],
@@ -702,7 +705,7 @@ export default function Fusion() {
     ...new Set(runtimeChoices.map((item) => item.provider)),
   ].map((provider) => ({
     value: `${provider}::`,
-    label: `Automatic / ${provider}`,
+    label: `Automatic / ${t(runtimeProviderName(provider))}`,
     provider,
     runtimeId: '',
     models: runtimeChoices
@@ -724,7 +727,7 @@ export default function Fusion() {
       ? [
           {
             value: `${editingAgent.runtimeProvider || 'unknown'}::${editingAgent.runtimeId}`,
-            label: `Unavailable Runtime / ${editingAgent.runtimeProvider || 'unknown'}`,
+            label: `Unavailable Runtime / ${t(runtimeProviderName(editingAgent.runtimeProvider)) || 'unknown'}`,
             provider: editingAgent.runtimeProvider || 'unknown',
             runtimeId: editingAgent.runtimeId,
             models: [],
@@ -5359,10 +5362,12 @@ function AgentsView({
         (candidate) => candidate.id === agent.runtimeId,
       );
       if (runtime) {
-        return `${node.labels?.name || node.id} / ${runtime.provider}`;
+        return `${node.labels?.name || node.id} / ${t(runtimeProviderName(runtime.provider))}`;
       }
     }
-    return agent.runtimeProvider || t('Runtime unavailable');
+    return (
+      t(runtimeProviderName(agent.runtimeProvider)) || t('Runtime unavailable')
+    );
   };
   return (
     <div className="ws-page">
@@ -5499,7 +5504,7 @@ function AgentsView({
               <span className="ws-runtime-environments">
                 {node.runtimes.map((runtime) => (
                   <span className="ws-runtime-environment" key={runtime.id}>
-                    <strong>{runtime.provider}</strong>
+                    <strong>{t(runtimeProviderName(runtime.provider))}</strong>
                     <i />
                     <small>{runtime.version || t('Version unavailable')}</small>
                     <button
@@ -7097,7 +7102,7 @@ function RuntimeDialog({
                     onChange={() => toggleRuntime(runtime.id)}
                   />
                   <span>
-                    <strong>{runtime.provider}</strong>
+                    <strong>{t(runtimeProviderName(runtime.provider))}</strong>
                     <small>{runtime.id}</small>
                   </span>
                   {runtime.version && <em>{runtime.version}</em>}
@@ -7200,7 +7205,7 @@ function RuntimeDialog({
                 <h3>{t('Install a new Relay Node')}</h3>
                 <p className="ws-runtime-install-description">
                   {t(
-                    'Install once on the machine where Codex, Trae, or another Runtime is available,',
+                    'Install once on the machine where Codex, Trae, Qoder, QwenWork, or another Runtime is available,',
                   )}
                   {language === 'en' ? ' ' : ''}
                   <span>

@@ -117,3 +117,15 @@ export type RelayNode = {
   labels?: Record<string, string>;
   runtimes: RelayRuntime[];
 };
+
+// Relay providers are stable lowercase IDs; products whose ID differs from the
+// product name get a display name here. Unknown providers are shown as-is.
+const runtimeProviderNames: Record<string, string> = {
+  qoder: 'Qoder',
+  qwenwork: 'QwenWork',
+};
+
+export function runtimeProviderName(provider?: string | null) {
+  if (!provider) return '';
+  return runtimeProviderNames[provider.toLowerCase()] || provider;
+}

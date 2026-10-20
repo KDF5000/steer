@@ -71,6 +71,8 @@ To connect a Node from another machine, set `RELAY_BIND_ADDRESS=0.0.0.0`, set `R
 
 Generate the Node's one-time installation command from **System → Runtimes → Add Runtime**. The Node belongs to the signed-in user; its Runtime instances can be connected independently to any Workspace that user owns, while the Node's concurrency limit is shared globally.
 
+Qoder (`qodercli`) and QwenWork / 千问办公 (`qoderclicn`) appear as the `qoder` and `qwenwork` Runtime providers once the Node runs a Relay release with the Qoder adapter. Log in once on the Node as the Node's user (`qodercli login` or `qoderclicn login`), and set a headless permission policy in the Node configuration, for example `"args": ["--permission-mode", "accept_edits"]`; otherwise Qoder denies file edits and shell commands.
+
 ## Checks
 
 ```bash
