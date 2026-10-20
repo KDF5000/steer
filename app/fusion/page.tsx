@@ -1663,6 +1663,32 @@ export default function Fusion() {
     }
   };
 
+  useEffect(() => {
+    if (!agentDialog) return;
+    const requestedWorkspace = workspaceID;
+    let cancelled = false;
+    void steer
+      .bootstrap()
+      .then((data) => {
+        if (
+          !cancelled &&
+          mounted.current &&
+          steer.workspace() === requestedWorkspace
+        ) {
+          setRuntimeNodes(data.relay.nodes || []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled && steer.workspace() === requestedWorkspace)
+          setNotice(
+            'Could not refresh Runtime models. Close and reopen the Agent editor to retry.',
+          );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [agentDialog, workspaceID]);
+
   const openNewAgent = () => {
     setEditingAgent(null);
     setAgentRuntime(
