@@ -344,9 +344,9 @@ func (s *Store) DeleteOwnedRelayNode(ctx context.Context, userID, nodeID string)
 			JOIN relay_node_runtimes r ON r.id=b.node_runtime_id
 			WHERE r.node_id=$1),
 		(SELECT COUNT(*) FROM projects p
-			JOIN workspace_runtime_bindings b ON b.id=p.runtime_id AND b.workspace_id=p.workspace_id
-			JOIN relay_node_runtimes r ON r.id=b.node_runtime_id
-			WHERE r.node_id=$1 AND p.deleted_at IS NULL)
+			WHERE p.deleted_at IS NULL AND (p.node_id=$1 OR EXISTS(
+				SELECT 1 FROM workspace_runtime_bindings b JOIN relay_node_runtimes r ON r.id=b.node_runtime_id
+				WHERE b.id=p.runtime_id AND b.workspace_id=p.workspace_id AND r.node_id=$1)))
 	`, nodeID).Scan(&agentReferences, &projectReferences); err != nil {
 		return err
 	}

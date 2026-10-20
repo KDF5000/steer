@@ -708,10 +708,7 @@ export default function Fusion() {
     (project) => project.id === chatProject,
   );
   const composerExecutionRuntimeId =
-    activeChatSession?.executionRuntimeId || selectedProject?.runtimeId || null;
-  const activeExecutionRuntime = runtimeChoices.find(
-    (runtime) => runtime.runtimeId === composerExecutionRuntimeId,
-  );
+    activeChatSession?.executionRuntimeId || null;
   const automaticChoices: RuntimeChoice[] = [
     ...new Set(runtimeChoices.map((item) => item.provider)),
   ].map((provider) => ({
@@ -1472,7 +1469,11 @@ export default function Fusion() {
           projectId: chatProject === 'none' ? null : chatProject,
           executionRuntimeId:
             currentAgent.runtimeId ||
-            projectList.find((item) => item.id === chatProject)?.runtimeId ||
+            runtimeNodes
+              .find((node) => node.id === selectedProject?.nodeId)
+              ?.runtimes?.find(
+                (runtime) => runtime.provider === currentAgent.runtimeProvider,
+              )?.id ||
             null,
           workspaceKey: null,
           createdAt: now,
@@ -1543,7 +1544,7 @@ export default function Fusion() {
       workspaceKind === 'git'
         ? formValue(data, 'repositoryUrl')
         : formValue(data, 'path');
-    const runtimeId = formValue(data, 'runtimeId');
+    const nodeId = formValue(data, 'nodeId');
     if (!name || !workspaceSource) {
       setFormError(
         workspaceKind === 'git'
@@ -1552,8 +1553,8 @@ export default function Fusion() {
       );
       return;
     }
-    if (workspaceKind === 'local' && !runtimeId) {
-      setFormError('Choose the Runtime where this directory exists.');
+    if (workspaceKind === 'local' && !nodeId) {
+      setFormError('Choose the machine where this directory exists.');
       return;
     }
     setCreatingProject(true);
@@ -1567,7 +1568,8 @@ export default function Fusion() {
         workspaceSubdir: formValue(data, 'subdir') || null,
         executionMode:
           workspaceKind === 'git' ? 'session_worktree' : 'in_place',
-        runtimeId: workspaceKind === 'local' ? runtimeId : null,
+        runtimeId: null,
+        nodeId: workspaceKind === 'local' ? nodeId : null,
       } as const;
       const project = editingProject
         ? await steer.updateProject(editingProject.id, input)
@@ -1592,7 +1594,7 @@ export default function Fusion() {
           ? 'Project updated.'
           : workspaceKind === 'git'
             ? 'Git project added. Each conversation gets an isolated worktree.'
-            : 'Directory project added on the selected Runtime.',
+            : 'Directory project added on the selected machine.',
       );
     } catch (error) {
       setFormError(
@@ -2489,8 +2491,28 @@ export default function Fusion() {
             sessionId={chatSession}
             agents={agentList}
             agent={currentAgent}
-            executionRuntimeId={composerExecutionRuntimeId}
-            executionRuntimeProvider={activeExecutionRuntime?.provider || null}
+            projectRuntimeChoices={
+              selectedProject?.workspaceKind === 'local' ||
+              composerExecutionRuntimeId
+                ? runtimeChoices.filter((runtime) =>
+                    runtimeNodes.some(
+                      (node) =>
+                        node.id ===
+                          (selectedProject?.workspaceKind === 'local'
+                            ? selectedProject.nodeId
+                            : runtimeNodes.find((candidate) =>
+                                candidate.runtimes?.some(
+                                  (item) =>
+                                    item.id === composerExecutionRuntimeId,
+                                ),
+                              )?.id) &&
+                        node.runtimes?.some(
+                          (item) => item.id === runtime.runtimeId,
+                        ),
+                    ),
+                  )
+                : undefined
+            }
             projects={projectList}
             project={chatProject}
             artifacts={conversationArtifacts}
@@ -2675,7 +2697,7 @@ export default function Fusion() {
         open={projectDialog}
         creating={creatingProject}
         error={formError}
-        runtimes={runtimeChoices}
+        nodes={runtimeNodes}
         project={editingProject}
         defaultRuntimeId={
           editingProject?.runtimeId || currentAgent?.runtimeId || ''
@@ -2986,8 +3008,7 @@ function ChatView({
   sessionId,
   agents,
   agent,
-  executionRuntimeId,
-  executionRuntimeProvider,
+  projectRuntimeChoices,
   projects,
   project,
   artifacts,
@@ -3013,8 +3034,7 @@ function ChatView({
   sessionId: string;
   agents: AgentItem[];
   agent?: AgentItem;
-  executionRuntimeId: string | null;
-  executionRuntimeProvider: string | null;
+  projectRuntimeChoices?: RuntimeChoice[];
   projects: ProjectRecord[];
   project: string;
   artifacts: Artifact[];
@@ -3923,11 +3943,13 @@ function ChatView({
                     >
                       {agents.map((item) => {
                         const runtimeMismatch = Boolean(
-                          (executionRuntimeId &&
-                            item.runtimeId &&
-                            item.runtimeId !== executionRuntimeId) ||
-                          (executionRuntimeProvider &&
-                            item.runtimeProvider !== executionRuntimeProvider),
+                          projectRuntimeChoices &&
+                          !projectRuntimeChoices.some(
+                            (runtime) =>
+                              runtime.provider === item.runtimeProvider &&
+                              (!item.runtimeId ||
+                                item.runtimeId === runtime.runtimeId),
+                          ),
                         );
                         return (
                           <SelectItem
@@ -3937,14 +3959,14 @@ function ChatView({
                             title={
                               runtimeMismatch
                                 ? t(
-                                    'This conversation is pinned to another Runtime',
+                                    'This Agent is unavailable on the conversation machine',
                                   )
                                 : undefined
                             }
                           >
                             {item.name}
                             {runtimeMismatch
-                              ? ` · ${t('Different Runtime')}`
+                              ? ` · ${t('Different machine')}`
                               : ''}
                           </SelectItem>
                         );
@@ -6671,7 +6693,7 @@ function ProjectDialog({
   open,
   creating,
   error,
-  runtimes,
+  nodes,
   project,
   defaultRuntimeId,
   onOpen,
@@ -6680,7 +6702,7 @@ function ProjectDialog({
   open: boolean;
   creating: boolean;
   error: string;
-  runtimes: RuntimeChoice[];
+  nodes: RelayNode[];
   project: ProjectRecord | null;
   defaultRuntimeId: string;
   onOpen: (open: boolean) => void;
@@ -6690,11 +6712,17 @@ function ProjectDialog({
     project?.workspaceKind === 'git' ? 'git' : 'local',
   );
   const [projectRuntimeId, setProjectRuntimeId] = useState(
-    project?.runtimeId || defaultRuntimeId,
+    project?.nodeId ||
+      nodes.find((node) =>
+        node.runtimes?.some(
+          (runtime) => runtime.id === (project?.runtimeId || defaultRuntimeId),
+        ),
+      )?.id ||
+      nodes[0]?.id ||
+      '',
   );
-  const projectRuntimeLabel = runtimes.find(
-    (runtime) => runtime.runtimeId === projectRuntimeId,
-  )?.label;
+  const selectedNode = nodes.find((node) => node.id === projectRuntimeId);
+  const projectRuntimeLabel = selectedNode?.labels?.name || selectedNode?.id;
   return (
     <Dialog open={open} onOpenChange={(value) => !creating && onOpen(value)}>
       <DialogContent className="ws-agent-dialog ws-project-dialog">
@@ -6702,7 +6730,7 @@ function ProjectDialog({
         <DialogDescription>
           {project
             ? 'Update the Project name or execution location.'
-            : 'Use a directory on one Runtime, or let Relay prepare an isolated Git worktree for each conversation.'}
+            : 'Use a directory on one machine, or let Relay prepare an isolated Git worktree for each conversation.'}
         </DialogDescription>
         <form
           key={`${project?.id || 'new'}:${project?.updatedAt || ''}`}
@@ -6723,7 +6751,7 @@ function ProjectDialog({
               <Folder />
               <span>
                 <strong>Existing directory</strong>
-                <small>Work in place on one Runtime</small>
+                <small>Work in place on one machine</small>
               </span>
             </button>
             <button
@@ -6752,10 +6780,10 @@ function ProjectDialog({
           {projectType === 'local' ? (
             <>
               <div className="ws-form-field">
-                <span>Runtime location</span>
+                <span>Machine location</span>
                 <Select
                   key={defaultRuntimeId}
-                  name="runtimeId"
+                  name="nodeId"
                   value={projectRuntimeId}
                   onValueChange={(value) =>
                     setProjectRuntimeId(value == null ? '' : String(value))
@@ -6764,23 +6792,20 @@ function ProjectDialog({
                 >
                   <SelectTrigger
                     className="ws-form-select"
-                    aria-label="Runtime location"
+                    aria-label="Machine location"
                   >
-                    {projectRuntimeLabel || 'Select a Runtime'}
+                    {projectRuntimeLabel || 'Select a machine'}
                   </SelectTrigger>
                   <SelectContent className="ws-select-popup">
-                    {runtimes.length ? (
-                      runtimes.map((runtime) => (
-                        <SelectItem
-                          key={runtime.runtimeId}
-                          value={runtime.runtimeId}
-                        >
-                          {runtime.label}
+                    {nodes.length ? (
+                      nodes.map((node) => (
+                        <SelectItem key={node.id} value={node.id}>
+                          {node.labels?.name || node.id}
                         </SelectItem>
                       ))
                     ) : (
                       <SelectItem value="__unavailable" disabled>
-                        No Runtime available
+                        No machine available
                       </SelectItem>
                     )}
                   </SelectContent>
@@ -6802,8 +6827,8 @@ function ProjectDialog({
                 />
               </label>
               <p className="ws-field-note">
-                Runs modify this directory directly. Agents on another Runtime
-                cannot use it without an explicit project location.
+                Runs modify this directory directly. Use any Runtime on this
+                machine that is assigned to the workspace.
               </p>
             </>
           ) : (
@@ -6843,8 +6868,8 @@ function ProjectDialog({
               </label>
               <p className="ws-field-note ws-project-worktree-note">
                 Relay keeps one Git mirror per Runtime and gives each
-                conversation a reusable worktree. A fixed-Runtime Agent is
-                required for the first version.
+                conversation a reusable worktree. An Agent on the selected
+                machine is required for the first version.
               </p>
             </>
           )}

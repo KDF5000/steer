@@ -432,29 +432,34 @@ func (s *Server) validateProject(w http.ResponseWriter, r *http.Request, project
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "directory projects currently support only in_place execution"})
 			return false
 		}
-		if project.RuntimeID == nil || strings.TrimSpace(*project.RuntimeID) == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "directory projects require a runtimeId"})
-			return false
-		}
 		nodes, err := s.workspaceNodes(r.Context(), s.workspace(r))
 		if err != nil {
-			writeError(w, fmt.Errorf("verify project Runtime: %w", err))
+			writeError(w, fmt.Errorf("verify project machine: %w", err))
 			return false
 		}
-		found := false
+		nodeID := strings.TrimSpace(value(project.NodeID))
+		// Accept an older client binding, but store only the machine location.
 		for _, node := range nodes {
 			for _, runtime := range node.Runtimes {
-				if runtime.ID == *project.RuntimeID {
-					found = true
-					break
+				if nodeID == "" && runtime.ID == value(project.RuntimeID) {
+					nodeID = node.ID
 				}
 			}
 		}
+		found := false
+		for _, node := range nodes {
+			if node.ID == nodeID && len(node.Runtimes) > 0 {
+				found = true
+			}
+		}
 		if !found {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "selected Runtime is not currently available"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "select a machine with Runtimes assigned to this workspace"})
 			return false
 		}
+		project.NodeID = &nodeID
+		project.RuntimeID = nil
 	} else {
+		project.NodeID = nil
 		project.RuntimeID = nil
 		if project.ExecutionMode != "session_worktree" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "git projects currently require session_worktree execution"})

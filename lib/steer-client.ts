@@ -122,6 +122,7 @@ export type ProjectRecord = {
   workspaceSubdir: string | null;
   executionMode: 'in_place' | 'session_worktree';
   runtimeId: string | null;
+  nodeId: string | null;
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -654,6 +655,7 @@ export const steer = {
       | 'workspaceSubdir'
       | 'executionMode'
       | 'runtimeId'
+      | 'nodeId'
     >,
   ) =>
     request<ProjectRecord>('/projects', {
@@ -671,6 +673,7 @@ export const steer = {
       | 'workspaceSubdir'
       | 'executionMode'
       | 'runtimeId'
+      | 'nodeId'
     >,
   ) =>
     request<ProjectRecord>(`/projects/${encodeURIComponent(id)}`, {

@@ -167,12 +167,11 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	var workspaceKey *string
 	if project != nil {
 		if project.WorkspaceKind == "local" {
-			if project.RuntimeID != nil && strings.TrimSpace(*project.RuntimeID) != "" {
-				executionRuntimeID = project.RuntimeID
+			resolved, resolveErr := s.projectAgentRuntime(ctx, wid, *project, agent)
+			if resolveErr != nil {
+				return submittedTask{}, false, resolveErr
 			}
-			if executionRuntimeID == nil || strings.TrimSpace(*executionRuntimeID) == "" {
-				return submittedTask{}, false, taskRequestError{Status: http.StatusConflict, Message: "Directory projects require a fixed Runtime. Edit or recreate this Project with a Runtime location."}
-			}
+			executionRuntimeID = &resolved
 		} else if project.WorkspaceKind == "git" {
 			key := "steer/" + wid + "/" + conversationID
 			workspaceKey = &key
@@ -199,20 +198,22 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 		}
 		project = &selected
 	}
-	// For directory Projects the Project's Runtime is the execution location
-	// (the workspace directory lives on that machine). Keep the Session's
-	// pinned Runtime in sync so editing the Project's Runtime later does not
-	// strand the conversation on the old machine.
-	if project != nil && project.WorkspaceKind == "local" && project.RuntimeID != nil && strings.TrimSpace(*project.RuntimeID) != "" {
-		executionRuntimeID = project.RuntimeID
-		if session.ExecutionRuntimeID == nil || *session.ExecutionRuntimeID != *project.RuntimeID {
-			if err := s.store.UpdateSessionRuntime(ctx, wid, conversationID, *project.RuntimeID); err != nil {
-				return submittedTask{}, false, err
-			}
-			session.ExecutionRuntimeID = project.RuntimeID
+	if project != nil && project.WorkspaceKind == "local" {
+		resolved, resolveErr := s.projectAgentRuntime(ctx, wid, *project, agent)
+		if resolveErr != nil {
+			return submittedTask{}, false, resolveErr
 		}
+		executionRuntimeID = &resolved
 	} else if session.ExecutionRuntimeID != nil && strings.TrimSpace(*session.ExecutionRuntimeID) != "" {
-		executionRuntimeID = session.ExecutionRuntimeID
+		physical, resolveErr := s.physicalRuntimeID(ctx, wid, *session.ExecutionRuntimeID)
+		if resolveErr != nil {
+			return submittedTask{}, false, resolveErr
+		}
+		resolved, resolveErr := s.agentRuntimeOnNode(ctx, wid, runtimeNodeID(physical), agent)
+		if resolveErr != nil {
+			return submittedTask{}, false, resolveErr
+		}
+		executionRuntimeID = &resolved
 	}
 	if agent.RuntimeID != nil && executionRuntimeID != nil && *agent.RuntimeID != *executionRuntimeID {
 		return submittedTask{}, false, taskRequestError{Status: http.StatusConflict, Message: "The selected Agent is fixed to a different Runtime. Fork the conversation to change execution location."}
@@ -245,9 +246,13 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 		return submittedTask{}, false, activeErr
 	}
 
-	if err := s.store.UpdateSessionAgent(ctx, wid, conversationID, agent.ID); err != nil {
+	// Re-read under the lock: another completed turn may have changed the active
+	// Agent while this request was resolving its machine and Runtime.
+	session, err = s.store.Session(ctx, wid, conversationID)
+	if err != nil {
 		return submittedTask{}, false, err
 	}
+	switchedAgent := session.AgentID != agent.ID || value(session.ExecutionRuntimeID) != value(executionRuntimeID)
 	previous, err := s.store.Messages(ctx, wid, conversationID)
 	if err != nil {
 		return submittedTask{}, false, err
@@ -257,6 +262,11 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 		runPrompt = "Please inspect the attached image and respond to it."
 	}
 	input := relay.Input{Type: "text", Version: "1", Prompt: conversationPrompt(previous, runPrompt), ContinuationPrompt: runPrompt}
+	if switchedAgent && len(previous) > 0 {
+		// The target's native session may predate turns handled by other Agents.
+		// Refresh its visible conversation context even when Relay resumes it.
+		input.ContinuationPrompt = "The following is the current shared conversation history, including work by other Agents. Use it to update your context; answer only the latest user request.\n\n" + input.Prompt
+	}
 	if len(attachments) > 0 {
 		images := make([]relayInputImage, 0, len(attachments))
 		for _, item := range attachments {
@@ -316,6 +326,16 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	run, err := s.submitRelayRun(ctx, request)
 	if err != nil {
 		return submittedTask{}, false, fmt.Errorf("submit Relay run: %w", err)
+	}
+	// Update routing only after Relay accepts the task. A failed submission must
+	// not suppress history synchronization on the next attempt to switch Agents.
+	if value(session.ExecutionRuntimeID) != value(executionRuntimeID) {
+		if err := s.store.UpdateSessionRuntime(ctx, wid, conversationID, value(executionRuntimeID)); err != nil {
+			return submittedTask{}, false, err
+		}
+	}
+	if err := s.store.UpdateSessionAgent(ctx, wid, conversationID, agent.ID); err != nil {
+		return submittedTask{}, false, err
 	}
 	var idempotencyKey *string
 	if in.IdempotencyKey != "" {
@@ -438,4 +458,31 @@ func (s *Server) cancelTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cancelRunForID(w, r, task.RelayRunID)
+}
+
+// Projects choose a physical machine; Agents choose the Runtime on that machine.
+func (s *Server) projectAgentRuntime(ctx context.Context, wid string, project store.Project, agent store.Agent) (string, error) {
+	nodeID, err := s.projectInspectionNodeID(ctx, wid, project)
+	if err != nil {
+		return "", err
+	}
+	return s.agentRuntimeOnNode(ctx, wid, nodeID, agent)
+}
+
+func (s *Server) agentRuntimeOnNode(ctx context.Context, wid, nodeID string, agent store.Agent) (string, error) {
+	nodes, err := s.workspaceNodes(ctx, wid)
+	if err != nil {
+		return "", err
+	}
+	for _, node := range nodes {
+		if node.ID != nodeID {
+			continue
+		}
+		for _, runtime := range node.Runtimes {
+			if runtime.Provider == agent.RuntimeProvider && (value(agent.RuntimeID) == "" || value(agent.RuntimeID) == runtime.ID) {
+				return runtime.ID, nil
+			}
+		}
+	}
+	return "", taskRequestError{Status: http.StatusConflict, Message: "The selected Agent's Runtime is not assigned to this conversation's machine. Select an Agent on that machine or assign a matching Runtime to the workspace."}
 }

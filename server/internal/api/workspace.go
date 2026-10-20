@@ -80,6 +80,18 @@ var errProjectWorkspaceUnavailable = errors.New("project workspace unavailable o
 // on an earlier Run. The Project binding is authoritative; legacy Projects
 // without one inherit the Runtime of their most recently created conversation.
 func (s *Server) projectInspectionNodeID(ctx context.Context, wid string, project store.Project) (string, error) {
+	if nodeID := strings.TrimSpace(value(project.NodeID)); nodeID != "" {
+		nodes, err := s.workspaceNodes(ctx, wid)
+		if err != nil {
+			return "", err
+		}
+		for _, node := range nodes {
+			if node.ID == nodeID && len(node.Runtimes) > 0 {
+				return nodeID, nil
+			}
+		}
+		return "", errProjectWorkspaceUnavailable
+	}
 	runtimeID := strings.TrimSpace(value(project.RuntimeID))
 	if runtimeID == "" {
 		agentID, agentErr := s.store.LatestProjectAgentID(ctx, wid, project.ID)

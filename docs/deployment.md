@@ -316,3 +316,24 @@ conversation Runtime selections. Remove the old Relay Node service and
 configuration, then reinstall it with a new Steer enrollment command. After the
 Node reconnects, share its Runtimes with each Workspace and reselect them on
 Agents and directory Projects.
+
+### Project machine locations
+
+Directory Projects store a `nodeId` for the machine containing the directory.
+The selected Agent determines which Runtime executes there; only Runtimes
+assigned to the current workspace are eligible. An Agent fixed to another
+machine cannot execute a task in that directory Project. Git repository
+Projects continue to use reusable conversation worktrees on the selected Agent's
+Runtime.
+
+Migration 26 converts existing Project Runtime bindings to their owning Node,
+without changing Agent bindings or conversation Runtime state. Different Runtime
+providers can start separate conversations under the same Project. A shared conversation can switch Agents and providers on the same machine.
+Relay maintains a separate native session for each Agent/Runtime/provider. When
+switching Agents, Steer supplies the bounded shared transcript as the continuation
+prompt so a previously used native session receives intervening work. Consecutive
+turns with the same Agent continue using the short current-turn prompt. Native
+thinking, caches, and internal tool state are not shared across providers. Project Git status inspects the Project's current Node.
+
+Deploy the Steer Server and frontend together for the new Project machine
+selector. Relay Server and Relay Node require no protocol changes for this feature.

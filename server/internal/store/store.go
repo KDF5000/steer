@@ -59,6 +59,7 @@ type Project struct {
 	WorkspaceSubdir *string    `json:"workspaceSubdir"`
 	ExecutionMode   string     `json:"executionMode"`
 	RuntimeID       *string    `json:"runtimeId"`
+	NodeID          *string    `json:"nodeId"`
 	DeletedAt       *time.Time `json:"deletedAt"`
 	CreatedAt       time.Time  `json:"createdAt"`
 	UpdatedAt       time.Time  `json:"updatedAt"`
@@ -83,11 +84,11 @@ type Session struct {
 
 func scanProject(row pgx.Row) (Project, error) {
 	var project Project
-	err := row.Scan(&project.ID, &project.WorkspaceID, &project.Name, &project.WorkspaceKind, &project.WorkspaceSource, &project.WorkspaceRef, &project.WorkspaceSubdir, &project.ExecutionMode, &project.RuntimeID, &project.DeletedAt, &project.CreatedAt, &project.UpdatedAt)
+	err := row.Scan(&project.ID, &project.WorkspaceID, &project.Name, &project.WorkspaceKind, &project.WorkspaceSource, &project.WorkspaceRef, &project.WorkspaceSubdir, &project.ExecutionMode, &project.RuntimeID, &project.NodeID, &project.DeletedAt, &project.CreatedAt, &project.UpdatedAt)
 	return project, err
 }
 
-const projectColumns = `id,workspace_id,name,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,runtime_id,deleted_at,created_at,updated_at`
+const projectColumns = `id,workspace_id,name,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,runtime_id,node_id,deleted_at,created_at,updated_at`
 
 func (s *Store) Projects(ctx context.Context, wid string) ([]Project, error) {
 	rows, err := s.pool.Query(ctx, `SELECT `+projectColumns+` FROM projects WHERE workspace_id=$1 AND deleted_at IS NULL ORDER BY updated_at DESC`, wid)
@@ -117,13 +118,13 @@ func (s *Store) Project(ctx context.Context, wid, id string) (Project, error) {
 func (s *Store) CreateProject(ctx context.Context, wid string, project Project) (Project, error) {
 	project.ID = uuid.NewString()
 	project.WorkspaceID = wid
-	return scanProject(s.pool.QueryRow(ctx, `INSERT INTO projects(id,workspace_id,name,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,runtime_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING `+projectColumns,
-		project.ID, project.WorkspaceID, project.Name, project.WorkspaceKind, project.WorkspaceSource, project.WorkspaceRef, project.WorkspaceSubdir, project.ExecutionMode, project.RuntimeID))
+	return scanProject(s.pool.QueryRow(ctx, `INSERT INTO projects(id,workspace_id,name,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,runtime_id,node_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING `+projectColumns,
+		project.ID, project.WorkspaceID, project.Name, project.WorkspaceKind, project.WorkspaceSource, project.WorkspaceRef, project.WorkspaceSubdir, project.ExecutionMode, project.RuntimeID, project.NodeID))
 }
 
 func (s *Store) UpdateProject(ctx context.Context, wid, id string, project Project) (Project, error) {
-	updated, err := scanProject(s.pool.QueryRow(ctx, `UPDATE projects SET name=$3,workspace_kind=$4,workspace_source=$5,workspace_ref=$6,workspace_subdir=$7,execution_mode=$8,runtime_id=$9,updated_at=now() WHERE workspace_id=$1 AND id=$2 AND deleted_at IS NULL RETURNING `+projectColumns,
-		wid, id, project.Name, project.WorkspaceKind, project.WorkspaceSource, project.WorkspaceRef, project.WorkspaceSubdir, project.ExecutionMode, project.RuntimeID))
+	updated, err := scanProject(s.pool.QueryRow(ctx, `UPDATE projects SET name=$3,workspace_kind=$4,workspace_source=$5,workspace_ref=$6,workspace_subdir=$7,execution_mode=$8,runtime_id=$9,node_id=$10,updated_at=now() WHERE workspace_id=$1 AND id=$2 AND deleted_at IS NULL RETURNING `+projectColumns,
+		wid, id, project.Name, project.WorkspaceKind, project.WorkspaceSource, project.WorkspaceRef, project.WorkspaceSubdir, project.ExecutionMode, project.RuntimeID, project.NodeID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Project{}, ErrNotFound
 	}
