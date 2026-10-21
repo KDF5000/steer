@@ -18,6 +18,33 @@ const storageKey = 'steer.interface-language';
 const languageEvent = 'steer:interface-language';
 
 const zhCN: Record<string, string> = {
+  'Getting started': '开始使用',
+  'Finish this step and we will guide you to the next one.':
+    '完成配置后，将自动引导你进行下一步。',
+  'Your workspace is ready. Send your first task to get started.':
+    '工作区已准备好，发送第一项任务即可开始。',
+  'Bring your Agents into one workspace.': '把你的 Agent 接入同一个工作台。',
+  'Four steps to your first conversation. Your progress is saved as you set things up.':
+    '四步开始第一次对话。配置完成后，引导会自动更新进度。',
+  'Setup progress': '设置进度',
+  Completed: '已完成',
+  'Connect a machine': '连接运行环境',
+  'Install Relay Node on the machine where your Agent tools are available, then add its Runtimes to this workspace.':
+    '在已安装 Agent 工具的机器上安装 Relay Node，再将运行环境添加到当前工作区。',
+  'Create your first Agent': '添加第一个智能体',
+  'Choose a Runtime and model, then give your Agent a name and instructions.':
+    '选择运行环境和模型，为智能体设置名称与指令。',
+  'Add your project': '添加项目',
+  'Select a directory on your machine or connect a Git repository. Your conversations will live under this project.':
+    '选择机器上的目录或接入 Git 仓库，在项目下组织你的会话。',
+  'Start a conversation': '开始聊天',
+  'Choose your Agent and project, then describe the first task you want to work on.':
+    '选择智能体和项目，描述你想完成的第一项任务。',
+  'Start chatting': '开始聊天',
+  'Skip for now': '暂时跳过',
+  'You can return to this guide from the sidebar.':
+    '可以随时从侧栏重新打开引导。',
+  Manage: '管理',
   'Account menu': '账户菜单',
   'Add document': '添加文档',
   'Add Runtime': '添加运行环境',

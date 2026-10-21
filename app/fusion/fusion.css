@@ -7630,3 +7630,69 @@ button.ws-chat-response-meta:focus-visible {
   height: auto;
   margin-inline: auto;
 }
+
+.ws-getting-started-dialog {
+  width: min(480px, calc(100vw - 32px));
+  padding: 28px;
+  gap: 18px;
+}
+.ws-getting-started-progress > span {
+  color: var(--ws-text-secondary);
+  font-size: 12px;
+}
+.ws-getting-started-progress > div {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+.ws-getting-started-progress i {
+  height: 3px;
+  flex: 1;
+  border-radius: 3px;
+  background: var(--ws-border);
+}
+.ws-getting-started-progress i.is-active {
+  background: var(--ws-accent);
+}
+.ws-getting-started-dialog [data-slot='dialog-title'] {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 20px;
+}
+.ws-getting-started-dialog [data-slot='dialog-title'] svg {
+  width: 20px;
+  height: 20px;
+}
+.ws-getting-started-dialog [data-slot='dialog-description'] {
+  line-height: 1.7;
+}
+.ws-getting-started-next {
+  color: var(--ws-text-tertiary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ws-getting-started-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.ws-onboarding-positioner {
+  z-index: 45;
+  max-width: calc(100vw - 24px);
+}
+.ws-onboarding-positioner .ws-getting-started-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(360px, calc(100vw - 24px));
+  background: var(--background, #fff);
+  border: 1px solid var(--ws-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px #11121720;
+}
+.ws-onboarding-target {
+  outline: 2px solid var(--ws-accent) !important;
+  outline-offset: 4px;
+}

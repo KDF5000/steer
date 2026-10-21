@@ -113,6 +113,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 import { runFileChanges, splitWorkspaceDiff } from '@/lib/review';
+import { GettingStarted } from './getting-started';
 import { setInterfaceLanguage, useI18n } from '@/lib/i18n';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type {
@@ -529,6 +530,8 @@ function SessionNavigationList({
 export default function Fusion() {
   const { t } = useI18n();
   const [authReady, setAuthReady] = useState(false);
+  const [gettingStarted, setGettingStarted] = useState(false);
+  const gettingStartedWorkspace = useRef('');
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [workspaceList, setWorkspaceList] = useState<WorkspaceRecord[]>([]);
   const [workspaceID, setWorkspaceID] = useState('');
@@ -1691,6 +1694,15 @@ export default function Fusion() {
     };
   }, [agentDialog, workspaceID]);
 
+  useEffect(() => {
+    if (!authReady || !authUser || !loaded || !workspaceID) return;
+    const key = `steer.firstLoginGuide:${authUser?.id || 'local'}`;
+    if (gettingStartedWorkspace.current === key) return;
+    gettingStartedWorkspace.current = key;
+    const firstVisit = !window.localStorage.getItem(key);
+    setGettingStarted(firstVisit && chatSessions.length === 0);
+  }, [authReady, loaded, workspaceID, authUser, chatSessions.length]);
+
   const openNewAgent = () => {
     setEditingAgent(null);
     setAgentRuntime(
@@ -1849,6 +1861,129 @@ export default function Fusion() {
     }
   };
 
+  const setupRuntimeReady = runtimeNodes.some((node) => node.runtimes?.length);
+  const setupAgentReady = agentList.some((agent) =>
+    runtimeChoices.some(
+      (runtime) =>
+        runtime.provider === agent.runtimeProvider &&
+        (!agent.runtimeId || agent.runtimeId === runtime.runtimeId),
+    ),
+  );
+  const setupProject = projectList.find(
+    (project) =>
+      !project.deletedAt &&
+      agentList.some((agent) =>
+        runtimeNodes.some(
+          (node) =>
+            (project.workspaceKind !== 'local' || node.id === project.nodeId) &&
+            node.runtimes?.some(
+              (runtime) =>
+                runtime.provider === agent.runtimeProvider &&
+                (!agent.runtimeId || agent.runtimeId === runtime.id),
+            ),
+        ),
+      ),
+  );
+  const setupCurrentStep = !setupRuntimeReady
+    ? 0
+    : !setupAgentReady
+      ? 1
+      : !setupProject
+        ? 2
+        : 3;
+  useEffect(() => {
+    if (
+      !loaded ||
+      !gettingStarted ||
+      runtimeDialog ||
+      agentDialog ||
+      projectDialog
+    )
+      return;
+    const frame = window.requestAnimationFrame(() => {
+      if (setupCurrentStep < 2) {
+        setView('agents');
+        setAgentTab(setupCurrentStep === 0 ? 'runtimes' : 'agents');
+      } else if (setupCurrentStep === 2) {
+        setSidebarOpen(true);
+      } else if (setupProject) {
+        const matching = agentList.find((agent) =>
+          runtimeNodes.some(
+            (node) =>
+              (setupProject.workspaceKind !== 'local' ||
+                node.id === setupProject.nodeId) &&
+              node.runtimes?.some(
+                (runtime) =>
+                  runtime.provider === agent.runtimeProvider &&
+                  (!agent.runtimeId || runtime.id === agent.runtimeId),
+              ),
+          ),
+        );
+        if (matching) setChatAgent(matching.id);
+        setChatProject(setupProject.id);
+        setView('chat');
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    loaded,
+    gettingStarted,
+    runtimeDialog,
+    agentDialog,
+    projectDialog,
+    setupCurrentStep,
+    setupProject,
+    agentList,
+    runtimeNodes,
+  ]);
+
+  const markGuideShown = useCallback(() => {
+    if (authUser)
+      window.localStorage.setItem(
+        `steer.firstLoginGuide:${authUser.id}`,
+        'seen',
+      );
+  }, [authUser]);
+
+  const leaveGettingStarted = () => {
+    window.localStorage.setItem(
+      `steer.firstLoginGuide:${authUser?.id || 'local'}`,
+      'dismissed',
+    );
+    setGettingStarted(false);
+  };
+  const setupStep = (step: number) => {
+    if (step === 0) openRuntimeDialog();
+    if (step === 1) openNewAgent();
+    if (step === 2) {
+      setEditingProject(null);
+      setFormError('');
+      setProjectDialog(true);
+    }
+    if (step === 3 && setupProject) {
+      const agent = agentList.find((agent) =>
+        runtimeNodes.some(
+          (node) =>
+            (setupProject.workspaceKind !== 'local' ||
+              node.id === setupProject.nodeId) &&
+            node.runtimes?.some(
+              (runtime) =>
+                runtime.provider === agent.runtimeProvider &&
+                (!agent.runtimeId || runtime.id === agent.runtimeId),
+            ),
+        ),
+      );
+      if (agent) setChatAgent(agent.id);
+      startNewChat(setupProject.id);
+      leaveGettingStarted();
+      window.requestAnimationFrame(() =>
+        document
+          .querySelector<HTMLTextAreaElement>('[data-onboarding="chat"]')
+          ?.focus(),
+      );
+    }
+  };
+
   const openRuntimeDialog = () => {
     setRuntimeDialog(true);
     setRelayEnrollmentToken('');
@@ -1878,6 +2013,7 @@ export default function Fusion() {
       if (!mounted.current || steer.workspace() !== requestedWorkspace) return;
       const count = selectedRuntimeIDs.length;
       setRuntimeNodes(nodes);
+      if (gettingStarted) setRuntimeDialog(false);
       setSelectedRuntimeIDs([]);
       setNotice(`${count} Runtime${count === 1 ? '' : 's'} added.`);
       await discoverRuntimes();
@@ -1979,6 +2115,7 @@ export default function Fusion() {
 
   const activateWorkspace = async (workspace: WorkspaceRecord) => {
     if (workspace.id === workspaceID) return;
+    gettingStartedWorkspace.current = '';
     setLoaded(false);
     workspaceHydrationSequence.current += 1;
     setLoadError('');
@@ -2032,6 +2169,7 @@ export default function Fusion() {
     projectGitStatusController.current?.abort();
     projectGitStatusController.current = null;
     requestedProjectGitStatuses.current.clear();
+    gettingStartedWorkspace.current = '';
     setLoaded(false);
     setLoadError('');
   };
@@ -2316,6 +2454,7 @@ export default function Fusion() {
                 )}
                 <SidebarMenuItem>
                   <SidebarMenuButton
+                    data-onboarding="project"
                     onClick={() => {
                       setFormError('');
                       setEditingProject(null);
@@ -2692,8 +2831,26 @@ export default function Fusion() {
           setView('agents');
         }}
       />
+      <GettingStarted
+        open={
+          loaded &&
+          gettingStarted &&
+          !runtimeDialog &&
+          !agentDialog &&
+          !projectDialog
+        }
+        completed={[
+          setupRuntimeReady,
+          setupAgentReady,
+          Boolean(setupProject),
+          chatSessions.length > 0,
+        ]}
+        onStep={setupStep}
+        onSkip={leaveGettingStarted}
+        onShown={markGuideShown}
+      />
       <ProjectDialog
-        key={`${editingProject?.id || 'new'}:${projectDialog ? 'open' : 'closed'}`}
+        key={`project:${editingProject?.id || 'new'}:${projectDialog ? 'open' : 'closed'}`}
         open={projectDialog}
         creating={creatingProject}
         error={formError}
@@ -2773,7 +2930,7 @@ export default function Fusion() {
         </AlertDialogContent>
       </AlertDialog>
       <AgentDialog
-        key={`${editingAgent?.id || 'new'}:${agentDialog ? 'open' : 'closed'}`}
+        key={`agent:${editingAgent?.id || 'new'}:${agentDialog ? 'open' : 'closed'}`}
         open={agentDialog}
         creating={creatingAgent}
         error={formError}
@@ -3860,6 +4017,7 @@ function ChatView({
               )}
               <textarea
                 ref={composer}
+                data-onboarding="chat"
                 aria-label="Message Agent"
                 rows={2}
                 value={input}
@@ -5531,6 +5689,7 @@ function AgentsView({
           <button
             type="button"
             className="ws-primary-button"
+            data-onboarding={tab === 'agents' ? 'agent' : 'runtime'}
             onClick={tab === 'agents' ? onCreate : onAddRuntime}
           >
             <Plus />
