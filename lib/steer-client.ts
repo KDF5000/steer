@@ -1,3 +1,4 @@
+import type { MessageContext, TaskMessageOptions } from './domain';
 import type { RelayEvent, RelayNode, RelayRun } from '@/lib/domain';
 
 export const steerAPIBaseURL =
@@ -98,6 +99,7 @@ export type ArtifactRecord = {
 };
 
 export type ChatSessionRecord = {
+  parentConversationId?: string | null;
   id: string;
   title: string;
   agentId: string;
@@ -223,6 +225,7 @@ export type WorkLogActivityRunRecord = {
 export type WorkLogWeeklyRunRecord = WorkLogActivityRunRecord;
 
 export type ChatMessageRecord = {
+  context?: MessageContext;
   id: string;
   role: 'user' | 'agent';
   content: string;
@@ -739,17 +742,23 @@ export const steer = {
       assistantMessage: { id: string };
     }>('/chat', { method: 'POST', body });
   },
-  createTask: (input: {
-    prompt: string;
-    agentId: string;
-    projectId?: string;
-    conversationId?: string;
-    images?: File[];
-    idempotencyKey?: string;
-  }) => {
+  createTask: (
+    input: TaskMessageOptions & {
+      prompt: string;
+      agentId: string;
+      projectId?: string;
+      conversationId?: string;
+      images?: File[];
+      idempotencyKey?: string;
+    },
+  ) => {
     const body = new FormData();
     body.set('prompt', input.prompt);
     body.set('agentId', input.agentId);
+    if (input.targetAgentId) body.set('targetAgentId', input.targetAgentId);
+    if (input.referencedMessageId)
+      body.set('referencedMessageId', input.referencedMessageId);
+    if (input.referenceMode) body.set('referenceMode', input.referenceMode);
     if (input.projectId) body.set('projectId', input.projectId);
     if (input.conversationId) body.set('conversationId', input.conversationId);
     input.images?.forEach((image) => body.append('images', image, image.name));
@@ -759,6 +768,7 @@ export const steer = {
         ? crypto.randomUUID()
         : `web-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     return request<{
+      delegationSession?: ChatSessionRecord;
       taskId: string;
       conversationId: string;
       sessionId: string;
@@ -766,9 +776,10 @@ export const steer = {
       status: string;
       userMessage: {
         id: string;
+        context?: MessageContext;
         attachments?: ChatMessageRecord['attachments'];
       };
-      assistantMessage: { id: string };
+      assistantMessage: { id: string; context?: MessageContext };
     }>('/tasks', {
       method: 'POST',
       headers: { 'Idempotency-Key': idempotencyKey },

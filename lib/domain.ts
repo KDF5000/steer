@@ -46,7 +46,23 @@ export type ChatActivity = {
   children?: ChatActivity[];
 };
 
+export type MessageContext = {
+  delegationSessionId?: string;
+  parentConversationId?: string;
+  taskId?: string;
+  agentId: string;
+  agentName: string;
+  ownerAgentId: string;
+  delegated?: boolean;
+  reference?: { messageId: string; agentName: string; content: string };
+};
+export type TaskMessageOptions = {
+  targetAgentId?: string;
+  referencedMessageId?: string;
+  referenceMode?: 'explicit' | 'latest' | 'none';
+};
 export type ChatMessage = {
+  context?: MessageContext;
   id?: string;
   role: 'user' | 'agent';
   text: string;

@@ -18,6 +18,29 @@ const storageKey = 'steer.interface-language';
 const languageEvent = 'steer:interface-language';
 
 const zhCN: Record<string, string> = {
+  'Waiting to start': '等待执行',
+  Processing: '正在处理',
+  Stopping: '正在停止',
+  View: '查看',
+
+  'Press Backspace to remove': '按退格键移除',
+  'Working in a separate conversation': '正在独立会话中执行',
+  'Delegation finished': '委派已结束',
+  'Open delegated conversation': '查看委派会话',
+
+  'Quote reply': '引用回复',
+  Quote: '引用',
+  'View quotation': '查看引用',
+  'Remove quotation': '移除引用',
+  'Cancel delegation': '取消委派',
+  'Delegate to an Agent on this machine': '委派给同机 Agent',
+  'No available Agents on this machine': '没有可用的同机 Agent',
+  'Delegated reply': '委派回复',
+  'Hand back to {agent}': '交给 {agent} 继续',
+  "Continue based on {agent}'s result.": '请根据 {agent} 的结果继续推进。',
+  'This Agent is unavailable on the conversation machine. Choose another Agent.':
+    '该 Agent 不在当前会话机器上，请重新选择。',
+
   'Getting started': '开始使用',
   'Finish this step and we will guide you to the next one.':
     '完成配置后，将自动引导你进行下一步。',

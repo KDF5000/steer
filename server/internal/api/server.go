@@ -608,13 +608,16 @@ func (s *Server) artifactContent(w http.ResponseWriter, r *http.Request) {
 }
 
 type chatRequest struct {
-	Prompt         string          `json:"prompt"`
-	AgentID        string          `json:"agentId"`
-	SessionID      *string         `json:"sessionId"`
-	ConversationID *string         `json:"conversationId"`
-	ProjectID      *string         `json:"projectId"`
-	IdempotencyKey string          `json:"idempotencyKey"`
-	Metadata       json.RawMessage `json:"metadata"`
+	TargetAgentID       string          `json:"targetAgentId"`
+	ReferencedMessageID string          `json:"referencedMessageId"`
+	ReferenceMode       string          `json:"referenceMode"`
+	Prompt              string          `json:"prompt"`
+	AgentID             string          `json:"agentId"`
+	SessionID           *string         `json:"sessionId"`
+	ConversationID      *string         `json:"conversationId"`
+	ProjectID           *string         `json:"projectId"`
+	IdempotencyKey      string          `json:"idempotencyKey"`
+	Metadata            json.RawMessage `json:"metadata"`
 }
 
 const (
@@ -643,7 +646,7 @@ func decodeChatRequest(w http.ResponseWriter, r *http.Request) (chatRequest, []s
 	if err := r.ParseMultipartForm(maxChatRequestSize); err != nil {
 		return chatRequest{}, nil, fmt.Errorf("invalid image upload: %w", err)
 	}
-	in := chatRequest{Prompt: r.FormValue("prompt"), AgentID: r.FormValue("agentId")}
+	in := chatRequest{Prompt: r.FormValue("prompt"), AgentID: r.FormValue("agentId"), TargetAgentID: r.FormValue("targetAgentId"), ReferencedMessageID: r.FormValue("referencedMessageId"), ReferenceMode: r.FormValue("referenceMode")}
 	if value := strings.TrimSpace(r.FormValue("sessionId")); value != "" {
 		in.SessionID = &value
 	}
@@ -986,6 +989,10 @@ func conversationPrompt(items []store.Message, prompt string) string {
 	completed := make([]store.Message, 0, len(items))
 	for _, item := range items {
 		if (item.Status == "complete" || item.Status == "succeeded") && strings.TrimSpace(item.Content) != "" {
+			if item.Role == "user" && item.Context != nil && item.Context.Reference != nil {
+				reference := item.Context.Reference
+				item.Content = "Quoted reply from " + reference.AgentName + ":\n" + reference.Content + "\n\nUser request:\n" + item.Content
+			}
 			completed = append(completed, item)
 		}
 	}
@@ -1022,10 +1029,7 @@ func conversationPrompt(items []store.Message, prompt string) string {
 		}
 		remaining := memoryBudgetRunes
 		for _, item := range completed[:recentStart] {
-			speaker := "User"
-			if item.Role == "agent" {
-				speaker = "Assistant"
-			}
+			speaker := conversationSpeaker(item)
 			excerpt := truncateConversationExcerpt(strings.Join(strings.Fields(item.Content), " "), perItemBudget)
 			line := fmt.Sprintf("- %s: %s\n", speaker, excerpt)
 			if len([]rune(line)) > remaining {
@@ -1037,10 +1041,7 @@ func conversationPrompt(items []store.Message, prompt string) string {
 	}
 	b.WriteString("\nRecent completed messages:\n\n")
 	for _, item := range completed[recentStart:] {
-		speaker := "User"
-		if item.Role == "agent" {
-			speaker = "Assistant"
-		}
+		speaker := conversationSpeaker(item)
 		content := item.Content
 		if len(completed[recentStart:]) == 1 && len([]rune(content)) > recentBudgetRunes {
 			content = truncateConversationExcerpt(content, recentBudgetRunes)
@@ -1225,4 +1226,17 @@ func (s *Server) recover(next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(w, r)
 	})
+}
+
+func conversationSpeaker(item store.Message) string {
+	if item.Role == "agent" {
+		if item.Context != nil {
+			return "Assistant (" + item.Context.AgentName + ")"
+		}
+		return "Assistant"
+	}
+	if item.Context != nil && item.Context.Delegated {
+		return "User (to " + item.Context.AgentName + ")"
+	}
+	return "User"
 }

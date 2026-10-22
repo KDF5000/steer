@@ -7696,3 +7696,303 @@ button.ws-chat-response-meta:focus-visible {
   outline: 2px solid var(--ws-accent) !important;
   outline-offset: 4px;
 }
+
+.ws-inline-composer {
+  position: relative;
+  min-height: 48px;
+  padding: 1px 4px 6px;
+  font-size: var(--ws-font-ui);
+  line-height: 1.8;
+}
+.ws-inline-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.ws-inline-editor {
+  outline: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ws-inline-editor:empty::after {
+  content: attr(data-placeholder);
+  color: #a2a3a8;
+  pointer-events: none;
+}
+.ws-inline-token {
+  display: inline-flex;
+  vertical-align: baseline;
+  align-items: center;
+  gap: 4px;
+  margin-right: 6px;
+  color: var(--ws-accent, #5364c9);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ws-inline-token button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #8a8d97;
+  cursor: pointer;
+}
+.ws-inline-token svg,
+.ws-message-reference svg {
+  width: 13px;
+  height: 13px;
+}
+.ws-inline-token summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  list-style: none;
+}
+.ws-inline-token summary::-webkit-details-marker {
+  display: none;
+}
+.ws-quote-preview {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  width: min(440px, 100%);
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: var(--ws-text);
+  background: var(--ws-panel, white);
+  padding: 12px;
+  border: 1px solid var(--ws-border, #ddd);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px #0001;
+  z-index: 30;
+}
+.ws-mention-picker {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: min(300px, 100%);
+  max-height: 240px;
+  overflow: auto;
+  background: var(--ws-panel, white);
+  border: 1px solid var(--ws-border, #ddd);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 6px 20px #0001;
+  z-index: 25;
+}
+.ws-mention-picker button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  padding: 8px 10px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.ws-mention-picker button[aria-selected='true'],
+.ws-mention-picker button:hover {
+  background: #f2f3f7;
+  border-radius: 4px;
+}
+.ws-mention-picker small,
+.ws-mention-picker p {
+  color: var(--ws-muted, #888);
+  font-size: 12px;
+}
+.ws-chat-message-actions > button.is-quoted {
+  color: var(--ws-accent, #5364c9);
+}
+.ws-delegated-author {
+  display: inline;
+  color: var(--ws-muted, #888);
+  font-size: 12px;
+  margin: 0;
+}
+.ws-message-reference {
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 8px;
+  color: #959ba7;
+  font-size: var(--ws-font-ui);
+  line-height: 1.6;
+}
+.ws-message-reference details {
+  min-width: 0;
+}
+.ws-message-reference summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  cursor: pointer;
+  list-style: none;
+}
+.ws-message-reference summary::-webkit-details-marker {
+  display: none;
+}
+.ws-message-reference summary > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ws-message-reference details > div {
+  padding-top: 6px;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow: auto;
+}
+.ws-sent-mention {
+  margin-right: 6px;
+  color: var(--ws-accent, #5263ba);
+  font: inherit;
+}
+.ws-delegation-meta {
+  max-width: 100%;
+  flex-wrap: wrap;
+  line-height: 1.3;
+}
+.ws-delegation-meta > .ws-delegation-agent {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ws-delegation-meta > .ws-delegation-separator {
+  color: #b9bac0;
+}
+.ws-delegation-meta.is-running > .ws-delegation-separator {
+  animation: none;
+}
+
+.ws-inline-editor:empty {
+  display: inline-block;
+  min-width: 1ch;
+  caret-color: var(--ws-text);
+}
+.ws-quote-token {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #f4f5f7;
+  color: #959ba7;
+  font-size: var(--ws-font-ui);
+  line-height: 1.6;
+}
+.ws-quote-token summary {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+.ws-quote-token > details {
+  flex: 1;
+  min-width: 0;
+}
+.ws-quote-token .ws-quote-remove {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  color: inherit;
+}
+.ws-quote-remove:focus-visible {
+  outline: 2px solid var(--ws-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.ws-quote-divider {
+  flex-shrink: 0;
+  color: #c1c5ce;
+}
+.ws-quote-token summary > .ws-quote-label {
+  flex-shrink: 0;
+  overflow: visible;
+}
+.ws-quote-token summary > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-inline-token.ws-mention-token {
+  display: inline;
+  font: inherit;
+  line-height: inherit;
+}
+.ws-mention-token button {
+  display: inline;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ws-accent, #5263ba);
+  font: inherit;
+  line-height: inherit;
+}
+
+.ws-delegation-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 12px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: #85868d;
+  font-size: var(--ws-font-control);
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+.ws-delegation-progress-agent {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.ws-delegation-spinner {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  color: #9a9da8;
+  animation: ws-delegation-spin 1.6s linear infinite;
+}
+.ws-delegation-elapsed {
+  color: #a9aab1;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.ws-delegation-view {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-left: 3px;
+  color: #a2a3a9;
+}
+.ws-delegation-progress:hover .ws-delegation-view,
+.ws-delegation-progress:focus-visible .ws-delegation-view {
+  color: #606168;
+}
+.ws-delegation-progress:focus-visible {
+  outline: 2px solid var(--ws-accent);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+@keyframes ws-delegation-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ws-delegation-spinner {
+    animation: none;
+  }
+}

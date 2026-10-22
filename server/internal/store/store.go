@@ -66,20 +66,21 @@ type Project struct {
 }
 
 type Session struct {
-	ID                 string    `json:"id"`
-	WorkspaceID        string    `json:"workspaceId"`
-	Title              string    `json:"title"`
-	AgentID            string    `json:"agentId"`
-	ProjectID          *string   `json:"projectId"`
-	ExecutionRuntimeID *string   `json:"executionRuntimeId"`
-	WorkspaceKey       *string   `json:"workspaceKey"`
-	WorkspaceKind      *string   `json:"workspaceKind"`
-	WorkspaceSource    *string   `json:"workspaceSource"`
-	WorkspaceRef       *string   `json:"workspaceRef"`
-	WorkspaceSubdir    *string   `json:"workspaceSubdir"`
-	ExecutionMode      *string   `json:"executionMode"`
-	CreatedAt          time.Time `json:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt"`
+	ParentConversationID *string   `json:"parentConversationId,omitempty"`
+	ID                   string    `json:"id"`
+	WorkspaceID          string    `json:"workspaceId"`
+	Title                string    `json:"title"`
+	AgentID              string    `json:"agentId"`
+	ProjectID            *string   `json:"projectId"`
+	ExecutionRuntimeID   *string   `json:"executionRuntimeId"`
+	WorkspaceKey         *string   `json:"workspaceKey"`
+	WorkspaceKind        *string   `json:"workspaceKind"`
+	WorkspaceSource      *string   `json:"workspaceSource"`
+	WorkspaceRef         *string   `json:"workspaceRef"`
+	WorkspaceSubdir      *string   `json:"workspaceSubdir"`
+	ExecutionMode        *string   `json:"executionMode"`
+	CreatedAt            time.Time `json:"createdAt"`
+	UpdatedAt            time.Time `json:"updatedAt"`
 }
 
 func scanProject(row pgx.Row) (Project, error) {
@@ -139,6 +140,24 @@ func (s *Store) DeleteProject(ctx context.Context, wid, id string) (Project, err
 	return project, err
 }
 
+// MessageContext snapshots authorship and the selected quotation for a turn.
+type MessageContext struct {
+	SeenDelegationIDs    []string          `json:"seenDelegationIds,omitempty"`
+	DelegationSessionID  string            `json:"delegationSessionId,omitempty"`
+	ParentConversationID string            `json:"parentConversationId,omitempty"`
+	TaskID               string            `json:"taskId,omitempty"`
+	AgentID              string            `json:"agentId"`
+	AgentName            string            `json:"agentName"`
+	OwnerAgentID         string            `json:"ownerAgentId"`
+	Delegated            bool              `json:"delegated,omitempty"`
+	Reference            *MessageReference `json:"reference,omitempty"`
+}
+type MessageReference struct {
+	MessageID string `json:"messageId"`
+	AgentName string `json:"agentName"`
+	Content   string `json:"content"`
+}
+
 type Message struct {
 	ID          string              `json:"id"`
 	WorkspaceID string              `json:"workspaceId"`
@@ -151,6 +170,7 @@ type Message struct {
 	CreatedAt   time.Time           `json:"createdAt"`
 	UpdatedAt   time.Time           `json:"updatedAt"`
 	Attachments []MessageAttachment `json:"attachments,omitempty"`
+	Context     *MessageContext     `json:"context,omitempty"`
 }
 
 type MessageAttachment struct {
@@ -192,23 +212,26 @@ type RunLink struct {
 }
 
 type Task struct {
-	ID                 string          `json:"id"`
-	WorkspaceID        string          `json:"-"`
-	ConversationID     string          `json:"conversationId"`
-	RelayRunID         string          `json:"runId"`
-	AgentID            string          `json:"agentId"`
-	UserMessageID      string          `json:"userMessageId"`
-	AssistantMessageID string          `json:"assistantMessageId"`
-	Source             string          `json:"source"`
-	IdempotencyKey     *string         `json:"-"`
-	Status             string          `json:"status"`
-	Result             *string         `json:"result"`
-	Error              *string         `json:"error"`
-	Metadata           json.RawMessage `json:"metadata"`
-	CreatedAt          time.Time       `json:"createdAt"`
-	UpdatedAt          time.Time       `json:"updatedAt"`
-	StartedAt          *time.Time      `json:"startedAt"`
-	CompletedAt        *time.Time      `json:"completedAt"`
+	ParentConversationID *string         `json:"parentConversationId,omitempty"`
+	DelegationSession    *Session        `json:"-"`
+	MessageContext       *MessageContext `json:"-"`
+	ID                   string          `json:"id"`
+	WorkspaceID          string          `json:"-"`
+	ConversationID       string          `json:"conversationId"`
+	RelayRunID           string          `json:"runId"`
+	AgentID              string          `json:"agentId"`
+	UserMessageID        string          `json:"userMessageId"`
+	AssistantMessageID   string          `json:"assistantMessageId"`
+	Source               string          `json:"source"`
+	IdempotencyKey       *string         `json:"-"`
+	Status               string          `json:"status"`
+	Result               *string         `json:"result"`
+	Error                *string         `json:"error"`
+	Metadata             json.RawMessage `json:"metadata"`
+	CreatedAt            time.Time       `json:"createdAt"`
+	UpdatedAt            time.Time       `json:"updatedAt"`
+	StartedAt            *time.Time      `json:"startedAt"`
+	CompletedAt          *time.Time      `json:"completedAt"`
 }
 
 var ErrConversationBusy = errors.New("conversation already has an active task")
@@ -445,7 +468,7 @@ func (s *Store) DeleteSession(ctx context.Context, wid, id string) (Session, err
 }
 
 func (s *Store) Messages(ctx context.Context, wid, sessionID string) ([]Message, error) {
-	rows, err := s.pool.Query(ctx, `SELECT id,workspace_id,session_id,role,content,status,relay_run_id,error,created_at,updated_at FROM messages WHERE workspace_id=$1 AND session_id=$2 ORDER BY created_at, CASE role WHEN 'user' THEN 0 ELSE 1 END, id`, wid, sessionID)
+	rows, err := s.pool.Query(ctx, `SELECT id,workspace_id,session_id,role,content,status,relay_run_id,error,created_at,updated_at,context FROM messages WHERE workspace_id=$1 AND session_id=$2 ORDER BY created_at, CASE role WHEN 'user' THEN 0 ELSE 1 END, id`, wid, sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -453,7 +476,7 @@ func (s *Store) Messages(ctx context.Context, wid, sessionID string) ([]Message,
 	out := []Message{}
 	for rows.Next() {
 		var x Message
-		if err := rows.Scan(&x.ID, &x.WorkspaceID, &x.SessionID, &x.Role, &x.Content, &x.Status, &x.RelayRunID, &x.Error, &x.CreatedAt, &x.UpdatedAt); err != nil {
+		if err := rows.Scan(&x.ID, &x.WorkspaceID, &x.SessionID, &x.Role, &x.Content, &x.Status, &x.RelayRunID, &x.Error, &x.CreatedAt, &x.UpdatedAt, &x.Context); err != nil {
 			return nil, err
 		}
 		out = append(out, x)
@@ -485,8 +508,8 @@ func (s *Store) Messages(ctx context.Context, wid, sessionID string) ([]Message,
 
 func (s *Store) Message(ctx context.Context, wid, id string) (Message, error) {
 	var item Message
-	err := s.pool.QueryRow(ctx, `SELECT id,workspace_id,session_id,role,content,status,relay_run_id,error,created_at,updated_at FROM messages WHERE workspace_id=$1 AND id=$2`, wid, id).Scan(
-		&item.ID, &item.WorkspaceID, &item.SessionID, &item.Role, &item.Content, &item.Status, &item.RelayRunID, &item.Error, &item.CreatedAt, &item.UpdatedAt,
+	err := s.pool.QueryRow(ctx, `SELECT id,workspace_id,session_id,role,content,status,relay_run_id,error,created_at,updated_at,context FROM messages WHERE workspace_id=$1 AND id=$2`, wid, id).Scan(
+		&item.ID, &item.WorkspaceID, &item.SessionID, &item.Role, &item.Content, &item.Status, &item.RelayRunID, &item.Error, &item.CreatedAt, &item.UpdatedAt, &item.Context,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Message{}, ErrNotFound
@@ -512,14 +535,14 @@ func (s *Store) SharedConversationByToken(ctx context.Context, hash string) (Sha
 	return share, err
 }
 
-const sessionColumns = `id,workspace_id,title,agent_id,project_id,execution_runtime_id,workspace_key,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,created_at,updated_at`
+const sessionColumns = `id,workspace_id,title,agent_id,project_id,execution_runtime_id,workspace_key,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,parent_conversation_id,created_at,updated_at`
 
 type rowScanner interface {
 	Scan(...any) error
 }
 
 func scanSessionFields(row rowScanner, x *Session) error {
-	return row.Scan(&x.ID, &x.WorkspaceID, &x.Title, &x.AgentID, &x.ProjectID, &x.ExecutionRuntimeID, &x.WorkspaceKey, &x.WorkspaceKind, &x.WorkspaceSource, &x.WorkspaceRef, &x.WorkspaceSubdir, &x.ExecutionMode, &x.CreatedAt, &x.UpdatedAt)
+	return row.Scan(&x.ID, &x.WorkspaceID, &x.Title, &x.AgentID, &x.ProjectID, &x.ExecutionRuntimeID, &x.WorkspaceKey, &x.WorkspaceKind, &x.WorkspaceSource, &x.WorkspaceRef, &x.WorkspaceSubdir, &x.ExecutionMode, &x.ParentConversationID, &x.CreatedAt, &x.UpdatedAt)
 }
 
 func (s *Store) EnsureSession(ctx context.Context, wid, sessionID, title, agentID string, projectID, executionRuntimeID, workspaceKey *string, project *Project) (Session, error) {
@@ -607,10 +630,21 @@ func (s *Store) saveChatRun(ctx context.Context, wid, sessionID, agentID, prompt
 		return Message{}, Message{}, err
 	}
 	defer tx.Rollback(ctx)
+	if task != nil && task.DelegationSession != nil {
+		child := task.DelegationSession
+		_, err = tx.Exec(ctx, `INSERT INTO chat_sessions(id,workspace_id,title,agent_id,project_id,execution_runtime_id,workspace_key,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,parent_conversation_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, child.ID, wid, child.Title, child.AgentID, child.ProjectID, child.ExecutionRuntimeID, child.WorkspaceKey, child.WorkspaceKind, child.WorkspaceSource, child.WorkspaceRef, child.WorkspaceSubdir, child.ExecutionMode, child.ParentConversationID)
+		if err != nil {
+			return Message{}, Message{}, err
+		}
+	}
 	now := time.Now()
 	user := Message{ID: uuid.NewString(), WorkspaceID: wid, SessionID: sessionID, Role: "user", Content: prompt, Status: "complete", CreatedAt: now, UpdatedAt: now}
 	assistant := Message{ID: uuid.NewString(), WorkspaceID: wid, SessionID: sessionID, Role: "agent", Status: status, RelayRunID: &runID, CreatedAt: now, UpdatedAt: now}
-	_, err = tx.Exec(ctx, `INSERT INTO messages(id,workspace_id,session_id,role,content,status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$7)`, user.ID, wid, sessionID, user.Role, user.Content, user.Status, now)
+	if task != nil {
+		user.Context = task.MessageContext
+		assistant.Context = task.MessageContext
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO messages(id,workspace_id,session_id,role,content,status,created_at,updated_at,context) VALUES($1,$2,$3,$4,$5,$6,$7,$7,$8)`, user.ID, wid, sessionID, user.Role, user.Content, user.Status, now, user.Context)
 	if err != nil {
 		return Message{}, Message{}, err
 	}
@@ -625,7 +659,7 @@ func (s *Store) saveChatRun(ctx context.Context, wid, sessionID, agentID, prompt
 		}
 	}
 	user.Attachments = attachments
-	_, err = tx.Exec(ctx, `INSERT INTO messages(id,workspace_id,session_id,role,content,status,relay_run_id,created_at,updated_at) VALUES($1,$2,$3,$4,'',$5,$6,$7,$7)`, assistant.ID, wid, sessionID, assistant.Role, status, runID, now)
+	_, err = tx.Exec(ctx, `INSERT INTO messages(id,workspace_id,session_id,role,content,status,relay_run_id,created_at,updated_at,context) VALUES($1,$2,$3,$4,'',$5,$6,$7,$7,$8)`, assistant.ID, wid, sessionID, assistant.Role, status, runID, now, assistant.Context)
 	if err != nil {
 		return Message{}, Message{}, err
 	}
@@ -640,15 +674,51 @@ func (s *Store) saveChatRun(ctx context.Context, wid, sessionID, agentID, prompt
 		if len(task.Metadata) == 0 {
 			task.Metadata = json.RawMessage(`{}`)
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO tasks(id,workspace_id,conversation_id,relay_run_id,agent_id,user_message_id,assistant_message_id,source,idempotency_key,status,metadata,started_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now())`,
-			task.ID, wid, sessionID, runID, agentID, user.ID, assistant.ID, task.Source, task.IdempotencyKey, status, task.Metadata)
+		_, err = tx.Exec(ctx, `INSERT INTO tasks(id,workspace_id,conversation_id,relay_run_id,agent_id,user_message_id,assistant_message_id,source,idempotency_key,status,metadata,parent_conversation_id,started_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now())`,
+			task.ID, wid, sessionID, runID, agentID, user.ID, assistant.ID, task.Source, task.IdempotencyKey, status, task.Metadata, task.ParentConversationID)
 		if err != nil {
 			return Message{}, Message{}, err
 		}
 	}
-	_, err = tx.Exec(ctx, `UPDATE chat_sessions SET agent_id=$3,updated_at=$4 WHERE workspace_id=$1 AND id=$2`, wid, sessionID, agentID, now)
+	sessionAgentID := agentID
+	if assistant.Context != nil && assistant.Context.Delegated && (task == nil || task.ParentConversationID == nil) {
+		sessionAgentID = assistant.Context.OwnerAgentID
+	}
+	_, err = tx.Exec(ctx, `UPDATE chat_sessions SET agent_id=$3,updated_at=$4 WHERE workspace_id=$1 AND id=$2`, wid, sessionID, sessionAgentID, now)
 	if err != nil {
 		return Message{}, Message{}, err
+	}
+	if task != nil && task.ParentConversationID != nil {
+		parentID := *task.ParentConversationID
+		parentUser := user
+		parentUser.ID = uuid.NewString()
+		parentUser.SessionID = parentID
+		parentUser.Attachments = nil
+		parentAssistant := assistant
+		parentAssistant.ID = uuid.NewString()
+		parentAssistant.SessionID = parentID
+		_, err = tx.Exec(ctx, `INSERT INTO messages(id,workspace_id,session_id,role,content,status,created_at,updated_at,context) VALUES($1,$2,$3,'user',$4,'complete',$5,$5,$6)`, parentUser.ID, wid, parentID, prompt, now, parentUser.Context)
+		if err != nil {
+			return Message{}, Message{}, err
+		}
+		for _, attachment := range attachments {
+			attachment.ID = uuid.NewString()
+			attachment.MessageID = parentUser.ID
+			_, err = tx.Exec(ctx, `INSERT INTO message_attachments(id,workspace_id,session_id,message_id,name,content_type,size,content,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, attachment.ID, wid, parentID, parentUser.ID, attachment.Name, attachment.ContentType, attachment.Size, attachment.Content, now)
+			if err != nil {
+				return Message{}, Message{}, err
+			}
+			parentUser.Attachments = append(parentUser.Attachments, attachment)
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO messages(id,workspace_id,session_id,role,content,status,relay_run_id,created_at,updated_at,context) VALUES($1,$2,$3,'agent','',$4,$5,$6,$6,$7)`, parentAssistant.ID, wid, parentID, status, runID, now, parentAssistant.Context)
+		if err != nil {
+			return Message{}, Message{}, err
+		}
+		_, err = tx.Exec(ctx, `UPDATE chat_sessions SET updated_at=$3 WHERE workspace_id=$1 AND id=$2`, wid, parentID, now)
+		if err != nil {
+			return Message{}, Message{}, err
+		}
+		user, assistant = parentUser, parentAssistant
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return Message{}, Message{}, err
@@ -656,11 +726,11 @@ func (s *Store) saveChatRun(ctx context.Context, wid, sessionID, agentID, prompt
 	return user, assistant, nil
 }
 
-const taskColumns = `id,workspace_id,conversation_id,relay_run_id,agent_id,user_message_id,assistant_message_id,source,idempotency_key,status,result,error,metadata,created_at,updated_at,started_at,completed_at`
+const taskColumns = `id,workspace_id,conversation_id,relay_run_id,agent_id,user_message_id,assistant_message_id,source,idempotency_key,status,result,error,metadata,parent_conversation_id,created_at,updated_at,started_at,completed_at`
 
 func scanTask(row pgx.Row) (Task, error) {
 	var task Task
-	err := row.Scan(&task.ID, &task.WorkspaceID, &task.ConversationID, &task.RelayRunID, &task.AgentID, &task.UserMessageID, &task.AssistantMessageID, &task.Source, &task.IdempotencyKey, &task.Status, &task.Result, &task.Error, &task.Metadata, &task.CreatedAt, &task.UpdatedAt, &task.StartedAt, &task.CompletedAt)
+	err := row.Scan(&task.ID, &task.WorkspaceID, &task.ConversationID, &task.RelayRunID, &task.AgentID, &task.UserMessageID, &task.AssistantMessageID, &task.Source, &task.IdempotencyKey, &task.Status, &task.Result, &task.Error, &task.Metadata, &task.ParentConversationID, &task.CreatedAt, &task.UpdatedAt, &task.StartedAt, &task.CompletedAt)
 	return task, err
 }
 
@@ -689,6 +759,27 @@ func (s *Store) ActiveConversationTask(ctx context.Context, wid, conversationID 
 }
 
 func (s *Store) TaskMessages(ctx context.Context, wid string, task Task) (Message, Message, error) {
+	if task.ParentConversationID != nil {
+		messages, err := s.Messages(ctx, wid, *task.ParentConversationID)
+		if err != nil {
+			return Message{}, Message{}, err
+		}
+		var user, assistant Message
+		for _, message := range messages {
+			if message.Context != nil && message.Context.TaskID == task.ID {
+				if message.Role == "user" {
+					user = message
+				} else {
+					assistant = message
+				}
+			}
+		}
+		if user.ID == "" || assistant.ID == "" {
+			return Message{}, Message{}, ErrNotFound
+		}
+		return user, assistant, nil
+	}
+
 	user, err := s.Message(ctx, wid, task.UserMessageID)
 	if err != nil {
 		return Message{}, Message{}, err
@@ -884,4 +975,22 @@ func (s *Store) Artifact(ctx context.Context, wid, id string) (Artifact, error) 
 func (s *Store) UpsertArtifact(ctx context.Context, wid string, link RunLink, id, name, typ, ref, contentType string, size int64) error {
 	_, err := s.pool.Exec(ctx, `INSERT INTO artifacts(id,workspace_id,relay_artifact_id,relay_run_id,name,type,ref,content_type,size,state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'ready') ON CONFLICT(workspace_id,relay_artifact_id) WHERE relay_artifact_id IS NOT NULL DO UPDATE SET name=EXCLUDED.name,type=EXCLUDED.type,ref=EXCLUDED.ref,content_type=EXCLUDED.content_type,size=EXCLUDED.size`, uuid.NewString(), wid, id, link.RelayRunID, name, typ, ref, contentType, size)
 	return err
+}
+
+// PendingDelegations lets a parent refresh results before its Agent resumes.
+func (s *Store) PendingDelegations(ctx context.Context, wid, sessionID string) ([]Task, error) {
+	rows, err := s.pool.Query(ctx, `SELECT `+taskColumns+` FROM tasks WHERE workspace_id=$1 AND parent_conversation_id=$2 AND status NOT IN ('succeeded','failed','cancelled')`, wid, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Task{}
+	for rows.Next() {
+		task, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, task)
+	}
+	return out, rows.Err()
 }

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Steer · Agent 引用与委派交互方案</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<header class="prototype-header">
+  <div><span class="eyebrow">STEER / INTERACTION STUDY</span><h1>引用一条回复，交给另一个 Agent。</h1></div>
+  <nav aria-label="交互方案"><button data-variant="a">A · 消息接续</button><button data-variant="b">B · 轻量引用</button><button data-variant="c">C · 明确交接</button></nav>
+</header>
+<section class="concept-note"><div><strong id="concept-title"></strong><p id="concept-description"></p></div><span id="concept-tag"></span></section>
+<div class="workspace">
+  <aside class="sidebar">
+    <div class="brand"><span>S</span><strong>Personal workspace</strong><span class="muted">⌄</span></div>
+    <button class="new-chat">＋ 新建会话</button>
+    <div class="side-label">项目</div><div class="project-row">▾ <span>▱</span> Steer</div>
+    <div class="session active">Agent 之间如何接续工作</div><div class="session">项目执行位置优化</div>
+    <button class="add-project">＋ 添加项目</button>
+    <div class="side-label system">工作区</div><div class="side-item">智能体 <span>3</span></div><div class="side-item">运行环境 <span>2</span></div><div class="side-item">设置</div>
+    <div class="account"><span>K</span><div>kongdefei<small>个人工作区</small></div></div>
+  </aside>
+  <main class="conversation">
+    <header class="conversation-header"><div><span>Steer</span><i>/</i><strong>Agent 之间如何接续工作</strong></div><span class="machine"><b></b> dev-mac-mini</span></header>
+    <div class="thread" id="thread">
+      <div class="user-message">把 Project 的执行位置改成机器级别，同一机器上的 Codex 和 Trae 都能使用。</div>
+      <article class="message" data-message="implementation">
+        <details class="response-status"><summary>Completed in 3m 37s <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><div class="process-detail">读取项目代码 → 修改项目绑定 → 运行测试 → 完成</div></details>
+        <div class="response-divider"></div>
+        <div class="message-body"><p>已完成机器级项目绑定。项目现在选择机器，Agent 决定使用哪个 Runtime。</p><ul><li>旧项目会迁移到原 Runtime 所属的机器。</li><li>同一会话可以切换同机 Agent，并带上已有对话。</li><li>前端构建与相关测试通过，修改尚未提交。</li></ul>
+        <button class="changes"><span>▤</span> Edited 4 files <strong>+128</strong><em>−42</em><span class="review-label">Review</span></button></div>
+        <div class="message-actions" data-toolbar="implementation"></div>
+      </article>
+      <article class="message earlier" data-message="explanation">
+        <details class="response-status"><summary>Completed in 12s <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></summary><div class="process-detail">整理项目与 Runtime 的边界说明</div></details>
+        <div class="response-divider"></div>
+        <div class="message-body"><p>补充一点：项目位置限制的是机器。不同 Runtime 的原生会话独立保存，Steer 负责把对话和任务结果衔接起来。</p></div>
+        <div class="message-actions" data-toolbar="explanation"></div>
+      </article>
+      <div id="generated"></div>
+    </div>
+    <div class="composer-area">
+      <div id="composer" class="composer">
+        <div id="recipient-bar"></div>
+        <div id="quote-region"></div>
+        <div class="input-wrap"><div id="prompt" class="rich-prompt"><span id="inline-recipient" contenteditable="false"></span><span id="draft-text" contenteditable="true" role="textbox" aria-label="消息输入框" aria-multiline="true" data-placeholder="描述一项任务，输入 @ 选择其他 Agent…"></span></div><div id="mention-menu" class="mention-menu" hidden></div></div>
+        <div class="composer-footer"><div class="composer-context"><button id="owner-button" class="owner-button"><span class="tiny-avatar">A</span> Builder <span class="muted">⌄</span></button><span class="project-chip">▱ Steer</span></div><div class="footer-tools"><button id="delegate-button" class="delegate-button"></button><button id="send" class="send" aria-label="发送消息">↑</button></div></div>
+      </div>
+      <div class="below-composer"><span id="routing-note">普通消息由 Builder 处理</span><span>Enter 发送 · Shift + Enter 换行</span></div>
+    </div>
+  </main>
+</div>
+<section class="demo-controls"><span>试一试</span><button id="scenario-explicit">引用第一条回复 → @Reviewer</button><button id="scenario-auto">直接 @Reviewer → 自动引用最新回复</button><button id="scenario-noquote">移除引用 → 独立任务</button><button id="reset">重置演示</button><p>演示使用模拟任务，不连接真实 Agent。结果返回后可点击「交给 Builder 继续」。</p></section>
+<div id="toast" role="status"></div>
+<dialog id="quote-dialog"><div class="dialog-top"><strong id="quote-dialog-title">引用内容</strong><button id="close-dialog" aria-label="关闭引用预览">×</button></div><div id="quote-dialog-body"></div><button id="dialog-done">完成</button></dialog>
+<script src="./app.js"></script>
+</body>
+</html>

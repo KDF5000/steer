@@ -153,6 +153,34 @@ Content-Type: application/json
 
 API 创建的会话是普通 Steer 会话，会出现在网页会话列表中。
 
+### 引用与临时委派
+
+在已有会话中提交任务时，可使用以下可选字段（JSON 和 multipart 均支持）：
+
+| 字段                  | 说明                                                                                                        |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `targetAgentId`       | 本轮临时执行的 Agent。必须属于当前 Workspace，并在会话机器上有可用 Runtime；主 Agent 不变。                 |
+| `referencedMessageId` | 引用本会话中已完成的 Agent 回复。服务端保存该回复的内容快照，不接受客户端提供引用正文。                     |
+| `referenceMode`       | `explicit` 指定引用；`latest` 取最新完成回复；`none` 明确不引用。委派时省略引用字段会默认引用最新完成回复。 |
+
+```json
+{
+  "agentId": "primary-agent-id",
+  "targetAgentId": "delegate-agent-id",
+  "prompt": "请检查这个结果，并指出需要调整的地方。",
+  "referencedMessageId": "completed-message-id",
+  "referenceMode": "explicit"
+}
+```
+
+将上述请求提交到 `POST /api/v1/conversations/{conversationId}/tasks`。委派 Agent 使用独立的原生会话，只收到本轮请求、引用内容和自己的指令/Skills；工作目录和 Git worktree 与原会话一致。委派支持本地目录和可复用的 Git 会话 worktree，临时目录不能作为共享执行位置。每个会话仍只允许一个活动任务；委派任务会创建独立子会话，因此不会占用父会话的活动任务。
+
+返回的 `delegationSession` 是新建的项目会话，包含父会话关联。返回的顶层 `conversationId` / `sessionId` 仍为父会话 ID，`task.conversationId` 为执行任务的子会话 ID。原会话显示简短状态和子会话入口，执行过程在子会话中查看，完成后结果同步回原会话。
+
+返回的 `userMessage.context` 和 `assistantMessage.context` 包含 `agentId`、`agentName`、`ownerAgentId`、`delegated` 以及 `taskId`、`delegationSessionId` 和可选 `reference`，重新加载会话仍可恢复作者和引用。
+
+委派完成后，使用主 Agent ID 再发送任务即可继续原会话；Steer 会将委派结果纳入主 Agent 的共享上下文。也可以通过 `referencedMessageId` 明确引用某条委派结果。网页中的“交给主 Agent 继续”只准备输入草稿，需要用户发送后才执行。
+
 ### 幂等提交
 
 生产调用应为每次逻辑请求设置唯一的 `Idempotency-Key`，最大长度 200 个字符。

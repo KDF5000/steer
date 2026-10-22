@@ -15,6 +15,7 @@ import {
 import {
   AlertCircle,
   ArrowDown,
+  ArrowUpRight,
   FileCode,
   FileJson,
   FileImage,
@@ -22,6 +23,7 @@ import {
   Check,
   ChevronRight,
   Copy,
+  Quote,
   Download,
   ExternalLink,
   FileText,
@@ -36,6 +38,8 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Reply,
+  LoaderCircle,
   Search,
   Send,
   Server,
@@ -53,6 +57,12 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
+import {
+  InlineComposer,
+  quotationSummary,
+  focusInlineComposer,
+} from './inline-composer';
+import type { TaskMessageOptions } from '@/lib/domain';
 import hljs from 'highlight.js/lib/common';
 import 'highlight.js/styles/github.css';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
@@ -379,6 +389,46 @@ const ResponseStatus = memo(function ResponseStatus({
     <span aria-live={terminal ? undefined : 'polite'}>
       {responseStatusLabel(message, now)}
     </span>
+  );
+});
+
+const DelegationProgress = memo(function DelegationProgress({
+  message,
+  onOpen,
+}: {
+  message: ChatMessage;
+  onOpen: () => void;
+}) {
+  const { t } = useI18n();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const status =
+    message.status === 'queued'
+      ? 'Waiting to start'
+      : message.status === 'cancelling'
+        ? 'Stopping'
+        : 'Processing';
+  return (
+    <button
+      type="button"
+      className="ws-delegation-progress"
+      title={t('Open delegated conversation')}
+      aria-label={t('Open delegated conversation')}
+      onClick={onOpen}
+    >
+      <LoaderCircle className="ws-delegation-spinner" aria-hidden="true" />
+      <span className="ws-delegation-progress-agent">
+        {message.context?.agentName}
+      </span>
+      <span aria-live="polite">{t(status)}</span>
+      <span className="ws-delegation-elapsed">
+        · {formatElapsed(message.createdAt, undefined, now)}
+      </span>
+      <ArrowUpRight className="ws-delegation-view" aria-hidden="true" />
+    </button>
   );
 });
 
@@ -915,6 +965,65 @@ export default function Fusion() {
     return () => window.clearTimeout(timeout);
   }, [notice]);
 
+  const delegatedRuns = messages.filter(
+    (message) =>
+      message.role === 'agent' &&
+      message.runId &&
+      message.context?.delegationSessionId &&
+      message.context.delegationSessionId !== chatSession &&
+      !isTerminalStatus(message.status),
+  );
+  const delegatedRunKey = delegatedRuns
+    .map((message) => `${message.runId}:${message.context?.taskId || ''}`)
+    .join(',');
+  useEffect(() => {
+    if (!delegatedRunKey) return;
+    let cancelled = false;
+    let busy = false;
+    const runs = delegatedRunKey.split(',').map((pair) => pair.split(':'));
+    const refresh = async () => {
+      if (busy || cancelled) return;
+      busy = true;
+      try {
+        await Promise.all(
+          runs.map(async ([runId, taskId]) => {
+            const result = await (
+              taskId ? steer.task(taskId) : steer.run(runId)
+            ).catch(() => null);
+            if (!result || cancelled) return;
+            const terminal = isTerminalStatus(result.run.status);
+            setMessages((current) =>
+              current.map((message) =>
+                message.runId === runId
+                  ? {
+                      ...message,
+                      status: result.run.status,
+                      text: terminal ? result.content : '',
+                      error: result.error || undefined,
+                      createdAt: result.run.started_at || message.createdAt,
+                      updatedAt:
+                        result.run.completed_at ||
+                        (terminal
+                          ? new Date().toISOString()
+                          : message.updatedAt),
+                    }
+                  : message,
+              ),
+            );
+          }),
+        );
+      } finally {
+        busy = false;
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [delegatedRunKey, chatSession]);
+
   const pollRun = useCallback(async (runID: string) => {
     if (
       activeRun.current !== runID ||
@@ -1184,6 +1293,7 @@ export default function Fusion() {
         }
         const sessionMessages: ChatMessage[] = data.messages.map((message) => ({
           id: message.id,
+          context: message.context,
           role: message.role,
           text:
             message.role === 'agent' && !isTerminalStatus(message.status)
@@ -1209,6 +1319,8 @@ export default function Fusion() {
           (message) =>
             message.role === 'agent' &&
             Boolean(message.runId) &&
+            (!message.context?.delegationSessionId ||
+              message.context.delegationSessionId === sessionID) &&
             !isTerminalStatus(message.status),
         );
         if (storedRunningMessage?.runId) {
@@ -1267,6 +1379,8 @@ export default function Fusion() {
           (message) =>
             message.role === 'agent' &&
             Boolean(message.runId) &&
+            (!message.context?.delegationSessionId ||
+              message.context.delegationSessionId === sessionID) &&
             !isTerminalStatus(message.status),
         );
         if (runningMessage?.runId) {
@@ -1413,10 +1527,11 @@ export default function Fusion() {
     setChatProject(projectID);
   };
 
-  const send = async (override?: string) => {
+  const send = async (override?: string, options?: TaskMessageOptions) => {
     const text = (override ?? chatInput).trim();
     const images = override ? [] : chatImages;
-    if ((!text && images.length === 0) || chatWorking || !currentAgent) return;
+    if ((!text && images.length === 0) || chatWorking || !currentAgent)
+      return false;
     const optimisticID = `local-${Date.now()}`;
     const startedAt = new Date().toISOString();
     setMessages((current) => [
@@ -1440,6 +1555,7 @@ export default function Fusion() {
     try {
       const result = await steer.createTask({
         prompt: text,
+        ...options,
         agentId: currentAgent.id,
         ...(chatProject !== 'none' ? { projectId: chatProject } : {}),
         ...(chatSession ? { conversationId: chatSession } : {}),
@@ -1482,8 +1598,44 @@ export default function Fusion() {
           createdAt: now,
           updatedAt: now,
         };
-        return [session, ...current.filter((item) => item.id !== session.id)];
+        const existing = current.find((item) => item.id === session.id);
+        return [
+          existing
+            ? { ...existing, updatedAt: now, agentId: currentAgent.id }
+            : session,
+          ...current.filter((item) => item.id !== session.id),
+        ];
       });
+      if (result.delegationSession) {
+        const child = result.delegationSession;
+        setChatSessions((current) => [
+          child,
+          ...current.filter((item) => item.id !== child.id),
+        ]);
+        setMessages((current) => [
+          ...current.map((item) =>
+            item.id === optimisticID
+              ? {
+                  ...item,
+                  id: result.userMessage.id,
+                  context: result.userMessage.context,
+                  attachments: persistedAttachments || item.attachments,
+                }
+              : item,
+          ),
+          {
+            id: result.assistantMessage.id,
+            context: result.assistantMessage.context,
+            role: 'agent',
+            text: '',
+            status: result.status,
+            runId: result.runId,
+            createdAt: startedAt,
+          },
+        ]);
+        setChatWorking(false);
+        return true;
+      }
       activeRun.current = result.runId;
       activeTask.current = result.taskId;
       activeRunContext.current = {
@@ -1497,12 +1649,14 @@ export default function Fusion() {
             ? {
                 ...item,
                 id: result.userMessage.id,
+                context: result.userMessage.context,
                 attachments: persistedAttachments || item.attachments,
               }
             : item,
         ),
         {
           id: result.assistantMessage.id,
+          context: result.assistantMessage.context,
           role: 'agent',
           text: '',
           status: result.status,
@@ -1512,6 +1666,7 @@ export default function Fusion() {
           activityLog: [{ id: 'starting-agent', label: 'Starting Agent' }],
         },
       ]);
+      return true;
     } catch (error) {
       setMessages((current) =>
         current.filter((message) => message.id !== optimisticID),
@@ -1521,6 +1676,7 @@ export default function Fusion() {
         error instanceof Error ? error.message : 'Could not submit the run.',
       );
       setChatWorking(false);
+      return false;
     }
   };
 
@@ -2662,6 +2818,7 @@ export default function Fusion() {
             images={chatImages}
             working={chatWorking}
             onAgent={setChatAgent}
+            onDelegationSession={(id) => void openChatSession(id)}
             onProject={selectChatProject}
             onAddProject={() => setProjectDialog(true)}
             onInput={setChatInput}
@@ -2715,8 +2872,8 @@ export default function Fusion() {
                 return current.filter((image) => image.id !== id);
               })
             }
-            onSend={() => void send()}
-            onRetry={(prompt) => void send(prompt)}
+            onSend={(options) => send(undefined, options)}
+            onRetry={(prompt, options) => void send(prompt, options)}
             onStop={() => void stop()}
             onNotice={setNotice}
             onArtifact={(id) => {
@@ -3176,6 +3333,7 @@ function ChatView({
   images,
   working,
   onAgent,
+  onDelegationSession,
   onProject,
   onAddProject,
   onInput,
@@ -3202,13 +3360,14 @@ function ChatView({
   images: PendingImage[];
   working: boolean;
   onAgent: (id: string) => void;
+  onDelegationSession: (id: string) => void;
   onProject: (id: string) => void;
   onAddProject: () => void;
   onInput: (value: string) => void;
   onImages: (files: File[]) => void;
   onRemoveImage: (id: string) => void;
-  onSend: () => void;
-  onRetry: (prompt: string) => void;
+  onSend: (options?: TaskMessageOptions) => Promise<boolean>;
+  onRetry: (prompt: string, options?: TaskMessageOptions) => void;
   onStop: () => void;
   onNotice: (message: string) => void;
   onArtifact: (id: string) => void;
@@ -3327,7 +3486,65 @@ function ChatView({
   const projectLabel =
     selectedProject?.workspaceSource || t('No project selected');
   const scrollArea = useRef<HTMLDivElement>(null);
-  const composer = useRef<HTMLTextAreaElement>(null);
+  const composer = useRef<HTMLSpanElement>(null);
+  const [quotedMessage, setQuotedMessage] = useState<ChatMessage>();
+  const [delegationTarget, setDelegationTarget] = useState<AgentItem>();
+  const [referenceRemoved, setReferenceRemoved] = useState(false);
+  const eligibleDelegates = agents.filter(
+    (item) =>
+      Boolean(
+        sessionId && (selectedProject || agent?.workspaceKind === 'local'),
+      ) &&
+      item.id !== agent?.id &&
+      projectRuntimeChoices?.some(
+        (runtime) =>
+          runtime.provider === item.runtimeProvider &&
+          (!item.runtimeId || item.runtimeId === runtime.runtimeId),
+      ),
+  );
+  const quoteMessage = (message: ChatMessage) => {
+    setQuotedMessage((current) =>
+      current?.id === message.id ? undefined : message,
+    );
+    setReferenceRemoved(quotedMessage?.id === message.id);
+    requestAnimationFrame(() => focusInlineComposer(composer.current));
+  };
+  const selectDelegate = (target?: AgentItem) => {
+    setDelegationTarget(target);
+    if (target && !quotedMessage && !referenceRemoved)
+      setQuotedMessage(
+        messages.findLast(
+          (message) =>
+            message.role === 'agent' &&
+            (message.status === 'succeeded' || message.status === 'complete') &&
+            Boolean(message.text),
+        ),
+      );
+  };
+  const submitMessage = async () => {
+    if (working || (!input.trim() && images.length === 0)) return;
+    if (
+      delegationTarget &&
+      !eligibleDelegates.some((item) => item.id === delegationTarget.id)
+    ) {
+      onNotice(
+        t(
+          'This Agent is unavailable on the conversation machine. Choose another Agent.',
+        ),
+      );
+      return;
+    }
+    const accepted = await onSend({
+      targetAgentId: delegationTarget?.id,
+      referencedMessageId: quotedMessage?.id,
+      referenceMode: quotedMessage ? 'explicit' : 'none',
+    });
+    if (accepted) {
+      setQuotedMessage(undefined);
+      setDelegationTarget(undefined);
+      setReferenceRemoved(false);
+    }
+  };
   const imageDragDepth = useRef(0);
   const followBottom = useRef(true);
   const thread = useRef<HTMLDivElement>(null);
@@ -3462,12 +3679,6 @@ function ChatView({
       window.cancelAnimationFrame(frame);
     };
   }, [hasMessages, sessionLoading]);
-  useEffect(() => {
-    const textarea = composer.current;
-    if (!textarea) return;
-    textarea.style.height = 'auto';
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
-  }, [input]);
   useEffect(() => {
     if (!reviewOpen || !previewID) return;
     let cancelled = false;
@@ -3616,6 +3827,10 @@ function ChatView({
                   const messageKey = message.id || `${message.role}-${index}`;
                   const previousPrompt = previousPrompts[index];
                   const terminal = isTerminalStatus(message.status);
+                  const delegatedElsewhere = Boolean(
+                    message.context?.delegationSessionId &&
+                    message.context.delegationSessionId !== sessionId,
+                  );
                   const finalOutputStarted =
                     message.role === 'agent' &&
                     !terminal &&
@@ -3648,13 +3863,17 @@ function ChatView({
                       key={messageKey}
                     >
                       <span className="ws-agent-avatar">
-                        {message.role === 'user' ? 'K' : agent.name[0]}
+                        {message.role === 'user'
+                          ? 'K'
+                          : (message.context?.agentName || agent.name)[0]}
                       </span>
                       <div>
                         <strong>
-                          {message.role === 'user' ? 'You' : agent.name}
+                          {message.role === 'user'
+                            ? 'You'
+                            : message.context?.agentName || agent.name}
                         </strong>
-                        {message.role === 'agent' && (
+                        {message.role === 'agent' && !delegatedElsewhere && (
                           <div
                             className={`ws-chat-response-process${processCollapsible ? '' : ' is-live'}`}
                           >
@@ -3670,11 +3889,21 @@ function ChatView({
                                   }))
                                 }
                               >
+                                {message.context?.delegated && (
+                                  <span className="ws-delegated-author">
+                                    {message.context.agentName} |
+                                  </span>
+                                )}
                                 <ResponseStatus message={message} />
                                 <ChevronRight aria-hidden="true" />
                               </button>
                             ) : (
                               <div className="ws-chat-response-meta is-running">
+                                {message.context?.delegated && (
+                                  <span className="ws-delegated-author">
+                                    {message.context.agentName} |
+                                  </span>
+                                )}
                                 <ResponseStatus message={message} />
                               </div>
                             )}
@@ -3698,8 +3927,68 @@ function ChatView({
                             )}
                           </div>
                         )}
+                        {message.role === 'agent' &&
+                          delegatedElsewhere &&
+                          (terminal ? (
+                            <div className="ws-chat-response-process">
+                              <button
+                                type="button"
+                                className={`ws-chat-response-meta ws-delegation-meta ${terminal ? 'is-complete' : 'is-running'}`}
+                                title={t('Open delegated conversation')}
+                                aria-label={t('Open delegated conversation')}
+                                onClick={() =>
+                                  message.context?.delegationSessionId &&
+                                  onDelegationSession(
+                                    message.context.delegationSessionId,
+                                  )
+                                }
+                              >
+                                <span className="ws-delegation-agent">
+                                  {message.context?.agentName}
+                                </span>
+                                <span
+                                  className="ws-delegation-separator"
+                                  aria-hidden="true"
+                                >
+                                  |
+                                </span>
+                                <ResponseStatus message={message} />
+                                <ChevronRight aria-hidden="true" />
+                              </button>
+                              <div
+                                className="ws-chat-response-divider"
+                                aria-hidden="true"
+                              />
+                            </div>
+                          ) : (
+                            <DelegationProgress
+                              message={message}
+                              onOpen={() =>
+                                message.context?.delegationSessionId &&
+                                onDelegationSession(
+                                  message.context.delegationSessionId,
+                                )
+                              }
+                            />
+                          ))}
+                        {message.role === 'user' &&
+                          message.context?.reference && (
+                            <div className="ws-message-reference">
+                              <details>
+                                <summary title={t('View quotation')}>
+                                  <span>
+                                    {quotationSummary(
+                                      message.context.reference.content,
+                                      180,
+                                    )}
+                                  </span>
+                                </summary>
+                                <div>{message.context.reference.content}</div>
+                              </details>
+                            </div>
+                          )}
                         {message.role === 'agent' ? (
-                          message.text ? (
+                          message.text && (!delegatedElsewhere || terminal) ? (
                             <div aria-live={terminal ? undefined : 'polite'}>
                               <Markdown
                                 onOpenWorkspaceFile={(path) =>
@@ -3732,7 +4021,16 @@ function ChatView({
                                 ))}
                               </div>
                             )}
-                            {message.text && <p>{message.text}</p>}
+                            {(message.text || message.context?.delegated) && (
+                              <p>
+                                {message.context?.delegated && (
+                                  <span className="ws-sent-mention">
+                                    @{message.context.agentName}
+                                  </span>
+                                )}
+                                {message.text}
+                              </p>
+                            )}
                           </>
                         )}
                         {message.error && (
@@ -3771,78 +4069,135 @@ function ChatView({
                               </button>
                             </div>
                           )}
-                        {terminal && !!message.changes?.length && (
-                          <div className="ws-message-changes">
-                            <div className="ws-message-changes-header">
-                              <span className="ws-message-changes-icon">
-                                <FileText aria-hidden="true" />
-                              </span>
-                              <button
-                                type="button"
-                                className="ws-message-changes-summary"
-                                onClick={() =>
-                                  openWorkspaceTab(
-                                    'changes',
-                                    message.runId,
-                                    message.changes?.[0]?.path,
-                                  )
-                                }
-                              >
-                                <strong>
-                                  Edited {message.changes.length}{' '}
-                                  {message.changes.length === 1
-                                    ? 'file'
-                                    : 'files'}
-                                </strong>
-                                <DiffStats
-                                  change={{
-                                    id: 'total',
-                                    path: '',
-                                    diff: message.changes
-                                      .map((change) => change.diff)
-                                      .join('\n'),
-                                  }}
-                                />
-                              </button>
-                              <Button
-                                className="ws-review-message-link"
-                                variant="outline"
-                                onClick={() =>
-                                  openWorkspaceTab(
-                                    'changes',
-                                    message.runId,
-                                    message.changes?.[0]?.path,
-                                  )
-                                }
-                              >
-                                Review
-                              </Button>
-                            </div>
-                            <div className="ws-message-changes-files">
-                              {message.changes.map((change) => (
-                                <Button
-                                  key={change.path}
-                                  variant="ghost"
-                                  title={change.path}
+                        {terminal &&
+                          !delegatedElsewhere &&
+                          !!message.changes?.length && (
+                            <div className="ws-message-changes">
+                              <div className="ws-message-changes-header">
+                                <span className="ws-message-changes-icon">
+                                  <FileText aria-hidden="true" />
+                                </span>
+                                <button
+                                  type="button"
+                                  className="ws-message-changes-summary"
                                   onClick={() =>
                                     openWorkspaceTab(
                                       'changes',
                                       message.runId,
-                                      change.path,
+                                      message.changes?.[0]?.path,
                                     )
                                   }
                                 >
-                                  <span>{change.path}</span>
-                                  <DiffStats change={change} />
+                                  <strong>
+                                    Edited {message.changes.length}{' '}
+                                    {message.changes.length === 1
+                                      ? 'file'
+                                      : 'files'}
+                                  </strong>
+                                  <DiffStats
+                                    change={{
+                                      id: 'total',
+                                      path: '',
+                                      diff: message.changes
+                                        .map((change) => change.diff)
+                                        .join('\n'),
+                                    }}
+                                  />
+                                </button>
+                                <Button
+                                  className="ws-review-message-link"
+                                  variant="outline"
+                                  onClick={() =>
+                                    openWorkspaceTab(
+                                      'changes',
+                                      message.runId,
+                                      message.changes?.[0]?.path,
+                                    )
+                                  }
+                                >
+                                  Review
                                 </Button>
-                              ))}
+                              </div>
+                              <div className="ws-message-changes-files">
+                                {message.changes.map((change) => (
+                                  <Button
+                                    key={change.path}
+                                    variant="ghost"
+                                    title={change.path}
+                                    onClick={() =>
+                                      openWorkspaceTab(
+                                        'changes',
+                                        message.runId,
+                                        change.path,
+                                      )
+                                    }
+                                  >
+                                    <span>{change.path}</span>
+                                    <DiffStats change={change} />
+                                  </Button>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
                         {message.role === 'agent' &&
                           terminal &&
                           message.text && (
                             <div className="ws-chat-message-actions">
+                              {(message.status === 'succeeded' ||
+                                message.status === 'complete') &&
+                                message.id && (
+                                  <button
+                                    type="button"
+                                    aria-label={t('Quote reply')}
+                                    title={t('Quote reply')}
+                                    aria-pressed={
+                                      quotedMessage?.id === message.id
+                                    }
+                                    disabled={working}
+                                    className={
+                                      quotedMessage?.id === message.id
+                                        ? 'is-quoted'
+                                        : undefined
+                                    }
+                                    onClick={() => quoteMessage(message)}
+                                  >
+                                    <Quote aria-hidden="true" />
+                                  </button>
+                                )}
+                              {message.context?.delegated &&
+                                message.context.agentId !== agent.id &&
+                                message.status === 'succeeded' && (
+                                  <button
+                                    type="button"
+                                    aria-label={t('Hand back to {agent}', {
+                                      agent: agent.name,
+                                    })}
+                                    title={t('Hand back to {agent}', {
+                                      agent: agent.name,
+                                    })}
+                                    disabled={working}
+                                    onClick={() => {
+                                      setDelegationTarget(undefined);
+                                      setQuotedMessage(message);
+                                      setReferenceRemoved(false);
+                                      onInput(
+                                        t(
+                                          "Continue based on {agent}'s result.",
+                                          {
+                                            agent:
+                                              message.context?.agentName ||
+                                              'Agent',
+                                          },
+                                        ),
+                                      );
+                                      requestAnimationFrame(() =>
+                                        focusInlineComposer(composer.current),
+                                      );
+                                    }}
+                                  >
+                                    <Reply aria-hidden="true" />
+                                  </button>
+                                )}
                               <button
                                 type="button"
                                 aria-label={
@@ -3885,7 +4240,17 @@ function ChatView({
                                 title="Run again"
                                 disabled={working || !previousPrompt}
                                 onClick={() =>
-                                  previousPrompt && onRetry(previousPrompt)
+                                  previousPrompt &&
+                                  onRetry(previousPrompt, {
+                                    targetAgentId: message.context?.delegated
+                                      ? message.context.agentId
+                                      : undefined,
+                                    referencedMessageId:
+                                      message.context?.reference?.messageId,
+                                    referenceMode: message.context?.reference
+                                      ? 'explicit'
+                                      : 'none',
+                                  })
                                 }
                               >
                                 <RefreshCw aria-hidden="true" />
@@ -3987,7 +4352,7 @@ function ChatView({
               onSubmit={(event) => {
                 event.preventDefault();
                 followBottom.current = true;
-                onSend();
+                void submitMessage();
               }}
             >
               {!!images.length && (
@@ -4015,13 +4380,7 @@ function ChatView({
                   ))}
                 </div>
               )}
-              <textarea
-                ref={composer}
-                data-onboarding="chat"
-                aria-label="Message Agent"
-                rows={2}
-                value={input}
-                onChange={(event) => onInput(event.target.value)}
+              <div
                 onDragEnter={(event) => {
                   if (!event.dataTransfer.types.includes('Files')) return;
                   event.preventDefault();
@@ -4049,41 +4408,34 @@ function ChatView({
                   setDraggingImages(false);
                   onImages(Array.from(event.dataTransfer.files));
                 }}
-                onPaste={(event) => {
-                  const pastedImages = Array.from(event.clipboardData.items)
-                    .filter(
-                      (item) =>
-                        item.kind === 'file' && item.type.startsWith('image/'),
-                    )
-                    .map((item) => item.getAsFile())
-                    .filter((file): file is File => file !== null);
-
-                  if (pastedImages.length > 0) {
-                    onImages(pastedImages);
-                  }
-                }}
-                onKeyDown={(event) => {
-                  if (
-                    event.key === 'Enter' &&
-                    !event.shiftKey &&
-                    !event.nativeEvent.isComposing &&
-                    // Safari may clear isComposing before the IME confirmation Enter.
-                    // oxlint-disable-next-line typescript/no-deprecated -- 229 is the compatibility signal for IME input
-                    event.nativeEvent.keyCode !== 229
-                  ) {
-                    event.preventDefault();
-                    followBottom.current = true;
-                    onSend();
-                  }
-                }}
-                placeholder={t('Ask a question or describe a task…')}
-              />
+              >
+                <InlineComposer
+                  input={input}
+                  onInput={onInput}
+                  reference={quotedMessage}
+                  target={delegationTarget}
+                  agents={eligibleDelegates}
+                  disabled={working}
+                  onReferenceRemove={() => {
+                    setQuotedMessage(undefined);
+                    setReferenceRemoved(true);
+                  }}
+                  onTarget={selectDelegate}
+                  onSend={submitMessage}
+                  onImages={onImages}
+                  editorRef={composer}
+                  placeholder={t('Ask a question or describe a task…')}
+                />
+              </div>
               <footer className="ws-chatbox-footer">
                 <div className="ws-chatbox-context">
                   <Select
                     value={agent.id}
                     disabled={working}
-                    onValueChange={(value) => onAgent(value ?? agent.id)}
+                    onValueChange={(value) => {
+                      setDelegationTarget(undefined);
+                      onAgent(value ?? agent.id);
+                    }}
                   >
                     <SelectTrigger
                       className="ws-composer-agent"
