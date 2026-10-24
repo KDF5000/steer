@@ -1,0 +1,28 @@
+
+=== b1-v2.svg  (316 bytes)
+viewBox 0 0 256 256 · aspect 1.0 (square)
+colours 1: #16181d · gradients 0 · anchors 14
+margins L32.0 R32.0 T32.0 B32.0 · bbox fill 0.562
+✔ no issues found
+production-readiness score: 100/100 (heuristic)
+
+=== b2-v2.svg  (405 bytes)
+viewBox 0 0 256 256 · aspect 1.0 (square)
+colours 1: #16181d · gradients 0 · anchors 22
+margins L40.0 R40.0 T40.0 B40.0 · bbox fill 0.473
+✔ no issues found
+production-readiness score: 100/100 (heuristic)
+
+=== b3-v2.svg  (271 bytes)
+viewBox 0 0 256 256 · aspect 1.0 (square)
+colours 1: #16181d · gradients 0 · anchors 10
+margins L32.0 R32.0 T32.0 B32.0 · bbox fill 0.562
+✔ no issues found
+production-readiness score: 100/100 (heuristic)
+
+=== b4-v2.svg  (341 bytes)
+viewBox 0 0 256 256 · aspect 1.0 (square)
+colours 1: #16181d · gradients 0 · anchors 14
+margins L32.0 R32.0 T32.0 B32.0 · bbox fill 0.562
+✔ no issues found
+production-readiness score: 100/100 (heuristic)

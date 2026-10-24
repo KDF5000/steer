@@ -1,0 +1,29 @@
+
+=== a-v2.svg  (428 bytes)
+viewBox 0 0 256 256 · aspect 1.0 (square)
+colours 1: #16181d · gradients 0 · anchors 6
+margins L56.5 R57.1 T31.8 B38.1 · bbox fill 0.404
+· INFO [strokes] 1 element(s) with strokes. Expand strokes to filled outlines in the master so the mark scales and cuts predictably (or document that it is a stroke-based variant).
+production-readiness score: 99/100 (heuristic)
+
+=== b-wordmark-v2.svg  (2850 bytes)
+viewBox 0 0 627 256 · aspect 2.449 (wide)
+colours 1: #16181d · gradients 0 · anchors 120
+margins L32.5 R34.2 T54.0 B54.0 · bbox fill 0.517
+▲ WARN [near-miss-angle] 3 straight edge(s) are 0.3–3° off a clean angle — they read as mistakes. Snap them: 177.6° (→0°) len 29.8 at (33,162); 177.4° (→0°) len 29.5 at (138,119); 88.1° (→90°) len 33.0 at (553,82). (Expected — and fine — for type set on a curve or deliberately rotated elements.)
+· INFO [precision] Coordinates with 4+ decimals: round to 0–2 decimals to reduce size and reveal misalignments.
+production-readiness score: 91/100 (heuristic)
+
+=== c-v2.svg  (369 bytes)
+viewBox 0 0 256 256 · aspect 1.0 (square)
+colours 1: #16181d · gradients 0 · anchors 26
+margins L36.0 R36.0 T48.0 B48.0 · bbox fill 0.449
+✔ no issues found
+production-readiness score: 100/100 (heuristic)
+
+=== d-v2.svg  (327 bytes)
+viewBox 0 0 256 256 · aspect 1.0 (square)
+colours 1: #16181d · gradients 0 · anchors 10
+margins L38.4 R38.4 T40.0 B40.0 · bbox fill 0.481
+✔ no issues found
+production-readiness score: 100/100 (heuristic)

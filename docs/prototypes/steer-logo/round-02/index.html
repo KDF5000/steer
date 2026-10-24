@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Steer Logo · 第二轮概念</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f7f8fa;
+        color: #24262b;
+        font:
+          14px/1.65 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+      }
+      main {
+        max-width: 1480px;
+        margin: auto;
+        padding: 32px 32px 48px;
+      }
+      header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 24px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 28px;
+        letter-spacing: -0.6px;
+      }
+      p {
+        color: #69707d;
+        margin: 8px 0 0;
+      }
+      .links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        padding-top: 8px;
+      }
+      a {
+        color: #454b56;
+        text-underline-offset: 4px;
+      }
+      .overview {
+        width: 100%;
+        height: auto;
+        margin: 24px 0;
+        display: block;
+        border-radius: 12px;
+      }
+      .context {
+        background: white;
+        border: 1px solid #e5e8ec;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 20px;
+        border-bottom: 1px solid #e5e8ec;
+      }
+      .toolbar strong {
+        margin-right: auto;
+        font-weight: 550;
+      }
+      .toolbar button {
+        border: 1px solid #e4e7ec;
+        border-radius: 7px;
+        background: white;
+        padding: 7px 12px;
+        font: inherit;
+        color: #69707d;
+        cursor: pointer;
+      }
+      .toolbar button[aria-pressed='true'] {
+        background: #292d35;
+        border-color: #292d35;
+        color: white;
+      }
+      .toolbar label {
+        color: #69707d;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      iframe {
+        display: block;
+        width: 100%;
+        height: 940px;
+        border: 0;
+        background: white;
+      }
+      .caption {
+        padding: 12px 20px;
+        margin: 0;
+        border-top: 1px solid #e5e8ec;
+        font-size: 12px;
+      }
+      footer {
+        margin-top: 20px;
+        color: #858b96;
+        font-size: 12px;
+      }
+      @media (max-width: 767px) {
+        main {
+          padding: 20px 12px;
+        }
+        header {
+          display: block;
+        }
+        h1 {
+          font-size: 22px;
+        }
+        .toolbar {
+          padding: 12px;
+          gap: 8px;
+        }
+        .toolbar strong {
+          flex-basis: 100%;
+        }
+        iframe {
+          height: 844px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1>Steer Logo · 第二轮概念</h1>
+          <p>
+            沿 B 方向继续探索，先比较轮廓，再看当前工作台中的效果。推荐重点比较
+            B2 和 B4。
+          </p>
+        </div>
+        <div class="links">
+          <a href="concepts-hd.png" target="_blank" rel="noopener">高清对比图</a
+          ><a href="tests-v2.html" target="_blank" rel="noopener"
+            >尺寸与反白测试</a
+          ><a href="BRIEF.md">设计说明</a>
+        </div>
+      </header>
+      <img
+        class="overview"
+        src="concepts.svg"
+        alt="B1 方位、B2 弧窗、B3 转折、B4 回环的新概念和 64、32、16 像素比较"
+      />
+      <section class="context" aria-label="当前工作台 Logo 比较">
+        <div class="toolbar">
+          <strong>在当前工作台中比较</strong
+          ><button type="button" data-concept="previous" aria-pressed="false">
+            原 B · 定向</button
+          ><button type="button" data-concept="b1" aria-pressed="false">
+            B1 · 方位</button
+          ><button type="button" data-concept="b2" aria-pressed="true">
+            B2 · 弧窗</button
+          ><button type="button" data-concept="b3" aria-pressed="false">
+            B3 · 转折</button
+          ><button type="button" data-concept="b4" aria-pressed="false">
+            B4 · 回环
+          </button>
+
+          <label><input type="checkbox" id="tile" /> 保留深灰底</label>
+          <a
+            id="open"
+            href="workbench-preview.html?concept=b2"
+            target="_blank"
+            rel="noopener"
+            >独立打开工作台</a
+          >
+        </div>
+        <iframe
+          id="workspace"
+          title="Steer 工作台：当前选中 Logo 的真实尺寸预览"
+          src="workbench-preview.html?concept=b2"
+        ></iframe>
+        <p class="caption">
+          使用当前已确认的工作台
+          HTML、字体和样式，仅在预览中替换侧栏标志。聊天字体、输入框和业务代码均保持现状。
+        </p>
+      </section>
+      <footer>
+        2026-10-24 · Round 02 / v2 · 本页为概念检查点，尚未替换正式
+        Logo。字标沿用页面文字，仅用于语境比较。
+      </footer>
+    </main>
+    <script>
+      let concept = 'b2';
+      function update() {
+        const q = new URLSearchParams({
+          concept,
+          tile: document.getElementById('tile').checked ? '1' : '0',
+        });
+        const src = 'workbench-preview.html?' + q;
+        document.getElementById('workspace').src = src;
+        document.getElementById('open').href = src;
+        document
+          .querySelectorAll('[data-concept]')
+          .forEach((button) =>
+            button.setAttribute(
+              'aria-pressed',
+              String(button.dataset.concept === concept),
+            ),
+          );
+      }
+      document.querySelectorAll('[data-concept]').forEach((button) =>
+        button.addEventListener('click', () => {
+          concept = button.dataset.concept;
+          update();
+        }),
+      );
+      document.getElementById('tile').addEventListener('change', update);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,21 @@
+
+=== concept-a-v2.svg  (263 bytes)
+viewBox 0 0 256 256 · aspect 1.0 (square)
+colours 1: #16181d · gradients 0 · anchors 13
+margins L40.0 R40.0 T40.0 B48.0 · bbox fill 0.451
+· INFO [off-centre-y] Vertical margins differ (top 40.0, bottom 48.0). Remember the optical centre sits slightly above the geometric centre.
+production-readiness score: 99/100 (heuristic)
+
+=== concept-b-v2.svg  (306 bytes)
+viewBox 0 0 256 256 · aspect 1.0 (square)
+colours 1: #16181d · gradients 0 · anchors 10
+margins L32.0 R32.0 T32.0 B32.0 · bbox fill 0.562
+✔ no issues found
+production-readiness score: 100/100 (heuristic)
+
+=== concept-c-v2.svg  (450 bytes)
+viewBox 0 0 256 256 · aspect 1.0 (square)
+colours 1: #16181d · gradients 0 · anchors 20
+margins L24.1 R24.0 T56.0 B56.2 · bbox fill 0.456
+✔ no issues found
+production-readiness score: 100/100 (heuristic)
