@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ComponentProps,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type SyntheticEvent,
@@ -84,6 +85,7 @@ import {
   SidebarMenuSub,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import {
@@ -499,6 +501,16 @@ const ProcessTranscript = memo(function ProcessTranscript({
   );
 });
 
+function sessionDisplayTitle(
+  session: Pick<ChatSessionRecord, 'title' | 'parentConversationId'>,
+) {
+  // Older delegated sessions store Agent identity before the task title.
+  // Keep the stored name intact and separate that metadata only for display.
+  return session.parentConversationId
+    ? session.title.replace(/^@[^·]+\s·\s/, '') || session.title
+    : session.title;
+}
+
 function SessionNavigationItem({
   session,
   active,
@@ -510,10 +522,23 @@ function SessionNavigationItem({
   onOpen: () => void;
   onDelete: () => void;
 }) {
+  const { isMobile, setOpenMobile } = useSidebar();
   return (
     <SidebarMenuItem className="ws-session-nav-item">
-      <SidebarMenuButton isActive={active} onClick={onOpen}>
-        <span>{session.title}</span>
+      <SidebarMenuButton
+        isActive={active}
+        onClick={() => {
+          onOpen();
+          if (isMobile) setOpenMobile(false);
+        }}
+        title={session.title}
+      >
+        <span>{sessionDisplayTitle(session)}</span>
+        {session.parentConversationId && (
+          <span className="ws-session-delegation-marker" title={session.title}>
+            <ArrowUpRight aria-label="Delegated conversation" />
+          </span>
+        )}
       </SidebarMenuButton>
       <SidebarMenuAction
         className="ws-session-delete"
@@ -590,12 +615,12 @@ export default function Fusion() {
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
-    if (typeof window === 'undefined') return 260;
+    if (typeof window === 'undefined') return 264;
     const saved = window.localStorage.getItem('steer.sidebarWidth');
     const parsed = saved ? parseInt(saved, 10) : NaN;
     return Number.isFinite(parsed) && parsed >= 200 && parsed <= 420
       ? parsed
-      : 260;
+      : 264;
   });
   const startSidebarResize = useCallback(
     (event: ReactPointerEvent<HTMLHRElement>) => {
@@ -2781,7 +2806,7 @@ export default function Fusion() {
             )}
           </div>
         ) : view === 'chat' ? (
-          <ChatView
+          <WorkspaceChatView
             key={chatSession || 'new-chat'}
             sessionId={chatSession}
             agents={agentList}
@@ -2813,6 +2838,18 @@ export default function Fusion() {
             artifacts={conversationArtifacts}
             messages={messages}
             sessionTitle={activeChatSession?.title}
+            parentConversationId={activeChatSession?.parentConversationId}
+            runtimeLabel={
+              runtimeChoices.find(
+                (runtime) =>
+                  runtime.runtimeId ===
+                    (composerExecutionRuntimeId || currentAgent?.runtimeId) &&
+                  runtime.provider === currentAgent?.runtimeProvider,
+              )?.label ||
+              (currentAgent?.runtimeId
+                ? t('Runtime unavailable')
+                : `Automatic / ${t(runtimeProviderName(currentAgent?.runtimeProvider))}`)
+            }
             sessionLoading={chatSessionLoading}
             input={chatInput}
             images={chatImages}
@@ -2881,7 +2918,6 @@ export default function Fusion() {
               setSelectedArtifact(index < 0 ? 0 : index);
               setView('artifacts');
             }}
-            onToggleSidebar={() => setSidebarOpen((open) => !open)}
           />
         ) : view === 'artifacts' ? (
           <ArtifactsView
@@ -3318,6 +3354,14 @@ function AuthScreen({
   );
 }
 
+// Resolve the left navigation context before ChatView creates its review sidebar.
+function WorkspaceChatView(
+  props: Omit<ComponentProps<typeof ChatView>, 'onToggleSidebar'>,
+) {
+  const { toggleSidebar } = useSidebar();
+  return <ChatView {...props} onToggleSidebar={toggleSidebar} />;
+}
+
 function ChatView({
   sessionId,
   agents,
@@ -3328,6 +3372,8 @@ function ChatView({
   artifacts,
   messages,
   sessionTitle,
+  parentConversationId,
+  runtimeLabel,
   sessionLoading,
   input,
   images,
@@ -3355,6 +3401,8 @@ function ChatView({
   artifacts: Artifact[];
   messages: ChatMessage[];
   sessionTitle?: string;
+  parentConversationId?: string | null;
+  runtimeLabel: string;
   sessionLoading: boolean;
   input: string;
   images: PendingImage[];
@@ -3473,13 +3521,17 @@ function ChatView({
     ? configuredProjectBranch(selectedProject)
     : '';
   const firstUserMessage = messages.find((message) => message.role === 'user');
-  const conversationTitle = firstUserMessage
-    ? (
-        firstUserMessage.text.trim().replace(/\s+/g, ' ') ||
-        firstUserMessage.attachments?.[0]?.name ||
-        'Image'
-      ).slice(0, 72)
-    : sessionTitle || t('New chat');
+  const conversationTitle =
+    (sessionTitle
+      ? sessionDisplayTitle({ title: sessionTitle, parentConversationId })
+      : '') ||
+    (firstUserMessage
+      ? (
+          firstUserMessage.text.trim().replace(/\s+/g, ' ') ||
+          firstUserMessage.attachments?.[0]?.name ||
+          'Image'
+        ).slice(0, 72)
+      : t('New chat'));
   const composerPreview = images.find(
     (image) => image.id === composerPreviewID,
   );
@@ -4547,7 +4599,7 @@ function ChatView({
               </footer>
             </form>
             <p className="ws-chat-mode-note">
-              {agent.name} · {agent.runtime} · {agent.model}
+              {agent.name} · {runtimeLabel} · {agent.model}
             </p>
           </div>
         </section>
