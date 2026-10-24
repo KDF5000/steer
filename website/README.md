@@ -47,7 +47,7 @@ sitemap.xml            # 配置官网地址后生成
 
 | 构建变量             | 说明                                                                                                                              |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `VITE_STEER_APP_URL` | “打开 Steer”等全部工作台入口的完整地址，默认 `https://steer-console.pcursor.run`。可以包含路径。                                     |
+| `VITE_STEER_APP_URL` | “打开 Steer”等全部工作台入口的完整地址，默认 `https://steer-console.pcursor.run`。可以包含路径。                                  |
 | `VITE_SITE_URL`      | 官网正式 origin，例如 `https://steer.example.com`，用于 canonical、hreflang、分享图片及 sitemap。不能包含子路径、查询参数或片段。 |
 
 两项均为公开地址，不要填写凭据。更改后需要重新构建。
@@ -83,4 +83,16 @@ Vercel 仅托管静态官网。Steer Web、Go 后端、PostgreSQL、Relay、飞�
 
 每种语言提供 1280 × 800 与 2560 × 1600 两种 PNG，通过 `srcset` 按显示尺寸和屏幕像素密度选择，点击截图可查看 2x 原图。更新截图时应直接以 1280 × 800 视口、1x / 2x 像素密度重新截取，不要放大旧图。
 
-产品亮点区的 `steer-handoff-en.png` / `steer-handoff-zh.png` 是真实工作台的局部截图（1680 × 1320）：示例实现保留在对话中，用户选中兼容同一 Runtime 的审查 Agent，准备发送后续请求。它展示的是 Agent 接续，不代表跨 Runtime 切换或已完成的真实代码审查。
+产品亮点区的 `steer-handoff-en.png` / `steer-handoff-zh.png` 是真实工作台聊天区域的 2x 截图：用户引用 Builder 的回复，并通过 @mention 选择同机的 Reviewer，准备在独立会话中委派任务。项目指定机器，Agent 可以使用该机器上已接入工作区的不同 Runtime。截图使用演示任务，不代表已完成真实代码审查。
+
+当前支持的内置 Runtime：Codex、Trae、Claude Code、OpenCode、Pi、Qoder、QwenWork（千问办公）。列表按 Steer 使用的 Relay v0.5.6 核实。
+
+可复用 `scripts/capture-product-shots.mjs` 重新生成六张截图。先启动仓库根目录的 Next 开发服务，再指定地址及本机 Playwright 模块路径：
+
+```bash
+STEER_CAPTURE_URL=http://localhost:3103/fusion \
+PLAYWRIGHT_MODULE=/path/to/playwright \
+node scripts/capture-product-shots.mjs
+```
+
+脚本只在独立浏览器中拦截 API，使用虚构的 Steer Demo 工作区，不写入业务数据。需要本机 Chrome。更新前后素材归档于 `docs/prototypes/website-product-shots/2026-10-24/`；保留旧版本，不覆盖归档。

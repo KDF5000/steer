@@ -131,7 +131,7 @@ export default function HomeContent({
           </h1>
           <p className="website_lead">
             {t(
-              'Bring Codex, Trae, Claude Code, Pi, Qoder, and QwenWork into one workspace.',
+              'Bring Codex, Trae, Claude Code, OpenCode, Pi, Qoder, and QwenWork into one workspace.',
             )}
             <br />
             {t(
@@ -220,6 +220,8 @@ export default function HomeContent({
             <strong>Trae</strong>
             <i />
             <strong>Claude Code</strong>
+            <i />
+            <strong>OpenCode</strong>
             <i />
             <strong>Pi</strong>
             <i />
@@ -352,7 +354,7 @@ export default function HomeContent({
             <h2>{t('Switch agents. Keep going.')}</h2>
             <p className="website_highlightCopy">
               {t(
-                'Switch agents in the same conversation and keep the previous messages as context. Go from coding to review without explaining the task again.',
+                'Switch agents or @mention a teammate. Delegate a task in its own session, then bring the result back to the conversation.',
               )}
             </p>
             <div
@@ -379,22 +381,22 @@ export default function HomeContent({
               >
                 <img
                   src={handoffScreenshot}
-                  width={1680}
-                  height={1320}
+                  width={2032}
+                  height={1600}
                   loading="lazy"
                   decoding="async"
                   alt={t(
-                    'Real Steer conversation with completed implementation, the review agent selected, and a follow-up ready to send',
+                    'Real Steer conversation with a quoted reply and a same-machine agent selected for delegation',
                   )}
                 />
               </a>
               <figcaption>
-                {t('Real interface · example conversation, ready for review')}
+                {t('Real interface · quote and delegate to another agent')}
               </figcaption>
             </figure>
             <p className="website_handoffNote">
               {t(
-                'Switch between agents compatible with the conversation’s runtime.',
+                'Project stays on one machine; choose any connected agent on that machine.',
               )}
             </p>
           </article>

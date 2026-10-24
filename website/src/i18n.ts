@@ -61,13 +61,13 @@ export const homeZhCN = {
   'Steer Web': 'Steer Web',
   'Conversation Task API': 'Conversation Task API',
   'An open-source workspace for your agents': '统一管理多个 Agent 的开源工作台',
-  'Bring Codex, Trae, Claude Code, Pi, Qoder, and QwenWork into one workspace.':
-    '把 Codex、Trae、Claude Code、Pi、Qoder 和千问办公接入同一个工作台。',
+  'Bring Codex, Trae, Claude Code, OpenCode, Pi, Qoder, and QwenWork into one workspace.':
+    '把 Codex、Trae、Claude Code、OpenCode、Pi、Qoder 和千问办公接入同一个工作台。',
   QwenWork: '千问办公',
   'Run tasks on local or remote machines. Organize your work through projects and conversations.':
     '在本地或远程机器上执行任务，通过项目和会话统一管理工作。',
-  'Steer brings agents and runtimes across your machines into one open-source workspace. Connect Codex, Trae, Claude Code, Pi, Qoder, and QwenWork, run tasks locally or remotely, and organize work through projects and conversations.':
-    'Steer 将不同机器上的 Agent 和 Runtime 接入同一个开源工作台。连接 Codex、Trae、Claude Code、Pi、Qoder 和千问办公，在本地或远程执行任务，通过项目和会话统一管理工作。',
+  'Steer brings agents and runtimes across your machines into one open-source workspace. Connect Codex, Trae, Claude Code, OpenCode, Pi, Qoder, and QwenWork, run tasks locally or remotely, and organize work through projects and conversations.':
+    'Steer 将不同机器上的 Agent 和 Runtime 接入同一个开源工作台。连接 Codex、Trae、Claude Code、OpenCode、Pi、Qoder 和千问办公，在本地或远程执行任务，通过项目和会话统一管理工作。',
   'Choose a project. ': '选好项目，',
   'Give your agent a task.': '把具体任务交给 Agent。',
   'Choose a project and an agent': '选择项目和 Agent',
@@ -88,20 +88,20 @@ export const homeZhCN = {
   'Same conversation': '同一会话',
   'View the agent handoff screenshot in a new tab':
     '在新标签页查看切换 Agent 的截图',
-  'Real Steer conversation with completed implementation, the review agent selected, and a follow-up ready to send':
-    '真实 Steer 对话：保留已完成的实现，选中审查 Agent，准备发送后续检查请求',
-  'Real interface · example conversation, ready for review':
-    '真实界面 · 切换 Agent 后继续追问的示例',
-  'Switch between agents compatible with the conversation’s runtime.':
-    '可选择的 Agent 需与当前会话的运行环境兼容。',
+  'Real Steer conversation with a quoted reply and a same-machine agent selected for delegation':
+    '真实 Steer 对话：引用已有回复，选中同机 Agent，准备委派下一轮任务',
+  'Real interface · quote and delegate to another agent':
+    '真实界面 · 引用回复并委派给另一个 Agent',
+  'Project stays on one machine; choose any connected agent on that machine.':
+    '项目固定在一台机器上，可选择已接入工作区的同机 Agent。',
   'Local directory': '本地目录',
   'Work where your files live': '直接使用已有项目文件',
   'Git worktree': 'Git 工作区',
   'Separate changes for each conversation': '不同会话的改动互不干扰',
   'See the process. Keep the result.': '过程看得见，结果留得住。',
   'Preview, download, revisit': '可预览、下载，方便日后查看',
-  'Switch agents in the same conversation and keep the previous messages as context. Go from coding to review without explaining the task again.':
-    '在同一会话里切换 Agent，保留对话上下文。先写代码，再做审查，不必重新交代背景。',
+  'Switch agents or @mention a teammate. Delegate a task in its own session, then bring the result back to the conversation.':
+    '切换 Agent，或通过 @ 临时委派。任务在独立会话中执行，结果回到当前对话，继续推进。',
   'Start with a task. Review the result, ask follow-up questions, and keep going.':
     '提出任务、查看结果，再接着追问和调整。',
   'Choose a project and an agent, then describe the task.':

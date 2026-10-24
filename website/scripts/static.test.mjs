@@ -132,3 +132,24 @@ test('localized screenshots provide real 1x and 2x image sizes', async () => {
     }
   }
 });
+
+test('supported runtimes and delegation semantics are present in both languages', async () => {
+  for (const locale of ['en', 'zh']) {
+    const html = await read(`${locale}/index.html`);
+    for (const name of [
+      'Codex',
+      'Trae',
+      'Claude Code',
+      'OpenCode',
+      'Pi',
+      'Qoder',
+      locale === 'zh' ? '千问办公' : 'QwenWork',
+    ])
+      assert.ok(html.includes(name), `${locale} missing ${name}`);
+    assert.match(html, /<meta name="description" content="[^"]*OpenCode/);
+    const png = await readFile(resolve(dist, `steer-handoff-${locale}.png`));
+    assert.equal(png.readUInt32BE(16), 2032);
+    assert.equal(png.readUInt32BE(20), 1600);
+    assert.ok(html.includes(locale === 'zh' ? '独立会话' : 'own session'));
+  }
+});
