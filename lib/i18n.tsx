@@ -18,6 +18,11 @@ const storageKey = 'steer.interface-language';
 const languageEvent = 'steer:interface-language';
 
 const zhCN: Record<string, string> = {
+  'Loading image…': '正在加载图片…',
+  'Image preview unavailable': '图片暂时无法预览',
+  'Open image preview: {name}': '查看图片：{name}',
+  'Show file browser': '展开文件浏览',
+  'Hide file browser': '收起文件浏览',
   'Waiting to start': '等待执行',
   Processing: '正在处理',
   Stopping: '正在停止',

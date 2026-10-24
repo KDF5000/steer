@@ -1,9 +1,12 @@
 'use client';
 
 import {
+  createContext,
   memo,
   useCallback,
+  useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -314,62 +317,192 @@ function workspaceLinkPath(href: string) {
   }
 }
 
+type MarkdownWorkspace = {
+  runId?: string;
+  readImage: ((path: string) => Promise<string>) | null;
+  onOpenFile?: (path: string) => void;
+};
+const MarkdownWorkspaceContext = createContext<MarkdownWorkspace | null>(null);
+
+function createWorkspaceImageReader(runId: string) {
+  let root: Promise<string> | undefined;
+  return async (path: string) => {
+    let relativePath = path;
+    if (path.startsWith('/')) {
+      root ??= steer
+        .inspectWorkspace(runId, 'list')
+        .then((result) => result.root)
+        .catch((error: unknown) => {
+          root = undefined;
+          throw error;
+        });
+      relativePath = workspaceRelativePath(path, await root);
+    }
+    const image = workspaceImageSource(
+      await steer.inspectWorkspace(runId, 'read', relativePath),
+    );
+    if (!image) throw new Error('Image preview unavailable');
+    return image;
+  };
+}
+
+function MarkdownImage({ src, alt = '', title }: ComponentProps<'img'>) {
+  const { t } = useI18n();
+  const workspace = useContext(MarkdownWorkspaceContext);
+  const source = typeof src === 'string' ? src : '';
+  const path = workspaceLinkPath(source);
+  const readImage = workspace?.readImage;
+  const key = `${workspace?.runId || ''}:${path}`;
+  const [result, setResult] = useState({ key: '', source: '', error: '' });
+  useEffect(() => {
+    if (!path || !readImage) return;
+    let cancelled = false;
+    void readImage(path)
+      .then((image) => {
+        if (!cancelled) setResult({ key, source: image, error: '' });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled)
+          setResult({
+            key,
+            source: '',
+            error:
+              error instanceof Error
+                ? error.message
+                : 'Image preview unavailable',
+          });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [key, path, readImage]);
+
+  if (!path) {
+    if (!source) return <span>{alt}</span>;
+    // oxlint-disable-next-line next/no-img-element -- Markdown may contain arbitrary external image URLs.
+    return <img src={source} alt={alt} title={title} loading="lazy" />;
+  }
+  const image = result.key === key ? result.source : '';
+  const error = result.key === key ? result.error : '';
+  const label = alt || path.split('/').at(-1) || t('Image');
+  return (
+    <button
+      type="button"
+      className="ws-message-image"
+      aria-label={t('Open image preview: {name}', { name: label })}
+      title={error || title || path}
+      disabled={!workspace?.onOpenFile}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        workspace?.onOpenFile?.(path);
+      }}
+    >
+      {image ? (
+        // oxlint-disable-next-line next/no-img-element -- Authenticated image data read through the run's Relay workspace.
+        <img
+          src={image}
+          alt={alt}
+          onError={() =>
+            setResult({ key, source: '', error: 'Image preview unavailable' })
+          }
+        />
+      ) : (
+        <span className="ws-message-image-placeholder">
+          {error || !readImage ? (
+            <FileImage aria-hidden="true" />
+          ) : (
+            <LoaderCircle
+              className="ws-message-image-loading"
+              aria-hidden="true"
+            />
+          )}
+          <span>{label}</span>
+          <small>
+            {t(
+              error || !readImage
+                ? 'Image preview unavailable'
+                : 'Loading image…',
+            )}
+          </small>
+        </span>
+      )}
+    </button>
+  );
+}
+
 const Markdown = memo(function Markdown({
   children,
   onOpenWorkspaceFile,
+  workspaceRunId,
 }: {
   children: string;
   onOpenWorkspaceFile?: (path: string) => void;
+  workspaceRunId?: string;
 }) {
+  const readImage = useMemo(
+    () => (workspaceRunId ? createWorkspaceImageReader(workspaceRunId) : null),
+    [workspaceRunId],
+  );
+  const workspace = useMemo(
+    () => ({
+      runId: workspaceRunId,
+      readImage,
+      onOpenFile: onOpenWorkspaceFile,
+    }),
+    [workspaceRunId, readImage, onOpenWorkspaceFile],
+  );
   return (
-    <div className="ws-markdown">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        urlTransform={(url, key, node) =>
-          onOpenWorkspaceFile &&
-          key === 'href' &&
-          node.tagName === 'a' &&
-          url.startsWith('file://')
-            ? url
-            : defaultUrlTransform(url)
-        }
-        components={{
-          a: ({ children: linkChildren, href = '', title }) => {
-            const text = markdownLinkText(linkChildren).trim();
-            const rawLink =
-              !text ||
-              text === href ||
-              /^https?:\/\//i.test(text) ||
-              text.startsWith('file://');
-            const filePath = workspaceLinkPath(href);
-            const external = /^https?:\/\//i.test(href);
-            return (
-              <a
-                href={href}
-                title={href}
-                target={external ? '_blank' : undefined}
-                rel={external ? 'noreferrer noopener' : undefined}
-                onClick={
-                  filePath && onOpenWorkspaceFile
-                    ? (event) => {
-                        event.preventDefault();
-                        onOpenWorkspaceFile(filePath);
-                      }
-                    : undefined
-                }
-              >
-                <span>
-                  {rawLink ? readableLinkLabel(href, title) : linkChildren}
-                </span>
-                {external && <ExternalLink aria-hidden="true" />}
-              </a>
-            );
-          },
-        }}
-      >
-        {children}
-      </ReactMarkdown>
-    </div>
+    <MarkdownWorkspaceContext.Provider value={workspace}>
+      <div className="ws-markdown">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          urlTransform={(url, key, node) =>
+            ((onOpenWorkspaceFile && key === 'href' && node.tagName === 'a') ||
+              (workspaceRunId && key === 'src' && node.tagName === 'img')) &&
+            url.startsWith('file://')
+              ? url
+              : defaultUrlTransform(url)
+          }
+          components={{
+            img: MarkdownImage,
+            a: ({ children: linkChildren, href = '', title }) => {
+              const text = markdownLinkText(linkChildren).trim();
+              const rawLink =
+                !text ||
+                text === href ||
+                /^https?:\/\//i.test(text) ||
+                text.startsWith('file://');
+              const filePath = workspaceLinkPath(href);
+              const external = /^https?:\/\//i.test(href);
+              return (
+                <a
+                  href={href}
+                  title={href}
+                  target={external ? '_blank' : undefined}
+                  rel={external ? 'noreferrer noopener' : undefined}
+                  onClick={
+                    filePath && onOpenWorkspaceFile
+                      ? (event) => {
+                          event.preventDefault();
+                          onOpenWorkspaceFile(filePath);
+                        }
+                      : undefined
+                  }
+                >
+                  <span>
+                    {rawLink ? readableLinkLabel(href, title) : linkChildren}
+                  </span>
+                  {external && <ExternalLink aria-hidden="true" />}
+                </a>
+              );
+            },
+          }}
+        >
+          {children}
+        </ReactMarkdown>
+      </div>
+    </MarkdownWorkspaceContext.Provider>
   );
 });
 
@@ -4043,6 +4176,7 @@ function ChatView({
                           message.text && (!delegatedElsewhere || terminal) ? (
                             <div aria-live={terminal ? undefined : 'polite'}>
                               <Markdown
+                                workspaceRunId={message.runId}
                                 onOpenWorkspaceFile={(path) =>
                                   openWorkspaceTab(
                                     'files',
@@ -4843,6 +4977,11 @@ function WorkspaceFiles({
   branch: string;
   onPathChange: (path: string) => void;
 }) {
+  const { t } = useI18n();
+  const directoryID = useId();
+  const [fileBrowserOverride, setFileBrowserOverride] = useState<
+    boolean | null
+  >(null);
   const [fileFilter, setFileFilter] = useState('');
   const [data, setData] = useState<{
     root: string;
@@ -4989,6 +5128,10 @@ function WorkspaceFiles({
       });
   }, [data, fallbackSnapshot, filePath, initialPath, runId]);
   const loading = listing || reading;
+  const previewingImage =
+    Boolean(imageSource) ||
+    /\.(png|jpe?g|gif|webp)$/i.test(filePath || initialPath);
+  const fileBrowserOpen = fileBrowserOverride ?? !previewingImage;
   if (!runId)
     return (
       <p className="ws-review-empty">
@@ -5019,6 +5162,24 @@ function WorkspaceFiles({
         <Button
           variant="ghost"
           size="icon"
+          className="ws-workspace-directory-toggle"
+          aria-label={t(
+            fileBrowserOpen ? 'Hide file browser' : 'Show file browser',
+          )}
+          title={t(fileBrowserOpen ? 'Hide file browser' : 'Show file browser')}
+          aria-expanded={fileBrowserOpen}
+          aria-controls={directoryID}
+          onClick={() => setFileBrowserOverride(!fileBrowserOpen)}
+        >
+          {fileBrowserOpen ? (
+            <PanelRightClose aria-hidden="true" />
+          ) : (
+            <PanelRightOpen aria-hidden="true" />
+          )}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
           className="ws-workspace-refresh"
           aria-label="Refresh files"
           title="Refresh files"
@@ -5045,7 +5206,9 @@ function WorkspaceFiles({
         </output>
       )}
       {loading && <output>Loading…</output>}
-      <div className="ws-workspace-columns">
+      <div
+        className={`ws-workspace-columns${fileBrowserOpen ? '' : ' is-directory-collapsed'}`}
+      >
         <section className="ws-workspace-preview" aria-label="File preview">
           {content !== null ? (
             imageSource ? (
@@ -5064,8 +5227,10 @@ function WorkspaceFiles({
           )}
         </section>
         <nav
+          id={directoryID}
           className="ws-workspace-directory"
           aria-label="Directory navigation"
+          hidden={!fileBrowserOpen}
         >
           <input
             className="ws-workspace-filter"
