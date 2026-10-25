@@ -2013,10 +2013,714 @@
 }
 
 /* Work log */
+.ws-footprints {
+  --footprint-purple: #6869cf;
+  --footprint-purple-soft: #ced0e6;
+}
+.ws-footprints .ws-work-log-header {
+  align-items: center;
+  margin-bottom: 18px;
+}
+.ws-footprints .ws-work-log-header button svg {
+  width: 14px;
+}
+.ws-footprint-tabs {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--ws-border);
+}
+.ws-footprint-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  padding: 0 0 11px;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-control);
+}
+.ws-footprint-tabs button.active {
+  box-shadow: 0 2px var(--ws-text);
+  color: var(--ws-text);
+  font-weight: 620;
+}
+.ws-footprint-tabs button span {
+  border-radius: 5px;
+  background: var(--ws-surface-subtle);
+  padding: 0 5px;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+.ws-footprint-filters {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.ws-footprint-range {
+  display: flex;
+  border-radius: 8px;
+  background: var(--ws-surface-subtle);
+  padding: 3px;
+}
+.ws-footprint-range button {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 4px 11px;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-control);
+}
+.ws-footprint-range button.active {
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(24 24 27 / 8%);
+  color: var(--ws-text);
+}
+.ws-footprint-date-label {
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-control);
+}
+.ws-footprint-filters > select,
+.ws-footprint-trend select,
+.ws-footprint-report-body select {
+  min-height: 31px;
+  border: 1px solid var(--ws-border);
+  border-radius: 7px;
+  background: #fff;
+  padding: 5px 28px 5px 9px;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-control);
+}
+.ws-footprint-filters > select {
+  margin-left: auto;
+}
+.ws-footprint-dates {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ws-text-tertiary);
+}
+.ws-footprint-dates input {
+  min-height: 31px;
+  border: 1px solid var(--ws-border);
+  border-radius: 7px;
+  padding: 4px 7px;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-control);
+}
+.ws-footprint-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.ws-footprint-metrics article {
+  min-width: 0;
+  border: 1px solid var(--ws-border);
+  border-radius: 10px;
+  padding: 16px 17px;
+}
+.ws-footprint-metrics header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-control);
+}
+.ws-footprint-metrics header svg {
+  width: 15px;
+  color: var(--ws-text-tertiary);
+}
+.ws-footprint-metrics strong {
+  display: block;
+  margin: 4px 0 3px;
+  font-size: 27px;
+  font-weight: 620;
+  letter-spacing: -0.04em;
+}
+.ws-footprint-metrics p {
+  overflow: hidden;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-footprint-metrics p.warning {
+  color: #9a681f;
+}
+.ws-footprint-trend {
+  border: 1px solid var(--ws-border);
+  border-radius: 10px;
+  padding: 17px 20px 15px;
+}
+.ws-footprint-trend > header,
+.ws-footprint-sessions > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ws-footprint-trend h2,
+.ws-footprint-sessions h2,
+.ws-footprint-reports h2 {
+  font-size: 15px;
+  font-weight: 630;
+}
+.ws-footprint-trend header p {
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+.ws-footprint-legend {
+  display: flex;
+  height: 28px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-caption);
+}
+.ws-footprint-legend span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.ws-footprint-legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--footprint-purple);
+}
+.ws-footprint-legend i.agent,
+.ws-footprint-chart i.agent {
+  background: var(--footprint-purple-soft);
+}
+.ws-footprint-chart {
+  display: flex;
+  height: 145px;
+  justify-content: space-around;
+  background: repeating-linear-gradient(
+    to top,
+    transparent 0,
+    transparent 39px,
+    var(--ws-divider) 40px
+  );
+  background-size: 100% 120px;
+  background-repeat: no-repeat;
+}
+.ws-footprint-chart > button {
+  display: flex;
+  width: min(76px, 13%);
+  flex-direction: column;
+  justify-content: flex-end;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  padding: 0;
+}
+.ws-footprint-chart > button:hover,
+.ws-footprint-chart > button.active {
+  background: var(--ws-accent-soft);
+}
+.ws-footprint-chart .bars {
+  display: flex;
+  height: 120px;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+}
+.ws-footprint-chart .bars i {
+  width: 14px;
+  border-radius: 3px 3px 0 0;
+  background: var(--footprint-purple);
+}
+.ws-footprint-chart small {
+  height: 25px;
+  padding-top: 5px;
+  color: var(--ws-text-secondary);
+  font-size: 11px;
+}
+.ws-footprint-trend > footer,
+.ws-footprint-sessions > footer {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+.ws-footprint-trend > footer {
+  margin-top: 10px;
+}
+.ws-footprint-sessions {
+  margin-top: 25px;
+}
+.ws-footprint-sessions > header > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.ws-footprint-sessions > header span {
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+.ws-footprint-sessions > header button {
+  border: 1px solid var(--ws-border);
+  border-radius: 6px;
+  background: #fff;
+  padding: 2px 6px;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-caption);
+}
+.ws-footprint-table {
+  overflow-x: auto;
+  margin: 11px 0;
+}
+.ws-footprint-table table {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+.ws-footprint-table th {
+  background: var(--ws-surface-subtle);
+  padding: 8px 11px;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+  font-weight: 450;
+  text-align: right;
+}
+.ws-footprint-table th:first-child {
+  width: 44%;
+  border-radius: 6px 0 0 6px;
+  text-align: left;
+}
+.ws-footprint-table td {
+  border-bottom: 1px solid var(--ws-divider);
+  padding: 11px;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-control);
+  text-align: right;
+}
+.ws-footprint-table td:first-child {
+  text-align: left;
+}
+.ws-footprint-table tr {
+  cursor: pointer;
+}
+.ws-footprint-table tbody tr:hover td {
+  background: #fafafb;
+}
+.ws-footprint-table td button {
+  display: block;
+  overflow: hidden;
+  max-width: 360px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--ws-text);
+  font-size: var(--ws-font-control);
+  text-overflow: ellipsis;
+}
+.ws-footprint-table td small {
+  display: block;
+  max-width: 360px;
+  overflow: hidden;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+  text-overflow: ellipsis;
+}
+.ws-footprint-table td svg {
+  width: 12px;
+  color: var(--ws-text-tertiary);
+}
+.ws-footprint-scope {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 25px;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+.ws-footprint-scope svg {
+  width: 12px;
+}
+.ws-footprint-state,
+.ws-footprint-empty {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  color: var(--ws-text-tertiary);
+  font-size: 12px;
+  text-align: center;
+}
+.ws-footprint-state.error {
+  color: var(--ws-negative);
+}
+.ws-footprint-state button {
+  margin-top: 8px;
+}
+.ws-footprint-empty svg {
+  width: 22px;
+}
+.ws-footprint-empty strong {
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-ui);
+}
+.ws-footprint-empty p {
+  font-size: var(--ws-font-caption);
+}
+.ws-footprint-reports > header {
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--ws-border);
+}
+.ws-footprint-reports > button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-bottom: 1px solid var(--ws-divider);
+  background: transparent;
+  padding: 14px 10px;
+  text-align: left;
+}
+.ws-footprint-reports > button:hover {
+  background: #fafafb;
+}
+.ws-footprint-reports > button strong,
+.ws-footprint-reports > button small {
+  display: block;
+}
+.ws-footprint-reports > button strong {
+  font-size: var(--ws-font-ui);
+}
+.ws-footprint-reports > button small {
+  margin-top: 2px;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+.ws-footprint-reports > button svg {
+  width: 13px;
+  color: var(--ws-text-tertiary);
+}
+.ws-footprint-report-detail {
+  width: 100%;
+  min-width: 0;
+}
+.ws-footprint-report-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.ws-footprint-report-back {
+  padding-left: 0;
+  padding-right: 8px;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-control);
+}
+.ws-footprint-report-back:hover {
+  color: var(--ws-text);
+}
+.ws-footprint-report-toolbar svg {
+  width: 14px;
+  height: 14px;
+}
+.ws-footprint-report-detail > header {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--ws-border);
+}
+.ws-footprint-report-detail > header h2 {
+  margin: 0;
+  color: var(--ws-text);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.ws-footprint-report-detail > header p {
+  margin-top: 6px;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-caption);
+  line-height: 1.5;
+}
+.ws-footprint-report-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ws-footprint-report-detail-actions button {
+  font-size: var(--ws-font-control);
+}
+.ws-footprint-report-document {
+  max-width: var(--ws-reading-width);
+  padding: 24px 0 28px;
+  color: var(--ws-text);
+  font-size: var(--ws-font-body);
+  line-height: 1.65;
+}
+.ws-footprint-report-title-editor {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--ws-surface-subtle);
+  padding: 0 4px;
+  color: var(--ws-text);
+  font: inherit;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.4;
+}
+.ws-footprint-report-inline-editor {
+  display: block;
+  width: 100%;
+  min-height: 280px;
+  resize: none;
+  overflow: hidden;
+  border: 0;
+  border-radius: 6px;
+  background: var(--ws-surface-subtle);
+  padding: 8px;
+  color: var(--ws-text);
+  font: inherit;
+  line-height: inherit;
+}
+.ws-footprint-report-title-editor:focus-visible,
+.ws-footprint-report-inline-editor:focus-visible {
+  outline: 1px solid var(--ws-border-strong);
+  outline-offset: 2px;
+}
+.ws-footprint-report-inline-editor:disabled,
+.ws-footprint-report-title-editor:disabled {
+  opacity: 0.65;
+}
+.ws-footprint-report-sources {
+  border-top: 1px solid var(--ws-border);
+  padding: 16px 0 0;
+}
+.ws-footprint-report-sources summary {
+  cursor: pointer;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-control);
+}
+.ws-footprint-report-sources > button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  padding: 9px 10px;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-control);
+  text-align: left;
+}
+.ws-footprint-report-sources > button:hover {
+  background: var(--ws-surface-subtle);
+}
+.ws-footprint-report-sources svg {
+  width: 13px;
+}
+.ws-footprint-report-dialog {
+  display: flex !important;
+  width: min(680px, calc(100vw - 32px)) !important;
+  max-width: 680px !important;
+  max-height: min(820px, calc(100dvh - 32px));
+  flex-direction: column;
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--ws-border) !important;
+  border-radius: 14px !important;
+  padding: 0 !important;
+  box-shadow: 0 24px 70px rgb(24 24 27 / 18%) !important;
+}
+.ws-footprint-report-head {
+  flex: 0 0 auto;
+  padding: 22px 26px 18px;
+  border-bottom: 1px solid var(--ws-border);
+}
+.ws-footprint-report-head [data-slot='dialog-title'] {
+  font-size: 18px;
+}
+.ws-footprint-report-head [data-slot='dialog-description'] {
+  margin-top: 3px;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+.ws-footprint-report-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 17px;
+  overflow-y: auto;
+  padding: 22px 26px 24px;
+}
+.ws-footprint-report-scope {
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--ws-border);
+  border-radius: 9px;
+  background: var(--ws-surface-subtle);
+  padding: 13px;
+  font-size: var(--ws-font-control);
+}
+.ws-footprint-report-scope small {
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+.ws-footprint-report-body label > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--ws-text);
+  font-size: var(--ws-font-control);
+  font-weight: 600;
+}
+.ws-footprint-report-body label > span small {
+  color: var(--ws-text-tertiary);
+  font-weight: 450;
+}
+.ws-footprint-report-body input,
+.ws-footprint-report-body textarea,
+.ws-footprint-report-body select {
+  width: 100%;
+  border: 1px solid var(--ws-border-strong);
+  border-radius: 7px;
+  background: #fff;
+  padding: 8px 9px;
+  font-size: var(--ws-font-body);
+}
+.ws-footprint-report-body textarea {
+  min-height: 92px;
+  resize: vertical;
+  line-height: 1.65;
+}
+.ws-footprint-report-body textarea.editor {
+  min-height: 360px;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+.ws-footprint-report-body > p {
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+.ws-footprint-report-body > button {
+  width: 100%;
+}
+.ws-footprint-report-body details {
+  border-top: 1px solid var(--ws-border);
+  padding-top: 12px;
+}
+.ws-footprint-report-body summary {
+  cursor: pointer;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-control);
+}
+.ws-footprint-report-body details > button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 7px;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-caption);
+  text-align: left;
+}
+.ws-footprint-report-body details > button:hover {
+  background: var(--ws-surface-subtle);
+}
+.ws-footprint-report-body details svg {
+  width: 11px;
+}
+.ws-footprint-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: auto;
+}
+.ws-footprint-report-progress {
+  display: grid;
+  min-height: 320px;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 30px;
+  text-align: center;
+}
+.ws-footprint-report-progress svg {
+  width: 24px;
+  color: var(--ws-accent);
+  animation: ws-spin 1.8s linear infinite;
+}
+.ws-footprint-report-progress strong {
+  font-size: var(--ws-font-ui);
+}
+.ws-footprint-report-progress p {
+  max-width: 310px;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+@keyframes ws-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .ws-work-log {
   width: min(100% - 48px, 1040px);
   margin: 0 auto;
   padding: 30px 0 72px;
+}
+@media (max-width: 880px) {
+  .ws-footprint-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ws-footprint-filters {
+    flex-wrap: wrap;
+  }
+  .ws-footprint-filters > select {
+    margin-left: 0;
+  }
+  .ws-footprint-date-label {
+    flex: 1;
+  }
+}
+@media (max-width: 640px) {
+  .ws-work-log.ws-footprints {
+    width: calc(100% - 28px);
+    padding-top: 22px;
+  }
+  .ws-footprint-trend > footer span:last-child,
+  .ws-footprint-sessions > header > span {
+    display: none;
+  }
+  .ws-footprint-report-dialog {
+    width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - 20px);
+  }
+  .ws-footprint-report-toolbar {
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .ws-footprint-report-detail-actions {
+    gap: 4px;
+  }
+  .ws-footprint-report-detail-actions button {
+    padding-inline: 8px;
+  }
+  .ws-footprint-report-detail > header h2,
+  .ws-footprint-report-title-editor {
+    font-size: 18px;
+  }
 }
 .ws-work-log-header {
   display: flex;

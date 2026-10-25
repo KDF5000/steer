@@ -2804,7 +2804,7 @@ export default function Fusion() {
                     onClick={() => setView('notes')}
                   >
                     <NotebookPen aria-hidden="true" />
-                    <span>{t('Work log')}</span>
+                    <span>{t('Footprints')}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
@@ -2912,7 +2912,7 @@ export default function Fusion() {
                 : view === 'assets'
                   ? t('Assets')
                   : view === 'notes'
-                    ? t('Work log')
+                    ? t('Footprints')
                     : view === 'settings'
                       ? t('Settings')
                       : agentTab === 'agents'
@@ -3074,6 +3074,8 @@ export default function Fusion() {
             key={`${authUser.id}:${workspaceID}`}
             draftKey={`steer.work-log.v1:${authUser.id}:${workspaceID}`}
             sessions={chatSessions}
+            projects={projectList}
+            onOpenSession={(sessionID) => void openChatSession(sessionID)}
             onNotice={setNotice}
           />
         ) : view === 'settings' ? (

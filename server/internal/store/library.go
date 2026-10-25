@@ -244,6 +244,7 @@ type WorkLogSummary struct {
 }
 
 type AgentActivity struct {
+	ProjectName       string                 `json:"-"`
 	SessionID         string                 `json:"sessionId"`
 	Title             string                 `json:"title"`
 	AgentName         string                 `json:"agentName"`
@@ -349,24 +350,33 @@ func (s *Store) UpsertWorkLogSummary(ctx context.Context, workspaceID, kind, sta
 }
 
 func (s *Store) AgentActivities(ctx context.Context, workspaceID string, from, to time.Time) ([]AgentActivity, error) {
+	return s.agentActivities(ctx, workspaceID, from, to, "", false)
+}
+
+func (s *Store) agentActivities(ctx context.Context, workspaceID string, from, to time.Time, projectID string, footprint bool) ([]AgentActivity, error) {
 	const messagesPerSession = 30
 	const messageCharacterLimit = 4000
-	rows, err := s.pool.Query(ctx, `SELECT s.id,s.title,a.name,COALESCE(first_user.content,''),m.role,m.content,m.status,m.updated_at,m.total_count
+	rows, err := s.pool.Query(ctx, `SELECT s.id,s.title,a.name,COALESCE(p.name,''),COALESCE(first_user.content,''),m.role,m.content,m.status,m.updated_at,m.total_count
 		FROM chat_sessions s
 		JOIN agents a ON a.id=s.agent_id AND a.workspace_id=s.workspace_id
+		LEFT JOIN projects p ON p.id=s.project_id AND p.workspace_id=s.workspace_id
 		LEFT JOIN LATERAL (
 			SELECT left(content,$5) AS content FROM messages
 			WHERE workspace_id=s.workspace_id AND session_id=s.id AND role='user' AND trim(content)<>''
 			ORDER BY created_at,id LIMIT 1
 		) first_user ON true
 		JOIN LATERAL (
-			SELECT role,left(content,$5) AS content,status,updated_at,count(*) OVER () AS total_count FROM messages
-			WHERE workspace_id=s.workspace_id AND session_id=s.id AND updated_at >= $2 AND updated_at < $3
+			SELECT role,left(content,$5) AS content,status,
+                CASE WHEN $7 AND role='user' THEN created_at ELSE updated_at END AS updated_at,
+                count(*) OVER () AS total_count FROM messages
+			WHERE workspace_id=s.workspace_id AND session_id=s.id
+                AND (CASE WHEN $7 AND role='user' THEN created_at ELSE updated_at END) >= $2
+                AND (CASE WHEN $7 AND role='user' THEN created_at ELSE updated_at END) < $3
 				AND role IN ('user','agent') AND trim(content)<>''
 			ORDER BY updated_at DESC,id DESC LIMIT $4
 		) m ON true
-		WHERE s.workspace_id=$1
-		ORDER BY s.id,m.updated_at,m.role,m.content`, workspaceID, from, to, messagesPerSession, messageCharacterLimit)
+		WHERE s.workspace_id=$1 AND ($6='' OR s.project_id=$6)
+		ORDER BY s.id,m.updated_at,m.role,m.content`, workspaceID, from, to, messagesPerSession, messageCharacterLimit, projectID, footprint)
 	if err != nil {
 		return nil, err
 	}
@@ -374,17 +384,17 @@ func (s *Store) AgentActivities(ctx context.Context, workspaceID string, from, t
 	items := []AgentActivity{}
 	bySession := map[string]int{}
 	for rows.Next() {
-		var sessionID, title, agentName, taskDescription string
+		var sessionID, title, agentName, projectName, taskDescription string
 		var totalMessageCount int
 		var message AgentActivityMessage
-		if err := rows.Scan(&sessionID, &title, &agentName, &taskDescription, &message.Role, &message.Content, &message.Status, &message.UpdatedAt, &totalMessageCount); err != nil {
+		if err := rows.Scan(&sessionID, &title, &agentName, &projectName, &taskDescription, &message.Role, &message.Content, &message.Status, &message.UpdatedAt, &totalMessageCount); err != nil {
 			return nil, err
 		}
 		index, exists := bySession[sessionID]
 		if !exists {
 			index = len(items)
 			bySession[sessionID] = index
-			items = append(items, AgentActivity{SessionID: sessionID, Title: title, AgentName: agentName, TaskDescription: taskDescription, Messages: []AgentActivityMessage{}, TotalMessageCount: totalMessageCount})
+			items = append(items, AgentActivity{SessionID: sessionID, Title: title, AgentName: agentName, ProjectName: projectName, TaskDescription: taskDescription, Messages: []AgentActivityMessage{}, TotalMessageCount: totalMessageCount})
 		}
 		items[index].Messages = append(items[index].Messages, message)
 		items[index].MessageCount++
@@ -397,6 +407,175 @@ func (s *Store) AgentActivities(ctx context.Context, workspaceID string, from, t
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].UpdatedAt.After(items[j].UpdatedAt) })
 	return items, nil
+}
+
+type FootprintSession struct {
+	SessionID     string    `json:"sessionId"`
+	Title         string    `json:"title"`
+	ProjectID     *string   `json:"projectId"`
+	ProjectName   string    `json:"projectName"`
+	AgentName     string    `json:"agentName"`
+	CreatedAt     time.Time `json:"createdAt"`
+	LastActiveAt  time.Time `json:"lastActiveAt"`
+	UserMessages  int       `json:"userMessages"`
+	AgentMessages int       `json:"agentMessages"`
+	TokenCount    *int64    `json:"tokenCount"`
+	ActiveDays    []string  `json:"activeDays"`
+}
+
+type FootprintDay struct {
+	Day           string `json:"day"`
+	Sessions      int    `json:"sessions"`
+	UserMessages  int    `json:"userMessages"`
+	AgentMessages int    `json:"agentMessages"`
+	TokenCount    *int64 `json:"tokenCount"`
+}
+
+type FootprintReport struct {
+	ID               string    `json:"id"`
+	WorkspaceID      string    `json:"workspaceId"`
+	Title            string    `json:"title"`
+	Content          string    `json:"content"`
+	From             time.Time `json:"from"`
+	To               time.Time `json:"to"`
+	ProjectID        *string   `json:"projectId"`
+	SourceSessionIDs []string  `json:"sourceSessionIds"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+}
+
+func (s *Store) ValidTimezone(ctx context.Context, timezone string) (bool, error) {
+	var valid bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_timezone_names WHERE name=$1)`, timezone).Scan(&valid)
+	return valid, err
+}
+
+func (s *Store) FootprintSessions(ctx context.Context, workspaceID string, from, to time.Time, projectID, timezone string) ([]FootprintSession, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT s.id,s.title,s.project_id,COALESCE(p.name,''),a.name,s.created_at,
+			max(CASE WHEN m.role='agent' THEN m.updated_at ELSE m.created_at END) AS last_active_at,
+			count(*) FILTER (WHERE m.role='user'),count(*) FILTER (WHERE m.role='agent'),
+			array_agg(DISTINCT to_char(date_trunc('day',(CASE WHEN m.role='agent' THEN m.updated_at ELSE m.created_at END) AT TIME ZONE $5),'YYYY-MM-DD'))
+		FROM chat_sessions s
+		JOIN agents a ON a.id=s.agent_id AND a.workspace_id=s.workspace_id
+		LEFT JOIN projects p ON p.id=s.project_id AND p.workspace_id=s.workspace_id
+		JOIN messages m ON m.workspace_id=s.workspace_id AND m.session_id=s.id
+			AND (CASE WHEN m.role='agent' THEN m.updated_at ELSE m.created_at END) >= $2
+			AND (CASE WHEN m.role='agent' THEN m.updated_at ELSE m.created_at END) < $3
+			AND m.role IN ('user','agent') AND trim(m.content)<>''
+		WHERE s.workspace_id=$1 AND ($4='' OR s.project_id=$4)
+		GROUP BY s.id,s.title,s.project_id,p.name,a.name,s.created_at
+		ORDER BY last_active_at DESC,s.id`, workspaceID, from, to, projectID, timezone)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FootprintSession{}
+	for rows.Next() {
+		var item FootprintSession
+		if err := rows.Scan(&item.SessionID, &item.Title, &item.ProjectID, &item.ProjectName, &item.AgentName, &item.CreatedAt, &item.LastActiveAt, &item.UserMessages, &item.AgentMessages, &item.ActiveDays); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (s *Store) FootprintDays(ctx context.Context, workspaceID string, from, to time.Time, projectID, timezone string) ([]FootprintDay, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT to_char(date_trunc('day',(CASE WHEN m.role='agent' THEN m.updated_at ELSE m.created_at END) AT TIME ZONE $5),'YYYY-MM-DD') AS day,
+			count(DISTINCT s.id),count(*) FILTER (WHERE m.role='user'),count(*) FILTER (WHERE m.role='agent')
+		FROM messages m JOIN chat_sessions s ON s.workspace_id=m.workspace_id AND s.id=m.session_id
+		WHERE m.workspace_id=$1
+			AND (CASE WHEN m.role='agent' THEN m.updated_at ELSE m.created_at END) >= $2
+			AND (CASE WHEN m.role='agent' THEN m.updated_at ELSE m.created_at END) < $3
+			AND m.role IN ('user','agent') AND trim(m.content)<>'' AND ($4='' OR s.project_id=$4)
+		GROUP BY day ORDER BY day`, workspaceID, from, to, projectID, timezone)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FootprintDay{}
+	for rows.Next() {
+		var item FootprintDay
+		if err := rows.Scan(&item.Day, &item.Sessions, &item.UserMessages, &item.AgentMessages); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (s *Store) FootprintReportActivities(ctx context.Context, workspaceID string, from, to time.Time, projectID string) ([]AgentActivity, error) {
+	// Use the same timestamp and project filter as the overview. User messages
+	// belong to their send date, not a later retry or projection update.
+	return s.agentActivities(ctx, workspaceID, from, to, projectID, true)
+}
+
+const footprintReportColumns = `id,workspace_id,title,content,from_at,to_at,project_id,source_session_ids,created_at,updated_at`
+
+func scanFootprintReport(row pgx.Row) (FootprintReport, error) {
+	var item FootprintReport
+	err := row.Scan(&item.ID, &item.WorkspaceID, &item.Title, &item.Content, &item.From, &item.To, &item.ProjectID, &item.SourceSessionIDs, &item.CreatedAt, &item.UpdatedAt)
+	if item.SourceSessionIDs == nil {
+		item.SourceSessionIDs = []string{}
+	}
+	return item, err
+}
+
+func (s *Store) FootprintReports(ctx context.Context, workspaceID string) ([]FootprintReport, error) {
+	rows, err := s.pool.Query(ctx, `SELECT `+footprintReportColumns+` FROM footprint_reports WHERE workspace_id=$1 ORDER BY created_at DESC`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FootprintReport{}
+	for rows.Next() {
+		item, scanErr := scanFootprintReport(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (s *Store) SaveFootprintReport(ctx context.Context, workspaceID string, item FootprintReport) (FootprintReport, error) {
+	return s.SaveFootprintReportFromRun(ctx, workspaceID, item, "")
+}
+
+func (s *Store) SaveFootprintReportFromRun(ctx context.Context, workspaceID string, item FootprintReport, runID string) (FootprintReport, error) {
+	if item.ID == "" {
+		item.ID = uuid.NewString()
+	}
+	if item.SourceSessionIDs == nil {
+		item.SourceSessionIDs = []string{}
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return FootprintReport{}, err
+	}
+	defer tx.Rollback(ctx)
+	if runID != "" {
+		result, err := tx.Exec(ctx, `UPDATE run_links SET acknowledged_at=now(),updated_at=now() WHERE workspace_id=$1 AND relay_run_id=$2 AND purpose='footprint_report' AND session_id IS NULL`, workspaceID, runID)
+		if err != nil {
+			return FootprintReport{}, err
+		}
+		if result.RowsAffected() == 0 {
+			return FootprintReport{}, ErrNotFound
+		}
+	}
+	saved, err := scanFootprintReport(tx.QueryRow(ctx, `INSERT INTO footprint_reports(id,workspace_id,title,content,from_at,to_at,project_id,source_session_ids) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(id) DO UPDATE SET title=EXCLUDED.title,content=EXCLUDED.content,from_at=EXCLUDED.from_at,to_at=EXCLUDED.to_at,project_id=EXCLUDED.project_id,source_session_ids=EXCLUDED.source_session_ids,updated_at=now() WHERE footprint_reports.workspace_id=$2 RETURNING `+footprintReportColumns, item.ID, workspaceID, item.Title, item.Content, item.From, item.To, item.ProjectID, item.SourceSessionIDs))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return FootprintReport{}, ErrNotFound
+	}
+	if err != nil {
+		return FootprintReport{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return FootprintReport{}, err
+	}
+	return saved, nil
 }
 
 const noteColumns = `id,workspace_id,title,content,tags,pinned,archived,reminder_at,created_at,updated_at`

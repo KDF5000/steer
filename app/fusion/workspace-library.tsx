@@ -16,19 +16,26 @@ import {
   Bell,
   BookOpen,
   CalendarDays,
+  BarChart3,
+  Bot,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Check,
   Clock3,
+  Download,
   ExternalLink,
   FileText,
+  Info,
   Import,
   MoreHorizontal,
+  MessageCircle,
+  Pencil,
   Pin,
   Plus,
   Search,
   Sparkles,
+  UserRound,
   Trash2,
   Wrench,
   X,
@@ -48,7 +55,10 @@ import {
   type AgentActivityRecord,
   type ChatSessionRecord,
   type DocumentRecord,
+  type FootprintOverviewRecord,
+  type FootprintReportRecord,
   type NoteRecord,
+  type ProjectRecord,
   type SkillRecord,
   type WorkLogActivityRunRecord,
   type WorkLogEntryRecord,
@@ -1256,7 +1266,1064 @@ function weekNumber(date: Date) {
   );
 }
 
+type FootprintRange = 'today' | 'week' | 'custom';
+
+const footprintDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const footprintDateRange = (
+  range: FootprintRange,
+  customFrom: string,
+  customTo: string,
+) => {
+  const today = new Date();
+  const from = new Date(today);
+  if (range === 'week') from.setDate(from.getDate() - 6);
+  const fromKey = range === 'custom' ? customFrom : footprintDateKey(from);
+  const toKey = range === 'custom' ? customTo : footprintDateKey(today);
+  const start = new Date(`${fromKey}T00:00:00`);
+  const end = new Date(`${toKey}T00:00:00`);
+  end.setDate(end.getDate() + 1);
+  const valid =
+    Number.isFinite(start.getTime()) &&
+    Number.isFinite(end.getTime()) &&
+    end > start &&
+    end.getTime() - start.getTime() <= 32 * 86400000;
+  return {
+    fromKey,
+    toKey,
+    valid,
+    from: valid ? start.toISOString() : '',
+    to: valid ? end.toISOString() : '',
+  };
+};
+
+const compactCount = (value: number) =>
+  new Intl.NumberFormat(undefined, {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
+
 export function WorkLogView({
+  onNotice,
+  sessions,
+  projects,
+  onOpenSession,
+}: {
+  onNotice: Notice;
+  draftKey: string;
+  sessions: ChatSessionRecord[];
+  projects: ProjectRecord[];
+  onOpenSession: (sessionID: string) => void;
+}) {
+  const { language, t } = useI18n();
+  const today = footprintDateKey(new Date());
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - 6);
+  const [range, setRange] = useState<FootprintRange>('week');
+  const [customFrom, setCustomFrom] = useState(footprintDateKey(weekStart));
+  const [customTo, setCustomTo] = useState(today);
+  const [projectID, setProjectID] = useState('');
+  const [overview, setOverview] = useState<FootprintOverviewRecord | null>(
+    null,
+  );
+  const [reports, setReports] = useState<FootprintReportRecord[]>([]);
+  const [tab, setTab] = useState<'overview' | 'reports'>('overview');
+  const [selectedReportID, setSelectedReportID] = useState('');
+  const [trendMetric, setTrendMetric] = useState<'messages' | 'sessions'>(
+    'messages',
+  );
+  const [selectedDay, setSelectedDay] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reloadSequence, setReloadSequence] = useState(0);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportPhase, setReportPhase] = useState<
+    'setup' | 'generating' | 'edit'
+  >('setup');
+  const [reportTitle, setReportTitle] = useState('');
+  const [reportContent, setReportContent] = useState('');
+  const [reportInstructions, setReportInstructions] = useState('');
+  const [reportGroup, setReportGroup] = useState<'project' | 'day'>('project');
+  const [reportRunID, setReportRunID] = useState('');
+  const [reportSources, setReportSources] = useState<string[]>([]);
+  const [reportFrom, setReportFrom] = useState('');
+  const [reportTo, setReportTo] = useState('');
+  const [reportProjectID, setReportProjectID] = useState<string | null>(null);
+  const [editingReportID, setEditingReportID] = useState('');
+  const [savingReport, setSavingReport] = useState(false);
+  const [inlineReportDraft, setInlineReportDraft] = useState<{
+    id: string;
+    title: string;
+    content: string;
+  } | null>(null);
+  const [savingInlineReport, setSavingInlineReport] = useState(false);
+  const inlineReportEditor = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const editor = inlineReportEditor.current;
+    if (!editor) return;
+    const resize = () => {
+      editor.style.height = 'auto';
+      editor.style.height = `${editor.scrollHeight}px`;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, [inlineReportDraft, selectedReportID, tab]);
+
+  useLayoutEffect(() => {
+    if (inlineReportDraft?.id === selectedReportID && tab === 'reports')
+      inlineReportEditor.current?.focus();
+  }, [inlineReportDraft?.id, selectedReportID, tab]);
+
+  const activeRange = footprintDateRange(range, customFrom, customTo);
+  const timezone =
+    new Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+  useEffect(() => {
+    if (!activeRange.valid) return;
+    let cancelled = false;
+    void steer
+      .footprints(activeRange.from, activeRange.to, timezone, projectID)
+      .then((data) => {
+        if (!cancelled) {
+          setOverview(data);
+          setLoadError('');
+        }
+      })
+      .catch((reason) => {
+        if (!cancelled)
+          setLoadError(
+            reason instanceof Error
+              ? reason.message
+              : 'Could not load footprints.',
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeRange.from,
+    activeRange.to,
+    activeRange.valid,
+    projectID,
+    reloadSequence,
+    timezone,
+  ]);
+
+  useEffect(() => {
+    void steer
+      .footprintReports()
+      .then(setReports)
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!reportRunID || reportPhase !== 'generating') return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const result = await steer.run(reportRunID);
+        if (cancelled) return;
+        if (result.run.status === 'succeeded') {
+          if (!result.content.trim())
+            throw new Error('The system Agent returned an empty report.');
+          setReportContent(result.content.trim());
+          setReportPhase('edit');
+        } else if (['failed', 'cancelled'].includes(result.run.status)) {
+          setReportPhase('setup');
+          onNotice(result.error || 'Could not generate the report.');
+        }
+      } catch (reason) {
+        if (!cancelled) {
+          setReportPhase('setup');
+          onNotice(
+            reason instanceof Error
+              ? reason.message
+              : 'Could not generate the report.',
+          );
+        }
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [onNotice, reportPhase, reportRunID]);
+
+  const rangeDays = useMemo(() => {
+    const items: string[] = [];
+    if (!activeRange.valid) return items;
+    const cursor = new Date(`${activeRange.fromKey}T12:00:00`);
+    const end = new Date(`${activeRange.toKey}T12:00:00`);
+    while (cursor <= end) {
+      items.push(footprintDateKey(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return items;
+  }, [activeRange.fromKey, activeRange.toKey, activeRange.valid]);
+  const days = new Map(overview?.days.map((item) => [item.day, item]) || []);
+  const maxTrend = rangeDays.reduce((maximum, key) => {
+    const item = days.get(key);
+    const value =
+      trendMetric === 'sessions'
+        ? item?.sessions || 0
+        : Math.max(item?.userMessages || 0, item?.agentMessages || 0);
+    return Math.max(maximum, value);
+  }, 1);
+  const visibleSessions =
+    overview?.sessions.filter(
+      (session) => !selectedDay || session.activeDays.includes(selectedDay),
+    ) || [];
+  const selectedReport = reports.find(
+    (report) => report.id === selectedReportID,
+  );
+  const editingInline = inlineReportDraft?.id === selectedReportID;
+
+  const openReport = () => {
+    if (reportRunID && ['generating', 'edit'].includes(reportPhase)) {
+      setReportOpen(true);
+      return;
+    }
+    const selectedFrom = selectedDay
+      ? new Date(`${selectedDay}T00:00:00`).toISOString()
+      : activeRange.from;
+    const selectedEnd = selectedDay
+      ? new Date(`${selectedDay}T00:00:00`)
+      : new Date(activeRange.to);
+    if (selectedDay) selectedEnd.setDate(selectedEnd.getDate() + 1);
+    const selectedTo = selectedEnd.toISOString();
+    const label = selectedDay
+      ? selectedDay.slice(5).replace('-', '.')
+      : `${activeRange.fromKey.slice(5).replace('-', '.')} — ${activeRange.toKey.slice(5).replace('-', '.')}`;
+    setEditingReportID('');
+    setReportTitle(
+      `${label} ${language === 'zh-CN' ? '工作回顾' : 'Work review'}`,
+    );
+    setReportContent('');
+    setReportInstructions('');
+    setReportGroup('project');
+    setReportRunID('');
+    setReportSources([]);
+    setReportFrom(selectedFrom);
+    setReportTo(selectedTo);
+    setReportProjectID(projectID || null);
+    setReportPhase('setup');
+    setReportOpen(true);
+  };
+
+  const generateReport = async () => {
+    try {
+      setReportPhase('generating');
+      const result = await steer.generateFootprintReport({
+        from: reportFrom,
+        to: reportTo,
+        projectId: reportProjectID || undefined,
+        groupBy: reportGroup,
+        instructions: reportInstructions.trim() || undefined,
+      });
+      setReportRunID(result.runId);
+      setReportSources(result.sourceSessionIds);
+    } catch (reason) {
+      setReportPhase('setup');
+      onNotice(
+        reason instanceof Error
+          ? reason.message
+          : 'Could not generate the report.',
+      );
+    }
+  };
+
+  const saveReport = async () => {
+    if (!reportTitle.trim() || !reportContent.trim() || savingReport) return;
+    setSavingReport(true);
+    try {
+      const saved = await steer.saveFootprintReport({
+        id: editingReportID || undefined,
+        title: reportTitle,
+        content: reportContent,
+        from: reportFrom,
+        to: reportTo,
+        projectId: reportProjectID,
+        sourceSessionIds: reportSources,
+        runId: reportRunID || undefined,
+      });
+      setReports((current) => [
+        saved,
+        ...current.filter((item) => item.id !== saved.id),
+      ]);
+      setEditingReportID(saved.id);
+      setReportRunID('');
+      setSelectedReportID(saved.id);
+      setTab('reports');
+      setReportOpen(false);
+      onNotice(t('Report saved.'));
+    } catch (reason) {
+      onNotice(
+        reason instanceof Error ? reason.message : 'Could not save the report.',
+      );
+    } finally {
+      setSavingReport(false);
+    }
+  };
+
+  const openSavedReport = (report: FootprintReportRecord) => {
+    setSelectedReportID(report.id);
+  };
+
+  const editSavedReport = (report: FootprintReportRecord) => {
+    setInlineReportDraft({
+      id: report.id,
+      title: report.title,
+      content: report.content,
+    });
+  };
+
+  const saveInlineReport = async () => {
+    if (
+      !selectedReport ||
+      !inlineReportDraft ||
+      savingInlineReport ||
+      !inlineReportDraft.title.trim() ||
+      !inlineReportDraft.content.trim()
+    )
+      return;
+    setSavingInlineReport(true);
+    try {
+      const saved = await steer.saveFootprintReport({
+        id: selectedReport.id,
+        title: inlineReportDraft.title,
+        content: inlineReportDraft.content,
+        from: selectedReport.from,
+        to: selectedReport.to,
+        projectId: selectedReport.projectId,
+        sourceSessionIds: selectedReport.sourceSessionIds,
+      });
+      setReports((current) =>
+        current.map((report) => (report.id === saved.id ? saved : report)),
+      );
+      setInlineReportDraft(null);
+      onNotice(t('Report saved.'));
+    } catch (reason) {
+      onNotice(
+        reason instanceof Error ? reason.message : 'Could not save the report.',
+      );
+    } finally {
+      setSavingInlineReport(false);
+    }
+  };
+
+  const downloadReport = (report?: FootprintReportRecord) => {
+    const title = report?.title || reportTitle;
+    const content = report?.content || reportContent;
+    const blob = new Blob([`# ${title}\n\n${content}`], {
+      type: 'text/markdown',
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${title || 'Steer report'}.md`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const reportFromKey = reportFrom
+    ? footprintDateKey(new Date(reportFrom))
+    : activeRange.fromKey;
+  const reportToKey = reportTo
+    ? footprintDateKey(new Date(new Date(reportTo).getTime() - 1))
+    : activeRange.toKey;
+  const reportConversationCount =
+    reportPhase === 'edit'
+      ? reportSources.length
+      : selectedDay
+        ? visibleSessions.length
+        : overview?.totals.activeSessions || 0;
+
+  return (
+    <div className="ws-work-log ws-footprints">
+      <header className="ws-work-log-header">
+        <div>
+          <h1>{t('Footprints')}</h1>
+          <p>
+            {t(
+              'Review the work that happened in Steer and keep every step traceable.',
+            )}
+          </p>
+        </div>
+        <Button
+          onClick={openReport}
+          disabled={
+            savingInlineReport ||
+            !activeRange.valid ||
+            !overview?.totals.activeSessions
+          }
+        >
+          <Sparkles />{' '}
+          {reportRunID
+            ? reportPhase === 'generating'
+              ? t('Generating…')
+              : t('Report ready')
+            : t('Generate report')}
+        </Button>
+      </header>
+      <nav className="ws-footprint-tabs" aria-label={t('Footprints')}>
+        <button
+          className={tab === 'overview' ? 'active' : ''}
+          disabled={savingInlineReport}
+          onClick={() => setTab('overview')}
+        >
+          {t('Overview')}
+        </button>
+        <button
+          className={tab === 'reports' ? 'active' : ''}
+          disabled={savingInlineReport}
+          onClick={() => setTab('reports')}
+        >
+          {t('Reports')} <span>{reports.length}</span>
+        </button>
+      </nav>
+      {tab === 'reports' ? (
+        selectedReport ? (
+          <article className="ws-footprint-report-detail">
+            <div className="ws-footprint-report-toolbar">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ws-footprint-report-back"
+                disabled={savingInlineReport}
+                onClick={() => setSelectedReportID('')}
+              >
+                <ArrowLeft />
+                {t('Back to reports')}
+              </Button>
+              <div className="ws-footprint-report-detail-actions">
+                {editingInline ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={savingInlineReport}
+                      onClick={() => setInlineReportDraft(null)}
+                    >
+                      {t('Cancel')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={
+                        savingInlineReport ||
+                        !inlineReportDraft?.title.trim() ||
+                        !inlineReportDraft?.content.trim()
+                      }
+                      onClick={() => void saveInlineReport()}
+                    >
+                      {savingInlineReport ? t('Saving…') : t('Save report')}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => downloadReport(selectedReport)}
+                    >
+                      <Download />
+                      {t('Export Markdown')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => editSavedReport(selectedReport)}
+                    >
+                      <Pencil />
+                      {t('Edit report')}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+            <header>
+              {editingInline && inlineReportDraft ? (
+                <input
+                  className="ws-footprint-report-title-editor"
+                  aria-label={t('Report title')}
+                  maxLength={160}
+                  value={inlineReportDraft.title}
+                  disabled={savingInlineReport}
+                  onChange={(event) =>
+                    setInlineReportDraft((current) =>
+                      current
+                        ? { ...current, title: event.target.value }
+                        : current,
+                    )
+                  }
+                />
+              ) : (
+                <h2>{selectedReport.title}</h2>
+              )}
+              <p>
+                {new Date(selectedReport.from).toLocaleDateString(language)} —{' '}
+                {new Date(
+                  new Date(selectedReport.to).getTime() - 1,
+                ).toLocaleDateString(language)}{' '}
+                ·{' '}
+                {t('{count} source conversations', {
+                  count: selectedReport.sourceSessionIds.length,
+                })}
+              </p>
+            </header>
+            <div className="ws-footprint-report-document">
+              {editingInline && inlineReportDraft ? (
+                <textarea
+                  ref={inlineReportEditor}
+                  className="ws-footprint-report-inline-editor"
+                  aria-label={t('Report content')}
+                  value={inlineReportDraft.content}
+                  disabled={savingInlineReport}
+                  onChange={(event) =>
+                    setInlineReportDraft((current) =>
+                      current
+                        ? { ...current, content: event.target.value }
+                        : current,
+                    )
+                  }
+                />
+              ) : (
+                <WorkLogMarkdown>{selectedReport.content}</WorkLogMarkdown>
+              )}
+            </div>
+            <details className="ws-footprint-report-sources">
+              <summary>
+                {t('{count} source conversations', {
+                  count: selectedReport.sourceSessionIds.length,
+                })}
+              </summary>
+              {selectedReport.sourceSessionIds.map((sessionID) => (
+                <button
+                  key={sessionID}
+                  disabled={savingInlineReport}
+                  onClick={() => onOpenSession(sessionID)}
+                >
+                  {sessions.find((item) => item.id === sessionID)?.title ||
+                    sessionID}
+                  <ExternalLink />
+                </button>
+              ))}
+            </details>
+          </article>
+        ) : (
+          <section className="ws-footprint-reports">
+            <header>
+              <h2>{t('Saved reports')}</h2>
+            </header>
+            {reports.length ? (
+              reports.map((report) => (
+                <button key={report.id} onClick={() => openSavedReport(report)}>
+                  <span>
+                    <strong>{report.title}</strong>
+                    <small>
+                      {new Date(report.from).toLocaleDateString(language)} —{' '}
+                      {new Date(
+                        new Date(report.to).getTime() - 1,
+                      ).toLocaleDateString(language)}{' '}
+                      ·{' '}
+                      {t('{count} source conversations', {
+                        count: report.sourceSessionIds.length,
+                      })}
+                    </small>
+                  </span>
+                  <ChevronRight />
+                </button>
+              ))
+            ) : (
+              <div className="ws-footprint-empty">
+                <FileText />
+                <strong>{t('No reports yet')}</strong>
+                <p>
+                  {t('Choose a range and generate your first work report.')}
+                </p>
+              </div>
+            )}
+          </section>
+        )
+      ) : (
+        <>
+          <div className="ws-footprint-filters">
+            <div className="ws-footprint-range">
+              {(['today', 'week', 'custom'] as FootprintRange[]).map((item) => (
+                <button
+                  key={item}
+                  className={range === item ? 'active' : ''}
+                  onClick={() => {
+                    setRange(item);
+                    setSelectedDay('');
+                  }}
+                >
+                  {item === 'today'
+                    ? t('Today')
+                    : item === 'week'
+                      ? t('Last 7 days')
+                      : t('Custom')}
+                </button>
+              ))}
+            </div>
+            {range === 'custom' ? (
+              <div className="ws-footprint-dates">
+                <input
+                  aria-label={t('Start date')}
+                  type="date"
+                  value={customFrom}
+                  max={customTo}
+                  onChange={(event) => {
+                    setCustomFrom(event.target.value);
+                    setSelectedDay('');
+                  }}
+                />
+                <span>—</span>
+                <input
+                  aria-label={t('End date')}
+                  type="date"
+                  value={customTo}
+                  min={customFrom}
+                  onChange={(event) => {
+                    setCustomTo(event.target.value);
+                    setSelectedDay('');
+                  }}
+                />
+              </div>
+            ) : (
+              <span className="ws-footprint-date-label">
+                {activeRange.fromKey.replaceAll('-', '.')} —{' '}
+                {activeRange.toKey.replaceAll('-', '.')}
+              </span>
+            )}
+            <select
+              aria-label={t('Filter by project')}
+              value={projectID}
+              onChange={(event) => {
+                setProjectID(event.target.value);
+                setSelectedDay('');
+              }}
+            >
+              <option value="">{t('All projects')}</option>
+              {projects.map((project) => (
+                <option value={project.id} key={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {loading && activeRange.valid ? (
+            <div className="ws-footprint-state">{t('Loading footprints…')}</div>
+          ) : !activeRange.valid || loadError ? (
+            <div className="ws-footprint-state error" role="alert">
+              {!activeRange.valid
+                ? t('Choose a valid date range of up to 32 days.')
+                : loadError}
+              <Button
+                variant="outline"
+                onClick={() => setReloadSequence((value) => value + 1)}
+              >
+                {t('Try again')}
+              </Button>
+            </div>
+          ) : (
+            overview && (
+              <>
+                <section className="ws-footprint-metrics">
+                  <article>
+                    <header>
+                      {t('Active conversations')}
+                      <MessageCircle />
+                    </header>
+                    <strong>{overview.totals.activeSessions}</strong>
+                    <p>
+                      {t('{count} started in this range', {
+                        count: overview.totals.newSessions,
+                      })}
+                    </p>
+                  </article>
+                  <article>
+                    <header>
+                      {t('Your messages')}
+                      <UserRound />
+                    </header>
+                    <strong>
+                      {compactCount(overview.totals.userMessages)}
+                    </strong>
+                    <p>{t('Messages sent by you')}</p>
+                  </article>
+                  <article>
+                    <header>
+                      {t('Agent replies')}
+                      <Bot />
+                    </header>
+                    <strong>
+                      {compactCount(overview.totals.agentMessages)}
+                    </strong>
+                    <p>{t('Tool calls and stream chunks excluded')}</p>
+                  </article>
+                  <article>
+                    <header>
+                      {t('Token usage')}
+                      <BarChart3 />
+                    </header>
+                    <strong>—</strong>
+                    <p className="warning">
+                      {t('Runtime usage was not reported')}
+                    </p>
+                  </article>
+                </section>
+                <section className="ws-footprint-trend">
+                  <header>
+                    <div>
+                      <h2>{t('Activity trend')}</h2>
+                      <p>{t('See when work happened')}</p>
+                    </div>
+                    <select
+                      value={trendMetric}
+                      onChange={(event) =>
+                        setTrendMetric(
+                          event.target.value as 'messages' | 'sessions',
+                        )
+                      }
+                    >
+                      <option value="messages">{t('Messages')}</option>
+                      <option value="sessions">{t('Conversations')}</option>
+                    </select>
+                  </header>
+                  <div className="ws-footprint-legend">
+                    {trendMetric === 'messages' ? (
+                      <>
+                        <span>
+                          <i />
+                          {t('Your messages')}
+                        </span>
+                        <span>
+                          <i className="agent" />
+                          {t('Agent replies')}
+                        </span>
+                      </>
+                    ) : (
+                      <span>
+                        <i />
+                        {t('Active conversations')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="ws-footprint-chart">
+                    {rangeDays.map((key) => {
+                      const item = days.get(key);
+                      const first =
+                        trendMetric === 'sessions'
+                          ? item?.sessions || 0
+                          : item?.userMessages || 0;
+                      const second =
+                        trendMetric === 'messages'
+                          ? item?.agentMessages || 0
+                          : 0;
+                      return (
+                        <button
+                          key={key}
+                          className={selectedDay === key ? 'active' : ''}
+                          onClick={() =>
+                            setSelectedDay((value) =>
+                              value === key ? '' : key,
+                            )
+                          }
+                          title={`${key}: ${first}${trendMetric === 'messages' ? ` / ${second}` : ''}`}
+                        >
+                          <span className="bars">
+                            <i
+                              style={{
+                                height: `${Math.max(first ? 3 : 0, (first / maxTrend) * 110)}px`,
+                              }}
+                            />
+                            {trendMetric === 'messages' && (
+                              <i
+                                className="agent"
+                                style={{
+                                  height: `${Math.max(second ? 3 : 0, (second / maxTrend) * 110)}px`,
+                                }}
+                              />
+                            )}
+                          </span>
+                          <small>{key.slice(5).replace('-', '/')}</small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <footer>
+                    <span>{t('Select a date to filter conversations.')}</span>
+                    <span>
+                      {t('Statistics timezone')}: {overview.timezone}
+                    </span>
+                  </footer>
+                </section>
+                <section className="ws-footprint-sessions">
+                  <header>
+                    <div>
+                      <h2>{t('Conversation details')}</h2>
+                      <span>
+                        {t('{count} conversations', {
+                          count: visibleSessions.length,
+                        })}
+                      </span>
+                      {selectedDay && (
+                        <button onClick={() => setSelectedDay('')}>
+                          {selectedDay.slice(5).replace('-', '/')} ×
+                        </button>
+                      )}
+                    </div>
+                    <span>{t('Sorted by recent activity')}</span>
+                  </header>
+                  {visibleSessions.length ? (
+                    <div className="ws-footprint-table">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>{t('Conversation / Project')}</th>
+                            <th>{t('Your messages')}</th>
+                            <th>{t('Agent replies')}</th>
+                            <th>{t('Token')}</th>
+                            <th>{t('Recent activity')}</th>
+                            <th aria-label={t('Open conversation')} />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visibleSessions.map((session) => (
+                            <tr
+                              key={session.sessionId}
+                              onClick={() => onOpenSession(session.sessionId)}
+                            >
+                              <td>
+                                <button>{session.title}</button>
+                                <small>
+                                  {session.projectName || t('No project')} ·{' '}
+                                  {session.agentName}
+                                  {new Date(session.createdAt) >=
+                                    new Date(activeRange.from) &&
+                                  new Date(session.createdAt) <
+                                    new Date(activeRange.to)
+                                    ? ` · ${t('New conversation')}`
+                                    : ''}
+                                </small>
+                              </td>
+                              <td>{session.userMessages}</td>
+                              <td>{session.agentMessages}</td>
+                              <td>
+                                <span
+                                  title={t('Runtime usage was not reported')}
+                                >
+                                  {t('Not reported')}
+                                </span>
+                              </td>
+                              <td>
+                                {new Date(session.lastActiveAt).toLocaleString(
+                                  language,
+                                  {
+                                    month: 'numeric',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  },
+                                )}
+                              </td>
+                              <td>
+                                <ChevronRight />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="ws-footprint-empty">
+                      <MessageCircle />
+                      <strong>{t('No activity in this range')}</strong>
+                      <p>{t('Try another date or project.')}</p>
+                    </div>
+                  )}
+                  <footer>
+                    <span>
+                      {t('Message counts only include the selected range.')}
+                    </span>
+                    <span>
+                      {t('Token coverage')}: 0 /{' '}
+                      {overview.totals.activeSessions}
+                    </span>
+                  </footer>
+                </section>
+                <p className="ws-footprint-scope">
+                  <Info />
+                  {t(
+                    'Footprints only include activity inside Steer. Message and token counts do not measure work outcomes.',
+                  )}
+                </p>
+              </>
+            )
+          )}
+        </>
+      )}
+      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+        <DialogContent className="ws-footprint-report-dialog" showCloseButton>
+          <div className="ws-footprint-report-head">
+            <DialogTitle>
+              {reportPhase === 'edit'
+                ? t('Report draft')
+                : t('Generate report')}
+            </DialogTitle>
+            <DialogDescription>
+              {reportFromKey} — {reportToKey} ·{' '}
+              {t('{count} conversations', {
+                count: reportConversationCount,
+              })}
+            </DialogDescription>
+          </div>
+          {reportPhase === 'setup' ? (
+            <div className="ws-footprint-report-body">
+              <div className="ws-footprint-report-scope">
+                <strong>
+                  {reportFromKey} — {reportToKey}
+                </strong>
+                <small>
+                  {reportProjectID
+                    ? projects.find((item) => item.id === reportProjectID)?.name
+                    : t('All projects')}{' '}
+                  ·{' '}
+                  {t('{count} conversations', {
+                    count: reportConversationCount,
+                  })}
+                </small>
+                <small>
+                  {t('Only messages inside this range will be summarized.')}
+                </small>
+              </div>
+              <label>
+                <span>{t('Report title')}</span>
+                <input
+                  value={reportTitle}
+                  onChange={(event) => setReportTitle(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>{t('Organization')}</span>
+                <select
+                  value={reportGroup}
+                  onChange={(event) =>
+                    setReportGroup(event.target.value as 'project' | 'day')
+                  }
+                >
+                  <option value="project">{t('Group by project')}</option>
+                  <option value="day">{t('Group by day')}</option>
+                </select>
+              </label>
+              <label>
+                <span>
+                  {t('Additional instructions')} <small>{t('Optional')}</small>
+                </span>
+                <textarea
+                  value={reportInstructions}
+                  onChange={(event) =>
+                    setReportInstructions(event.target.value)
+                  }
+                  placeholder={t(
+                    'For example: focus on product decisions and list follow-ups separately.',
+                  )}
+                />
+              </label>
+              <p>
+                {t(
+                  'The report includes source conversations. Verify completion claims before sharing it.',
+                )}
+              </p>
+              <Button
+                onClick={() => void generateReport()}
+                disabled={!reportTitle.trim()}
+              >
+                <Sparkles />
+                {t('Generate report')}
+              </Button>
+            </div>
+          ) : reportPhase === 'generating' ? (
+            <div className="ws-footprint-report-progress">
+              <Sparkles />
+              <strong>{t('Generating report…')}</strong>
+              <p>
+                {t(
+                  'You can keep working while the system Agent reviews the selected conversations.',
+                )}
+              </p>
+            </div>
+          ) : (
+            <div className="ws-footprint-report-body">
+              <label>
+                <span>{t('Report title')}</span>
+                <input
+                  value={reportTitle}
+                  onChange={(event) => setReportTitle(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>{t('Report content')}</span>
+                <textarea
+                  className="editor"
+                  value={reportContent}
+                  onChange={(event) => setReportContent(event.target.value)}
+                />
+              </label>
+              <details>
+                <summary>
+                  {t('{count} source conversations', {
+                    count: reportSources.length,
+                  })}
+                </summary>
+                {reportSources.map((sessionID) => (
+                  <button
+                    key={sessionID}
+                    onClick={() => {
+                      setReportOpen(false);
+                      onOpenSession(sessionID);
+                    }}
+                  >
+                    {sessions.find((item) => item.id === sessionID)?.title ||
+                      sessionID}
+                    <ExternalLink />
+                  </button>
+                ))}
+              </details>
+              <div className="ws-footprint-report-actions">
+                <Button variant="outline" onClick={() => downloadReport()}>
+                  <Download />
+                  {t('Export Markdown')}
+                </Button>
+                <Button
+                  onClick={() => void saveReport()}
+                  disabled={
+                    savingReport || !reportTitle.trim() || !reportContent.trim()
+                  }
+                >
+                  {savingReport ? t('Saving…') : t('Save report')}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+export function LegacyWorkLogView({
   onNotice,
   draftKey,
   sessions,

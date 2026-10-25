@@ -686,6 +686,188 @@ func (s *Server) saveWorkLogSummary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
+func footprintRange(w http.ResponseWriter, fromRaw, toRaw string) (time.Time, time.Time, bool) {
+	from, err := time.Parse(time.RFC3339, fromRaw)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid from timestamp"})
+		return time.Time{}, time.Time{}, false
+	}
+	to, err := time.Parse(time.RFC3339, toRaw)
+	if err != nil || !to.After(from) || to.Sub(from) > 32*24*time.Hour {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid footprint range"})
+		return time.Time{}, time.Time{}, false
+	}
+	return from, to, true
+}
+
+func (s *Server) footprints(w http.ResponseWriter, r *http.Request) {
+	from, to, ok := footprintRange(w, r.URL.Query().Get("from"), r.URL.Query().Get("to"))
+	if !ok {
+		return
+	}
+	projectID := strings.TrimSpace(r.URL.Query().Get("projectId"))
+	timezone := strings.TrimSpace(r.URL.Query().Get("timezone"))
+	if timezone == "" {
+		timezone = "UTC"
+	}
+	validTimezone, err := s.store.ValidTimezone(r.Context(), timezone)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !validTimezone {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid timezone"})
+		return
+	}
+	if projectID != "" {
+		if _, err := s.store.Project(r.Context(), s.workspace(r), projectID); err != nil {
+			writeError(w, err)
+			return
+		}
+	}
+	sessions, err := s.store.FootprintSessions(r.Context(), s.workspace(r), from, to, projectID, timezone)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	days, err := s.store.FootprintDays(r.Context(), s.workspace(r), from, to, projectID, timezone)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	userMessages, agentMessages, newSessions := 0, 0, 0
+	for _, item := range sessions {
+		userMessages += item.UserMessages
+		agentMessages += item.AgentMessages
+		if !item.CreatedAt.Before(from) && item.CreatedAt.Before(to) {
+			newSessions++
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"from": from, "to": to, "timezone": timezone, "sessions": sessions, "days": days,
+		"totals": map[string]any{"activeSessions": len(sessions), "newSessions": newSessions, "userMessages": userMessages, "agentMessages": agentMessages, "tokenCount": nil, "tokenCoverage": 0},
+	})
+}
+
+func (s *Server) footprintReports(w http.ResponseWriter, r *http.Request) {
+	items, err := s.store.FootprintReports(r.Context(), s.workspace(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (s *Server) generateFootprintReport(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		From         string `json:"from"`
+		To           string `json:"to"`
+		ProjectID    string `json:"projectId"`
+		GroupBy      string `json:"groupBy"`
+		Instructions string `json:"instructions"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, err)
+		return
+	}
+	from, to, ok := footprintRange(w, input.From, input.To)
+	if !ok {
+		return
+	}
+	if input.ProjectID != "" {
+		if _, err := s.store.Project(r.Context(), s.workspace(r), input.ProjectID); err != nil {
+			writeError(w, err)
+			return
+		}
+	}
+	activities, err := s.store.FootprintReportActivities(r.Context(), s.workspace(r), from, to, input.ProjectID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if len(activities) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "No conversations were active in this range."})
+		return
+	}
+	parts := make([]string, 0, len(activities))
+	sessionIDs := make([]string, 0, len(activities))
+	for _, item := range activities {
+		sessionIDs = append(sessionIDs, item.SessionID)
+		messages := make([]string, 0, len(item.Messages))
+		for _, message := range item.Messages {
+			messages = append(messages, fmt.Sprintf("[%s] %s (%s):\n%s", message.UpdatedAt.Format(time.RFC3339), message.Role, message.Status, message.Content))
+		}
+		projectName := item.ProjectName
+		if projectName == "" {
+			projectName = "No project"
+		}
+		parts = append(parts, fmt.Sprintf("Session ID: %s\nSession: %s\nProject: %s\nAgent: %s\nConversation (%d of %d messages):\n%s", item.SessionID, item.Title, projectName, item.AgentName, item.MessageCount, item.TotalMessageCount, strings.Join(messages, "\n\n")))
+	}
+	grouping := "project"
+	if input.GroupBy == "day" {
+		grouping = "day"
+	}
+	prompt := "Create a concise work report from the Steer conversations below. Organize the report by " + grouping + ". Distinguish completed and verified outcomes from discussions, proposals, work in progress, risks, and follow-ups. Never infer completion from a topic or session title. Merge duplicates. Use Markdown headings and bullets. Do not mention token counts or productivity scores. Return only the report. Do not modify files or use tools."
+	if value := strings.TrimSpace(input.Instructions); value != "" {
+		prompt += "\n\nUser's additional reporting instructions:\n" + value
+	}
+	prompt += "\n\n" + strings.Join(parts, "\n\n---\n\n")
+	run, err := s.submitSystemAgentRun(r.Context(), s.workspace(r), "footprint_report", prompt)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"runId": run.ID, "status": run.Status, "sourceSessionIds": sessionIDs})
+}
+
+func (s *Server) saveFootprintReport(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ID               string   `json:"id"`
+		Title            string   `json:"title"`
+		Content          string   `json:"content"`
+		From             string   `json:"from"`
+		To               string   `json:"to"`
+		ProjectID        *string  `json:"projectId"`
+		SourceSessionIDs []string `json:"sourceSessionIds"`
+		RunID            string   `json:"runId"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, err)
+		return
+	}
+	input.Title = strings.TrimSpace(input.Title)
+	input.Content = strings.TrimSpace(input.Content)
+	if input.Title == "" || len([]rune(input.Title)) > 160 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid report title"})
+		return
+	}
+	if !validateWorkLogContent(w, &input.Content) {
+		return
+	}
+	from, to, ok := footprintRange(w, input.From, input.To)
+	if !ok {
+		return
+	}
+	if input.ProjectID != nil {
+		if _, err := s.store.Project(r.Context(), s.workspace(r), *input.ProjectID); err != nil {
+			writeError(w, err)
+			return
+		}
+	}
+	for _, id := range input.SourceSessionIDs {
+		if _, err := s.store.Session(r.Context(), s.workspace(r), id); err != nil {
+			writeError(w, err)
+			return
+		}
+	}
+	item, err := s.store.SaveFootprintReportFromRun(r.Context(), s.workspace(r), store.FootprintReport{ID: input.ID, Title: input.Title, Content: input.Content, From: from, To: to, ProjectID: input.ProjectID, SourceSessionIDs: input.SourceSessionIDs}, input.RunID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
 func validateNote(w http.ResponseWriter, note *store.Note) bool {
 	note.Title = strings.TrimSpace(note.Title)
 	note.Content = strings.TrimSpace(note.Content)

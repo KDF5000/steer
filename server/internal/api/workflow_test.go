@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/KDF5000/relay"
 	"github.com/KDF5000/steer/server/internal/store"
@@ -118,6 +120,17 @@ func TestConversationWorkflowHTTP(t *testing.T) {
 	json.Unmarshal(call("POST", "/chat", fmt.Sprintf(`{"prompt":"Inspect","agentId":%q,"projectId":%q}`, agent.ID, project.ID), 202).Body.Bytes(), &started)
 	call("POST", "/chat", fmt.Sprintf(`{"prompt":"Continue","agentId":%q,"sessionId":%q}`, reviewer.ID, started.SessionID), 202)
 	call("GET", "/runs/"+started.RunID, "", 200)
+	footprintQuery := url.Values{
+		"from":     {time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)},
+		"to":       {time.Now().Add(time.Hour).UTC().Format(time.RFC3339)},
+		"timezone": {"Asia/Shanghai"},
+	}
+	footprints := call("GET", "/footprints?"+footprintQuery.Encode(), "", 200)
+	if !strings.Contains(footprints.Body.String(), `"activeSessions":1`) {
+		t.Fatalf("footprints did not accept an IANA timezone: %s", footprints.Body.String())
+	}
+	footprintQuery.Set("timezone", "Not/A_Timezone")
+	call("GET", "/footprints?"+footprintQuery.Encode(), "", 400)
 	activity := call("POST", "/work-log/activity", `{"from":"2000-01-01T00:00:00Z","to":"2100-01-01T00:00:00Z"}`, 202)
 	if !strings.Contains(activity.Body.String(), "runId") {
 		t.Fatalf("Agent activity did not start a system run: %s", activity.Body.String())

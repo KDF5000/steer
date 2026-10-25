@@ -224,6 +224,57 @@ export type WorkLogActivityRunRecord = {
 
 export type WorkLogWeeklyRunRecord = WorkLogActivityRunRecord;
 
+export type FootprintSessionRecord = {
+  sessionId: string;
+  title: string;
+  projectId: string | null;
+  projectName: string;
+  agentName: string;
+  createdAt: string;
+  lastActiveAt: string;
+  userMessages: number;
+  agentMessages: number;
+  tokenCount: number | null;
+  activeDays: string[];
+};
+
+export type FootprintDayRecord = {
+  day: string;
+  sessions: number;
+  userMessages: number;
+  agentMessages: number;
+  tokenCount: number | null;
+};
+
+export type FootprintOverviewRecord = {
+  from: string;
+  to: string;
+  timezone: string;
+  totals: {
+    activeSessions: number;
+    newSessions: number;
+    userMessages: number;
+    agentMessages: number;
+    tokenCount: number | null;
+    tokenCoverage: number;
+  };
+  sessions: FootprintSessionRecord[];
+  days: FootprintDayRecord[];
+};
+
+export type FootprintReportRecord = {
+  id: string;
+  workspaceId: string;
+  title: string;
+  content: string;
+  from: string;
+  to: string;
+  projectId: string | null;
+  sourceSessionIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ChatMessageRecord = {
   context?: MessageContext;
   id: string;
@@ -646,6 +697,41 @@ export const steer = {
   }) =>
     request<WorkLogSummaryRecord>('/work-log/summaries', {
       method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+  footprints: (from: string, to: string, timezone: string, projectId = '') =>
+    request<FootprintOverviewRecord>(
+      `/footprints?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&timezone=${encodeURIComponent(timezone)}${projectId ? `&projectId=${encodeURIComponent(projectId)}` : ''}`,
+    ),
+  footprintReports: () =>
+    request<FootprintReportRecord[]>('/footprints/reports'),
+  generateFootprintReport: (input: {
+    from: string;
+    to: string;
+    projectId?: string;
+    groupBy: 'project' | 'day';
+    instructions?: string;
+  }) =>
+    request<{
+      runId: string;
+      status: string;
+      sourceSessionIds: string[];
+    }>('/footprints/reports/generate', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  saveFootprintReport: (input: {
+    id?: string;
+    title: string;
+    content: string;
+    from: string;
+    to: string;
+    projectId?: string | null;
+    sourceSessionIds: string[];
+    runId?: string;
+  }) =>
+    request<FootprintReportRecord>('/footprints/reports', {
+      method: 'POST',
       body: JSON.stringify(input),
     }),
   createProject: (
