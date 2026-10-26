@@ -9066,3 +9066,65 @@ button.ws-chat-response-meta:focus-visible {
     max-width: 90%;
   }
 }
+
+/* Keep the mobile conversation inside the keyboard's visual viewport. */
+@media (max-width: 767px) {
+  .ws-chat-split {
+    position: fixed;
+    top: var(--chat-viewport-top, 0px);
+    left: 0;
+    width: var(--chat-viewport-width, 100%);
+    max-width: 100%;
+    height: var(--chat-viewport-height, 100dvh);
+    min-height: 0;
+    overflow: hidden;
+  }
+  .ws-conversation-panel,
+  .ws-chat-page {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+  }
+  .ws-chat-center,
+  .ws-chatbox,
+  .ws-inline-composer {
+    min-width: 0;
+  }
+  .ws-chatbox-wrap {
+    flex: 0 0 auto;
+    max-width: calc(100% - 24px);
+  }
+  /* Safari auto-zooms editable text below 16px. Keep desktop typography. */
+  .ws-inline-composer,
+  .ws-chatbox textarea {
+    font-size: 16px;
+  }
+  .ws-inline-line {
+    max-height: min(180px, calc(var(--chat-viewport-height, 100dvh) * 0.3));
+  }
+  .ws-chat-mode-note {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ws-chat-split[data-keyboard-open='true'] .ws-chatbox-wrap {
+    padding-bottom: 8px;
+  }
+  .ws-chat-split[data-keyboard-open='true'] .ws-chat-mode-note {
+    display: none;
+  }
+  .ws-chat-split[data-keyboard-open='true'] .ws-chat-center {
+    flex: 1;
+    overflow-y: auto;
+  }
+  .ws-chat-split[data-keyboard-open='true'] .ws-chat-welcome {
+    display: none;
+  }
+  .ws-chat-split[data-keyboard-open='true'] .ws-chat-center {
+    padding-top: 12px;
+  }
+  .ws-chat-split[data-keyboard-open='true'] .ws-chatbox-wrap {
+    margin-bottom: 0;
+  }
+}

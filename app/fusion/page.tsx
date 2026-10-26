@@ -157,6 +157,7 @@ import {
   type WorkspaceSettingsRecord,
   type WorkspaceRecord,
 } from '@/lib/steer-client';
+import { useChatViewport } from './use-chat-viewport';
 import { AssetsView, WorkLogView } from './workspace-library';
 import './fusion.css';
 
@@ -3734,6 +3735,10 @@ function ChatView({
   };
   const imageDragDepth = useRef(0);
   const followBottom = useRef(true);
+  const chatViewportRef = useChatViewport(() => {
+    const area = scrollArea.current;
+    if (area && followBottom.current) area.scrollTop = area.scrollHeight;
+  });
   const thread = useRef<HTMLDivElement>(null);
   const previousPrompts = useMemo(() => {
     let prompt: string | undefined;
@@ -3896,6 +3901,7 @@ function ChatView({
     );
   return (
     <SidebarProvider
+      ref={chatViewportRef}
       className="ws-chat-split"
       open={reviewOpen}
       onOpenChange={setReviewOpen}
