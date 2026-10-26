@@ -2147,6 +2147,71 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.ws-footprint-usage-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 8px;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+.ws-footprint-usage-details {
+  position: relative;
+}
+.ws-footprint-usage-details summary {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  color: var(--ws-text-secondary);
+  list-style: none;
+}
+.ws-footprint-usage-details summary::-webkit-details-marker {
+  display: none;
+}
+.ws-footprint-usage-details summary svg {
+  width: 12px;
+  height: 12px;
+}
+.ws-footprint-usage-details[open] summary svg {
+  transform: rotate(180deg);
+}
+.ws-footprint-usage-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 10;
+  width: min(260px, calc(100vw - 40px));
+  border: 1px solid var(--ws-border);
+  border-radius: 8px;
+  background: var(--ws-surface);
+  padding: 12px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 7%);
+}
+.ws-footprint-usage-popover dl {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.ws-footprint-usage-popover dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ws-footprint-usage-popover dt {
+  color: var(--ws-text-secondary);
+}
+.ws-footprint-usage-popover dd {
+  color: var(--ws-text);
+  font-variant-numeric: tabular-nums;
+}
+.ws-footprint-metrics .ws-footprint-usage-popover p {
+  white-space: normal;
+  line-height: 1.6;
+  margin-top: 4px;
+}
 .ws-footprint-metrics p.warning {
   color: #9a681f;
 }

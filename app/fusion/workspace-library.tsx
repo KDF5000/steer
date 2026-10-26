@@ -1338,6 +1338,17 @@ export function WorkLogView({
     'messages' | 'sessions' | 'tokens'
   >('messages');
   const [selectedDay, setSelectedDay] = useState('');
+  const usageDetailsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const dismiss = (event: PointerEvent) => {
+      const details = usageDetailsRef.current;
+      if (details?.open && !details.contains(event.target as Node))
+        details.open = false;
+    };
+    document.addEventListener('pointerdown', dismiss);
+    return () => document.removeEventListener('pointerdown', dismiss);
+  }, []);
+
   const [sessionPagination, setSessionPagination] = useState({
     scope: '',
     page: 1,
@@ -2035,13 +2046,76 @@ export function WorkLogView({
                         {t('Token usage is not available yet')}
                       </p>
                     )}
-                    <p>
-                      {t('Usage coverage')}:{' '}
-                      {overview.totals.tokenCoverage || 0} /{' '}
-                      {overview.totals.totalRuns || 0} {t('runs')}
-                      {!!overview.totals.partialRuns &&
-                        ` · ${t('{count} partially reported', { count: overview.totals.partialRuns })}`}
-                    </p>
+                    <div className="ws-footprint-usage-footer">
+                      <span
+                        title={`${t('Usage coverage')}: ${overview.totals.tokenCoverage || 0} / ${overview.totals.totalRuns || 0} ${t('runs')}`}
+                      >
+                        {t('Coverage')} {overview.totals.tokenCoverage || 0} /{' '}
+                        {overview.totals.totalRuns || 0}
+                      </span>
+                      {overview.totals.tokenCount != null && (
+                        <details
+                          className="ws-footprint-usage-details"
+                          ref={usageDetailsRef}
+                        >
+                          <summary
+                            onKeyDown={(event) => {
+                              if (
+                                event.key === 'Escape' &&
+                                usageDetailsRef.current
+                              )
+                                usageDetailsRef.current.open = false;
+                            }}
+                            onBlur={() => {
+                              if (usageDetailsRef.current)
+                                usageDetailsRef.current.open = false;
+                            }}
+                          >
+                            {t('Usage details')}
+                            <ChevronDown />
+                          </summary>
+                          <div className="ws-footprint-usage-popover">
+                            <dl>
+                              <div>
+                                <dt>{t('Cache read')}</dt>
+                                <dd>
+                                  {overview.totals.cacheReadTokens == null
+                                    ? '—'
+                                    : compactCount(
+                                        overview.totals.cacheReadTokens,
+                                      )}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt>{t('Cache write')}</dt>
+                                <dd>
+                                  {overview.totals.cacheWriteTokens == null
+                                    ? '—'
+                                    : compactCount(
+                                        overview.totals.cacheWriteTokens,
+                                      )}
+                                </dd>
+                              </div>
+                            </dl>
+                            <p>
+                              {t('Cache usage is included in input tokens.')}
+                            </p>
+                            <p>
+                              {t('Usage coverage')}:{' '}
+                              {overview.totals.tokenCoverage || 0} /{' '}
+                              {overview.totals.totalRuns || 0} {t('runs')}
+                            </p>
+                            {!!overview.totals.partialRuns && (
+                              <p>
+                                {t('{count} partially reported', {
+                                  count: overview.totals.partialRuns,
+                                })}
+                              </p>
+                            )}
+                          </div>
+                        </details>
+                      )}
+                    </div>
                   </article>
                 </section>
                 <section className="ws-footprint-trend">
