@@ -274,6 +274,18 @@ const zhCN: Record<string, string> = {
   'Messages sent by you': '按你发送的消息计数',
   'Agent replies': 'Agent 回复',
   'Tool calls and stream chunks excluded': '不包含工具调用与流式片段',
+  'Known token usage': '已知 Token 用量',
+  Input: '输入',
+  Output: '输出',
+  'Usage coverage': '用量统计覆盖',
+  runs: '个任务',
+  'Token usage is not available yet': '暂未获取到 Token 用量',
+  'Partially reported': '部分上报',
+  '{count} partially reported': '{count} 个部分上报',
+  'Cache tokens are included in input; reasoning is included in output.':
+    '输入已包含缓存 Token；输出已包含思考 Token。',
+  'Token usage is assigned to the run completion date.':
+    'Token 用量按任务结束日期统计。',
   'Token usage': 'Token 用量',
   'Runtime usage was not reported': 'Runtime 未上报用量',
   'Activity trend': '活动趋势',
@@ -283,6 +295,13 @@ const zhCN: Record<string, string> = {
   'Select a date to filter conversations.':
     '点击日期，查看当天最近活跃的会话。',
   'Statistics timezone': '统计时区',
+  'Showing {from}–{to} of {total} conversations':
+    '显示 {from}–{to} 条，共 {total} 个会话',
+  'Rows per page': '每页条数',
+  'Conversation pagination': '会话明细分页',
+  'Previous page': '上一页',
+  'Next page': '下一页',
+  'Page {page} of {pages}': '第 {page} / {pages} 页',
   'Conversation details': '会话明细',
   '{count} conversations': '{count} 个会话',
   '{count} source conversations': '{count} 个来源会话',

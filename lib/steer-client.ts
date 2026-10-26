@@ -235,6 +235,9 @@ export type FootprintSessionRecord = {
   userMessages: number;
   agentMessages: number;
   tokenCount: number | null;
+  tokenCoverage: number;
+  totalRuns: number;
+  partialRuns: number;
   activeDays: string[];
 };
 
@@ -257,6 +260,12 @@ export type FootprintOverviewRecord = {
     agentMessages: number;
     tokenCount: number | null;
     tokenCoverage: number;
+    totalRuns: number;
+    partialRuns: number;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    cacheReadTokens: number | null;
+    cacheWriteTokens: number | null;
   };
   sessions: FootprintSessionRecord[];
   days: FootprintDayRecord[];

@@ -2271,6 +2271,43 @@
   color: var(--ws-text-secondary);
   font-size: var(--ws-font-caption);
 }
+.ws-footprint-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-caption);
+}
+.ws-footprint-pagination-controls,
+.ws-footprint-pagination-controls label,
+.ws-footprint-pagination-controls nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ws-footprint-pagination-controls {
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.ws-footprint-pagination-controls select {
+  border: 1px solid var(--ws-border);
+  border-radius: 6px;
+  background: var(--ws-surface);
+  padding: 4px 6px;
+  color: var(--ws-text);
+  font: inherit;
+}
+.ws-footprint-pagination-controls nav > span {
+  min-width: 74px;
+  text-align: center;
+}
+.ws-footprint-pagination-controls svg {
+  width: 14px;
+  height: 14px;
+}
 .ws-footprint-table {
   overflow-x: auto;
   margin: 11px 0;

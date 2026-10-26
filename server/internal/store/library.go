@@ -410,6 +410,9 @@ func (s *Store) agentActivities(ctx context.Context, workspaceID string, from, t
 }
 
 type FootprintSession struct {
+	TokenCoverage int       `json:"tokenCoverage"`
+	TotalRuns     int       `json:"totalRuns"`
+	PartialRuns   int       `json:"partialRuns"`
 	SessionID     string    `json:"sessionId"`
 	Title         string    `json:"title"`
 	ProjectID     *string   `json:"projectId"`

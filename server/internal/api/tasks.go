@@ -471,6 +471,9 @@ func (s *Server) syncRelayRun(ctx context.Context, wid, runID string) (runProjec
 	if err != nil {
 		return runProjection{}, err
 	}
+	if err := s.store.SaveRunUsage(ctx, wid, run, events); err != nil {
+		return runProjection{}, fmt.Errorf("sync usage: %w", err)
+	}
 	content, lastSeq := visibleAssistantContent(run.Status, events, run.Result)
 	var runErr *string
 	if run.Status == relay.RunFailed || run.Status == relay.RunCancelled {

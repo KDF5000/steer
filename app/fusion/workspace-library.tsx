@@ -1334,10 +1334,15 @@ export function WorkLogView({
   const [reports, setReports] = useState<FootprintReportRecord[]>([]);
   const [tab, setTab] = useState<'overview' | 'reports'>('overview');
   const [selectedReportID, setSelectedReportID] = useState('');
-  const [trendMetric, setTrendMetric] = useState<'messages' | 'sessions'>(
-    'messages',
-  );
+  const [trendMetric, setTrendMetric] = useState<
+    'messages' | 'sessions' | 'tokens'
+  >('messages');
   const [selectedDay, setSelectedDay] = useState('');
+  const [sessionPagination, setSessionPagination] = useState({
+    scope: '',
+    page: 1,
+    size: 10,
+  });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [reloadSequence, setReloadSequence] = useState(0);
@@ -1478,13 +1483,37 @@ export function WorkLogView({
     const value =
       trendMetric === 'sessions'
         ? item?.sessions || 0
-        : Math.max(item?.userMessages || 0, item?.agentMessages || 0);
+        : trendMetric === 'tokens'
+          ? item?.tokenCount || 0
+          : Math.max(item?.userMessages || 0, item?.agentMessages || 0);
     return Math.max(maximum, value);
   }, 1);
   const visibleSessions =
     overview?.sessions.filter(
       (session) => !selectedDay || session.activeDays.includes(selectedDay),
     ) || [];
+  const sessionPageScope = `${activeRange.from}:${activeRange.to}:${projectID}:${selectedDay}`;
+  const sessionPageCount = Math.max(
+    1,
+    Math.ceil(visibleSessions.length / sessionPagination.size),
+  );
+  const sessionPage =
+    sessionPagination.scope === sessionPageScope
+      ? Math.min(sessionPagination.page, sessionPageCount)
+      : 1;
+  const sessionPageStart = (sessionPage - 1) * sessionPagination.size;
+  const pagedSessions = visibleSessions.slice(
+    sessionPageStart,
+    sessionPageStart + sessionPagination.size,
+  );
+  const resetSessionPage = () =>
+    setSessionPagination((current) => ({ ...current, page: 1, scope: '' }));
+  const changeSessionPage = (page: number) =>
+    setSessionPagination((current) => ({
+      ...current,
+      scope: sessionPageScope,
+      page,
+    }));
   const selectedReport = reports.find(
     (report) => report.id === selectedReportID,
   );
@@ -1866,6 +1895,7 @@ export function WorkLogView({
                   onClick={() => {
                     setRange(item);
                     setSelectedDay('');
+                    resetSessionPage();
                   }}
                 >
                   {item === 'today'
@@ -1886,6 +1916,7 @@ export function WorkLogView({
                   onChange={(event) => {
                     setCustomFrom(event.target.value);
                     setSelectedDay('');
+                    resetSessionPage();
                   }}
                 />
                 <span>—</span>
@@ -1897,6 +1928,7 @@ export function WorkLogView({
                   onChange={(event) => {
                     setCustomTo(event.target.value);
                     setSelectedDay('');
+                    resetSessionPage();
                   }}
                 />
               </div>
@@ -1912,6 +1944,7 @@ export function WorkLogView({
               onChange={(event) => {
                 setProjectID(event.target.value);
                 setSelectedDay('');
+                resetSessionPage();
               }}
             >
               <option value="">{t('All projects')}</option>
@@ -1974,12 +2007,40 @@ export function WorkLogView({
                   </article>
                   <article>
                     <header>
-                      {t('Token usage')}
+                      {t('Known token usage')}
                       <BarChart3 />
                     </header>
-                    <strong>—</strong>
-                    <p className="warning">
-                      {t('Runtime usage was not reported')}
+                    <strong>
+                      {overview.totals.tokenCount == null
+                        ? '—'
+                        : compactCount(overview.totals.tokenCount)}
+                    </strong>
+                    {overview.totals.tokenCount != null ? (
+                      <p
+                        title={t(
+                          'Cache tokens are included in input; reasoning is included in output.',
+                        )}
+                      >
+                        {t('Input')}{' '}
+                        {overview.totals.inputTokens == null
+                          ? '—'
+                          : compactCount(overview.totals.inputTokens)}{' '}
+                        · {t('Output')}{' '}
+                        {overview.totals.outputTokens == null
+                          ? '—'
+                          : compactCount(overview.totals.outputTokens)}
+                      </p>
+                    ) : (
+                      <p className="warning">
+                        {t('Token usage is not available yet')}
+                      </p>
+                    )}
+                    <p>
+                      {t('Usage coverage')}:{' '}
+                      {overview.totals.tokenCoverage || 0} /{' '}
+                      {overview.totals.totalRuns || 0} {t('runs')}
+                      {!!overview.totals.partialRuns &&
+                        ` · ${t('{count} partially reported', { count: overview.totals.partialRuns })}`}
                     </p>
                   </article>
                 </section>
@@ -1993,12 +2054,16 @@ export function WorkLogView({
                       value={trendMetric}
                       onChange={(event) =>
                         setTrendMetric(
-                          event.target.value as 'messages' | 'sessions',
+                          event.target.value as
+                            | 'messages'
+                            | 'sessions'
+                            | 'tokens',
                         )
                       }
                     >
                       <option value="messages">{t('Messages')}</option>
                       <option value="sessions">{t('Conversations')}</option>
+                      <option value="tokens">{t('Known token usage')}</option>
                     </select>
                   </header>
                   <div className="ws-footprint-legend">
@@ -2016,7 +2081,9 @@ export function WorkLogView({
                     ) : (
                       <span>
                         <i />
-                        {t('Active conversations')}
+                        {trendMetric === 'tokens'
+                          ? t('Known token usage')
+                          : t('Active conversations')}
                       </span>
                     )}
                   </div>
@@ -2026,7 +2093,9 @@ export function WorkLogView({
                       const first =
                         trendMetric === 'sessions'
                           ? item?.sessions || 0
-                          : item?.userMessages || 0;
+                          : trendMetric === 'tokens'
+                            ? item?.tokenCount || 0
+                            : item?.userMessages || 0;
                       const second =
                         trendMetric === 'messages'
                           ? item?.agentMessages || 0
@@ -2035,12 +2104,13 @@ export function WorkLogView({
                         <button
                           key={key}
                           className={selectedDay === key ? 'active' : ''}
-                          onClick={() =>
+                          onClick={() => {
                             setSelectedDay((value) =>
                               value === key ? '' : key,
-                            )
-                          }
-                          title={`${key}: ${first}${trendMetric === 'messages' ? ` / ${second}` : ''}`}
+                            );
+                            resetSessionPage();
+                          }}
+                          title={`${key}: ${trendMetric === 'tokens' && item?.tokenCount == null ? t('Not reported') : first}${trendMetric === 'messages' ? ` / ${second}` : ''}`}
                         >
                           <span className="bars">
                             <i
@@ -2063,7 +2133,13 @@ export function WorkLogView({
                     })}
                   </div>
                   <footer>
-                    <span>{t('Select a date to filter conversations.')}</span>
+                    <span>
+                      {trendMetric === 'tokens'
+                        ? t(
+                            'Token usage is assigned to the run completion date.',
+                          )
+                        : t('Select a date to filter conversations.')}
+                    </span>
                     <span>
                       {t('Statistics timezone')}: {overview.timezone}
                     </span>
@@ -2079,7 +2155,12 @@ export function WorkLogView({
                         })}
                       </span>
                       {selectedDay && (
-                        <button onClick={() => setSelectedDay('')}>
+                        <button
+                          onClick={() => {
+                            setSelectedDay('');
+                            resetSessionPage();
+                          }}
+                        >
                           {selectedDay.slice(5).replace('-', '/')} ×
                         </button>
                       )}
@@ -2100,7 +2181,7 @@ export function WorkLogView({
                           </tr>
                         </thead>
                         <tbody>
-                          {visibleSessions.map((session) => (
+                          {pagedSessions.map((session) => (
                             <tr
                               key={session.sessionId}
                               onClick={() => onOpenSession(session.sessionId)}
@@ -2122,9 +2203,18 @@ export function WorkLogView({
                               <td>{session.agentMessages}</td>
                               <td>
                                 <span
-                                  title={t('Runtime usage was not reported')}
+                                  title={
+                                    session.tokenCount == null
+                                      ? t('Token usage is not available yet')
+                                      : `${t('Usage coverage')}: ${session.tokenCoverage || 0} / ${session.totalRuns || 0} ${t('runs')}`
+                                  }
                                 >
-                                  {t('Not reported')}
+                                  {session.tokenCount == null
+                                    ? t('Not reported')
+                                    : compactCount(session.tokenCount)}
+                                  {!!session.partialRuns && (
+                                    <small>{t('Partially reported')}</small>
+                                  )}
                                 </span>
                               </td>
                               <td>
@@ -2153,13 +2243,76 @@ export function WorkLogView({
                       <p>{t('Try another date or project.')}</p>
                     </div>
                   )}
+                  {visibleSessions.length > 10 && (
+                    <div className="ws-footprint-pagination">
+                      <span aria-live="polite">
+                        {t('Showing {from}–{to} of {total} conversations', {
+                          from: sessionPageStart + 1,
+                          to: Math.min(
+                            sessionPageStart + sessionPagination.size,
+                            visibleSessions.length,
+                          ),
+                          total: visibleSessions.length,
+                        })}
+                      </span>
+                      <div className="ws-footprint-pagination-controls">
+                        <label>
+                          <span>{t('Rows per page')}</span>
+                          <select
+                            aria-label={t('Rows per page')}
+                            value={sessionPagination.size}
+                            onChange={(event) =>
+                              setSessionPagination({
+                                scope: sessionPageScope,
+                                page: 1,
+                                size: Number(event.target.value),
+                              })
+                            }
+                          >
+                            {[10, 20, 50].map((size) => (
+                              <option key={size} value={size}>
+                                {size}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <nav aria-label={t('Conversation pagination')}>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={t('Previous page')}
+                            disabled={sessionPage <= 1}
+                            onClick={() => changeSessionPage(sessionPage - 1)}
+                          >
+                            <ChevronLeft />
+                          </Button>
+                          <span aria-live="polite">
+                            {t('Page {page} of {pages}', {
+                              page: sessionPage,
+                              pages: sessionPageCount,
+                            })}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={t('Next page')}
+                            disabled={sessionPage >= sessionPageCount}
+                            onClick={() => changeSessionPage(sessionPage + 1)}
+                          >
+                            <ChevronRight />
+                          </Button>
+                        </nav>
+                      </div>
+                    </div>
+                  )}
                   <footer>
                     <span>
                       {t('Message counts only include the selected range.')}
                     </span>
                     <span>
-                      {t('Token coverage')}: 0 /{' '}
-                      {overview.totals.activeSessions}
+                      {t('Usage coverage')}:{' '}
+                      {overview.totals.tokenCoverage || 0} /{' '}
+                      {overview.totals.totalRuns || 0} {t('runs')}
                     </span>
                   </footer>
                 </section>

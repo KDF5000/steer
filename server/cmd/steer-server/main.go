@@ -39,6 +39,8 @@ func main() {
 		slog.Error("integration manager failed to start", "error", err)
 	}
 	defer apiServer.StopIntegrations()
+	stopUsageSync := apiServer.StartUsageSync(ctx)
+	defer stopUsageSync()
 	handler := apiServer.Handler()
 	server := &http.Server{Addr: env("STEER_ADDR", ":8080"), Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go func() {

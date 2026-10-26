@@ -735,6 +735,37 @@ func (s *Server) footprints(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	usage, sessionUsage, dayUsage, err := s.store.FootprintUsage(r.Context(), s.workspace(r), from, to, projectID, timezone)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	usageBySession := map[string]store.UsageTotals{}
+	for _, item := range sessionUsage {
+		usageBySession[item.SessionID] = item.UsageTotals
+	}
+	for i := range sessions {
+		u := usageBySession[sessions[i].SessionID]
+		sessions[i].TokenCount = u.TokenCount
+		sessions[i].TokenCoverage = u.TokenCoverage
+		sessions[i].TotalRuns = u.TotalRuns
+		sessions[i].PartialRuns = u.PartialRuns
+	}
+	usageByDay := map[string]store.UsageTotals{}
+	for _, item := range dayUsage {
+		usageByDay[item.Day] = item.UsageTotals
+	}
+	seenDays := map[string]bool{}
+	for i := range days {
+		days[i].TokenCount = usageByDay[days[i].Day].TokenCount
+		seenDays[days[i].Day] = true
+	}
+	for day, u := range usageByDay {
+		if !seenDays[day] {
+			days = append(days, store.FootprintDay{Day: day, TokenCount: u.TokenCount})
+		}
+	}
+	sort.Slice(days, func(i, j int) bool { return days[i].Day < days[j].Day })
 	userMessages, agentMessages, newSessions := 0, 0, 0
 	for _, item := range sessions {
 		userMessages += item.UserMessages
@@ -745,7 +776,7 @@ func (s *Server) footprints(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"from": from, "to": to, "timezone": timezone, "sessions": sessions, "days": days,
-		"totals": map[string]any{"activeSessions": len(sessions), "newSessions": newSessions, "userMessages": userMessages, "agentMessages": agentMessages, "tokenCount": nil, "tokenCoverage": 0},
+		"totals": map[string]any{"activeSessions": len(sessions), "newSessions": newSessions, "userMessages": userMessages, "agentMessages": agentMessages, "tokenCount": usage.TokenCount, "tokenCoverage": usage.TokenCoverage, "inputTokens": usage.InputTokens, "outputTokens": usage.OutputTokens, "cacheReadTokens": usage.CacheReadTokens, "cacheWriteTokens": usage.CacheWriteTokens, "totalRuns": usage.TotalRuns, "partialRuns": usage.PartialRuns},
 	})
 }
 

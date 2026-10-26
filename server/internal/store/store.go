@@ -667,6 +667,9 @@ func (s *Store) saveChatRun(ctx context.Context, wid, sessionID, agentID, prompt
 	if err != nil {
 		return Message{}, Message{}, err
 	}
+	if err := captureRunUsage(ctx, tx, wid, runID); err != nil {
+		return Message{}, Message{}, err
+	}
 	if task != nil {
 		if task.ID == "" {
 			task.ID = uuid.NewString()
@@ -812,8 +815,19 @@ func (s *Store) TryConversationLock(ctx context.Context, wid, conversationID str
 }
 
 func (s *Store) SaveSystemRun(ctx context.Context, wid, agentID, purpose, runID, status string) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO run_links(relay_run_id,workspace_id,purpose,agent_id,status) VALUES($1,$2,$3,$4,$5)`, runID, wid, purpose, agentID, status)
-	return err
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	_, err = tx.Exec(ctx, `INSERT INTO run_links(relay_run_id,workspace_id,purpose,agent_id,status) VALUES($1,$2,$3,$4,$5)`, runID, wid, purpose, agentID, status)
+	if err != nil {
+		return err
+	}
+	if err := captureRunUsage(ctx, tx, wid, runID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *Store) MessageAttachment(ctx context.Context, wid, messageID, attachmentID string) (MessageAttachment, error) {
