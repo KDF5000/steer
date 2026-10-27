@@ -64,6 +64,7 @@ import {
 } from 'lucide-react';
 import {
   InlineComposer,
+  ComposerDraft,
   quotationSummary,
   focusInlineComposer,
 } from './inline-composer';
@@ -449,7 +450,7 @@ const Markdown = memo(function Markdown({
   workspaceRunId,
 }: {
   children: string;
-  onOpenWorkspaceFile?: (path: string) => void;
+  onOpenWorkspaceFile?: (path: string, runId?: string) => void;
   workspaceRunId?: string;
 }) {
   const readImage = useMemo(
@@ -460,7 +461,9 @@ const Markdown = memo(function Markdown({
     () => ({
       runId: workspaceRunId,
       readImage,
-      onOpenFile: onOpenWorkspaceFile,
+      onOpenFile: onOpenWorkspaceFile
+        ? (path: string) => onOpenWorkspaceFile(path, workspaceRunId)
+        : undefined,
     }),
     [workspaceRunId, readImage, onOpenWorkspaceFile],
   );
@@ -497,7 +500,7 @@ const Markdown = memo(function Markdown({
                     filePath && onOpenWorkspaceFile
                       ? (event) => {
                           event.preventDefault();
-                          onOpenWorkspaceFile(filePath);
+                          onOpenWorkspaceFile(filePath, workspaceRunId);
                         }
                       : undefined
                   }
@@ -860,7 +863,18 @@ export default function Fusion() {
   const [relayPublicURL, setRelayPublicURL] = useState('http://localhost:8787');
   const [chatAgent, setChatAgent] = useState('');
   const [chatProject, setChatProject] = useState('none');
-  const [chatInput, setChatInput] = useState('');
+  const [chatInput, setChatInputState] = useState('');
+  const [chatInputRevision, setChatInputRevision] = useState(0);
+  const chatInputRef = useRef('');
+  const readChatInput = useCallback(() => chatInputRef.current, []);
+  const updateChatInput = useCallback((text: string) => {
+    chatInputRef.current = text;
+  }, []);
+  const setChatInput = useCallback((text: string) => {
+    chatInputRef.current = text;
+    setChatInputState(text);
+    setChatInputRevision((revision) => revision + 1);
+  }, []);
   const [chatImages, setChatImages] = useState<PendingImage[]>([]);
   const [chatWorking, setChatWorking] = useState(false);
   const [chatSessionLoading, setChatSessionLoading] = useState(false);
@@ -2016,7 +2030,7 @@ export default function Fusion() {
   };
 
   const send = async (override?: string, options?: TaskMessageOptions) => {
-    const text = (override ?? chatInput).trim();
+    const text = (override ?? chatInputRef.current).trim();
     const images = override ? [] : chatImages;
     if (
       (!text && images.length === 0) ||
@@ -3477,6 +3491,9 @@ export default function Fusion() {
             }
             sessionLoading={chatSessionLoading}
             input={chatInput}
+            inputRevision={chatInputRevision}
+            readDraftInput={readChatInput}
+            onDraftInput={updateChatInput}
             images={chatImages}
             working={chatWorking}
             onAgent={setChatAgent}
@@ -4073,6 +4090,9 @@ function ChatView({
   runtimeLabel,
   sessionLoading,
   input,
+  inputRevision,
+  readDraftInput,
+  onDraftInput,
   images,
   working,
   onAgent,
@@ -4112,6 +4132,9 @@ function ChatView({
   runtimeLabel: string;
   sessionLoading: boolean;
   input: string;
+  inputRevision: number;
+  readDraftInput: () => string;
+  onDraftInput: (text: string) => void;
   images: PendingImage[];
   working: boolean;
   onAgent: (id: string) => void;
@@ -4160,8 +4183,10 @@ function ChatView({
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('');
   const [selectedChange, setSelectedChange] = useState('');
   const [previewSource, setPreviewSource] = useState(false);
-  const reviewRounds = messages.filter(
-    (message) => message.role === 'agent' && message.runId,
+  const reviewRounds = useMemo(
+    () =>
+      messages.filter((message) => message.role === 'agent' && message.runId),
+    [messages],
   );
   const reviewMessage =
     reviewRounds.find((message) => message.runId === reviewRunID) ||
@@ -4283,8 +4308,8 @@ function ChatView({
         ),
       );
   };
-  const submitMessage = async () => {
-    if (readOnly || working || (!input.trim() && images.length === 0)) return;
+  const submitMessage = async (draft: string) => {
+    if (readOnly || working || (!draft.trim() && images.length === 0)) return;
     if (
       delegationTarget &&
       !eligibleDelegates.some((item) => item.id === delegationTarget.id)
@@ -4323,40 +4348,54 @@ function ChatView({
     }
     return prompts;
   }, [messages]);
-  const openWorkspaceTab = (
-    kind: 'changes' | 'documents' | 'files',
-    runId = '',
-    path = '',
-    snapshot?: string,
-  ) => {
-    const resolvedRunId = runId || reviewRounds.at(-1)?.runId || '';
-    const id =
-      kind === 'changes'
-        ? `review:${resolvedRunId || 'latest'}`
-        : kind === 'files' && path
-          ? `file:${resolvedRunId || 'latest'}:${path}`
-          : kind;
-    const title =
-      kind === 'changes'
-        ? `Review · Turn ${reviewRounds.findIndex((message) => message.runId === resolvedRunId) + 1}`
-        : kind === 'files'
-          ? path.split(/[\\/]/).filter(Boolean).at(-1) || 'Files'
-          : 'Documents';
-    setWorkspaceTabs((tabs) =>
-      tabs.some((tab) => tab.id === id)
-        ? tabs.map((tab) =>
-            tab.id === id
-              ? { ...tab, path, runId: resolvedRunId, title, snapshot }
-              : tab,
-          )
-        : [...tabs, { id, kind, runId: resolvedRunId, path, title, snapshot }],
-    );
-    setActiveWorkspaceTab(id);
-    setReviewTab(kind);
-    setReviewRunID(resolvedRunId);
-    setSelectedChange(path);
-    setReviewOpen(true);
-  };
+  const openWorkspaceTab = useCallback(
+    (
+      kind: 'changes' | 'documents' | 'files',
+      runId = '',
+      path = '',
+      snapshot?: string,
+    ) => {
+      const resolvedRunId = runId || reviewRounds.at(-1)?.runId || '';
+      const id =
+        kind === 'changes'
+          ? `review:${resolvedRunId || 'latest'}`
+          : kind === 'files' && path
+            ? `file:${resolvedRunId || 'latest'}:${path}`
+            : kind;
+      const title =
+        kind === 'changes'
+          ? `Review · Turn ${reviewRounds.findIndex((message) => message.runId === resolvedRunId) + 1}`
+          : kind === 'files'
+            ? path.split(/[\\/]/).filter(Boolean).at(-1) || 'Files'
+            : 'Documents';
+      setWorkspaceTabs((tabs) =>
+        tabs.some((tab) => tab.id === id)
+          ? tabs.map((tab) =>
+              tab.id === id
+                ? { ...tab, path, runId: resolvedRunId, title, snapshot }
+                : tab,
+            )
+          : [
+              ...tabs,
+              { id, kind, runId: resolvedRunId, path, title, snapshot },
+            ],
+      );
+      setActiveWorkspaceTab(id);
+      setReviewTab(kind);
+      setReviewRunID(resolvedRunId);
+      setSelectedChange(path);
+      setReviewOpen(true);
+    },
+    [reviewRounds],
+  );
+  // Keep this callback stable while typing so memoized Markdown replies do not
+  // reparse and highlight the entire conversation for every input event.
+  const openWorkspaceFile = useCallback(
+    (path: string, runId?: string) => {
+      openWorkspaceTab('files', runId || '', path);
+    },
+    [openWorkspaceTab],
+  );
   const activateWorkspaceTab = (tab: (typeof workspaceTabs)[number]) => {
     setActiveWorkspaceTab(tab.id);
     setReviewTab(tab.kind);
@@ -4843,13 +4882,7 @@ function ChatView({
                             <div aria-live={terminal ? undefined : 'polite'}>
                               <Markdown
                                 workspaceRunId={message.runId}
-                                onOpenWorkspaceFile={(path) =>
-                                  openWorkspaceTab(
-                                    'files',
-                                    message.runId || '',
-                                    path,
-                                  )
-                                }
+                                onOpenWorkspaceFile={openWorkspaceFile}
                               >
                                 {message.text}
                               </Markdown>
@@ -5199,215 +5232,227 @@ function ChatView({
                 <ArrowDown aria-hidden="true" />
               </button>
             )}
-            <form
-              className={`ws-chatbox${draggingImages ? ' is-dragging' : ''}`}
-              onSubmit={(event) => {
-                event.preventDefault();
-                followBottom.current = true;
-                void submitMessage();
-              }}
+            <ComposerDraft
+              input={input}
+              revision={inputRevision}
+              readInput={readDraftInput}
+              onInput={onDraftInput}
             >
-              {!!images.length && (
-                <div className="ws-chatbox-images">
-                  {images.map((image) => (
-                    <div key={image.id}>
-                      <button
-                        type="button"
-                        className="ws-chatbox-image-preview"
-                        aria-label={`Preview ${image.file.name}`}
-                        onClick={() => setComposerPreviewID(image.id)}
-                      >
-                        {/* oxlint-disable-next-line next/no-img-element -- local object URL preview */}
-                        <img src={image.url} alt="" />
-                      </button>
-                      <button
-                        type="button"
-                        className="ws-chatbox-image-remove"
-                        aria-label={`Remove ${image.file.name}`}
-                        onClick={() => onRemoveImage(image.id)}
-                      >
-                        <X aria-hidden="true" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div
-                onDragEnter={(event) => {
-                  if (!event.dataTransfer.types.includes('Files')) return;
-                  event.preventDefault();
-                  imageDragDepth.current += 1;
-                  setDraggingImages(true);
-                }}
-                onDragOver={(event) => {
-                  if (!event.dataTransfer.types.includes('Files')) return;
-                  event.preventDefault();
-                  event.dataTransfer.dropEffect = 'copy';
-                }}
-                onDragLeave={(event) => {
-                  if (!event.dataTransfer.types.includes('Files')) return;
-                  event.preventDefault();
-                  imageDragDepth.current = Math.max(
-                    0,
-                    imageDragDepth.current - 1,
-                  );
-                  if (imageDragDepth.current === 0) setDraggingImages(false);
-                }}
-                onDrop={(event) => {
-                  if (!event.dataTransfer.types.includes('Files')) return;
-                  event.preventDefault();
-                  imageDragDepth.current = 0;
-                  setDraggingImages(false);
-                  onImages(Array.from(event.dataTransfer.files));
-                }}
-              >
-                <InlineComposer
-                  input={input}
-                  onInput={onInput}
-                  reference={quotedMessage}
-                  target={delegationTarget}
-                  agents={eligibleDelegates}
-                  disabled={working || readOnly}
-                  onReferenceRemove={() => {
-                    setQuotedMessage(undefined);
-                    setReferenceRemoved(true);
+              {(draftInput, setDraftInput) => (
+                <form
+                  className={`ws-chatbox${draggingImages ? ' is-dragging' : ''}`}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    followBottom.current = true;
+                    void submitMessage(draftInput);
                   }}
-                  onTarget={selectDelegate}
-                  onSend={submitMessage}
-                  onImages={onImages}
-                  editorRef={composer}
-                  placeholder={t(
-                    readOnly
-                      ? readOnlyReason ||
-                          'This conversation is shared with view permission.'
-                      : 'Ask a question or describe a task…',
+                >
+                  {!!images.length && (
+                    <div className="ws-chatbox-images">
+                      {images.map((image) => (
+                        <div key={image.id}>
+                          <button
+                            type="button"
+                            className="ws-chatbox-image-preview"
+                            aria-label={`Preview ${image.file.name}`}
+                            onClick={() => setComposerPreviewID(image.id)}
+                          >
+                            {/* oxlint-disable-next-line next/no-img-element -- local object URL preview */}
+                            <img src={image.url} alt="" />
+                          </button>
+                          <button
+                            type="button"
+                            className="ws-chatbox-image-remove"
+                            aria-label={`Remove ${image.file.name}`}
+                            onClick={() => onRemoveImage(image.id)}
+                          >
+                            <X aria-hidden="true" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                />
-              </div>
-              <footer className="ws-chatbox-footer">
-                <div className="ws-chatbox-context">
-                  <Select
-                    value={agent.id}
-                    disabled={working || readOnly || agentSelectionLocked}
-                    onValueChange={(value) => {
-                      setDelegationTarget(undefined);
-                      onAgent(value ?? agent.id);
+                  <div
+                    onDragEnter={(event) => {
+                      if (!event.dataTransfer.types.includes('Files')) return;
+                      event.preventDefault();
+                      imageDragDepth.current += 1;
+                      setDraggingImages(true);
+                    }}
+                    onDragOver={(event) => {
+                      if (!event.dataTransfer.types.includes('Files')) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'copy';
+                    }}
+                    onDragLeave={(event) => {
+                      if (!event.dataTransfer.types.includes('Files')) return;
+                      event.preventDefault();
+                      imageDragDepth.current = Math.max(
+                        0,
+                        imageDragDepth.current - 1,
+                      );
+                      if (imageDragDepth.current === 0)
+                        setDraggingImages(false);
+                    }}
+                    onDrop={(event) => {
+                      if (!event.dataTransfer.types.includes('Files')) return;
+                      event.preventDefault();
+                      imageDragDepth.current = 0;
+                      setDraggingImages(false);
+                      onImages(Array.from(event.dataTransfer.files));
                     }}
                   >
-                    <SelectTrigger
-                      className="ws-composer-agent"
-                      aria-label={t('Select Agent')}
-                      title={agent.name}
-                    >
-                      <span className="ws-agent-avatar" aria-hidden="true">
-                        {agent.name[0]}
-                      </span>
-                      <span>{agent.name}</span>
-                    </SelectTrigger>
-                    <SelectContent
-                      className="ws-select-popup"
-                      alignItemWithTrigger={false}
-                    >
-                      {agents.map((item) => {
-                        const runtimeMismatch = Boolean(
-                          projectRuntimeChoices &&
-                          !projectRuntimeChoices.some(
-                            (runtime) =>
-                              runtime.provider === item.runtimeProvider &&
-                              (!item.runtimeId ||
-                                item.runtimeId === runtime.runtimeId),
-                          ),
-                        );
-                        return (
-                          <SelectItem
-                            value={item.id}
-                            key={item.id}
-                            disabled={runtimeMismatch}
-                            title={
-                              runtimeMismatch
-                                ? t(
-                                    'This Agent is unavailable on the conversation machine',
-                                  )
-                                : undefined
-                            }
-                          >
-                            {item.name}
-                            {runtimeMismatch
-                              ? ` · ${t('Different machine')}`
-                              : ''}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                  <Select
-                    value={project}
-                    disabled={
-                      working || hasMessages || executionLocked || readOnly
-                    }
-                    onValueChange={(value) => onProject(value ?? 'none')}
-                  >
-                    <SelectTrigger
-                      className="ws-composer-project"
-                      aria-label={t('Select Project')}
-                      title={projectLabel}
-                    >
-                      <Folder aria-hidden="true" />
-                      <span>
-                        {selectedProject
-                          ? `${selectedProject.name}${selectedProject.deletedAt ? ' (deleted)' : ''}`
-                          : t('Select project')}
-                      </span>
-                    </SelectTrigger>
-                    <SelectContent
-                      className="ws-select-popup"
-                      alignItemWithTrigger={false}
-                    >
-                      <SelectItem value="none">{t('No project')}</SelectItem>
-                      {projects
-                        .filter((item) => !item.deletedAt)
-                        .map((item) => (
-                          <SelectItem value={item.id} key={item.id}>
-                            {item.name} · {item.workspaceSource}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  {!hasMessages && !executionLocked && (
-                    <button
-                      type="button"
-                      className="ws-add-project"
-                      onClick={onAddProject}
-                    >
-                      <Plus aria-hidden="true" />
-                      {t('Add project')}
-                    </button>
-                  )}
-                </div>
-                <button
-                  className="ws-chat-send"
-                  type={working ? 'button' : 'submit'}
-                  aria-label={
-                    working ? t('Stop generating') : t('Send message')
-                  }
-                  disabled={
-                    readOnly ||
-                    (!working && !input.trim() && images.length === 0)
-                  }
-                  onClick={() => working && onStop()}
-                >
-                  {working ? (
-                    <Square
-                      aria-hidden="true"
-                      fill="currentColor"
-                      strokeWidth={0}
+                    <InlineComposer
+                      input={draftInput}
+                      onInput={setDraftInput}
+                      reference={quotedMessage}
+                      target={delegationTarget}
+                      agents={eligibleDelegates}
+                      disabled={working || readOnly}
+                      onReferenceRemove={() => {
+                        setQuotedMessage(undefined);
+                        setReferenceRemoved(true);
+                      }}
+                      onTarget={selectDelegate}
+                      onSend={() => void submitMessage(draftInput)}
+                      onImages={onImages}
+                      editorRef={composer}
+                      placeholder={t(
+                        readOnly
+                          ? readOnlyReason ||
+                              'This conversation is shared with view permission.'
+                          : 'Ask a question or describe a task…',
+                      )}
                     />
-                  ) : (
-                    <Send aria-hidden="true" />
-                  )}
-                </button>
-              </footer>
-            </form>
+                  </div>
+                  <footer className="ws-chatbox-footer">
+                    <div className="ws-chatbox-context">
+                      <Select
+                        value={agent.id}
+                        disabled={working || readOnly || agentSelectionLocked}
+                        onValueChange={(value) => {
+                          setDelegationTarget(undefined);
+                          onAgent(value ?? agent.id);
+                        }}
+                      >
+                        <SelectTrigger
+                          className="ws-composer-agent"
+                          aria-label={t('Select Agent')}
+                          title={agent.name}
+                        >
+                          <span className="ws-agent-avatar" aria-hidden="true">
+                            {agent.name[0]}
+                          </span>
+                          <span>{agent.name}</span>
+                        </SelectTrigger>
+                        <SelectContent
+                          className="ws-select-popup"
+                          alignItemWithTrigger={false}
+                        >
+                          {agents.map((item) => {
+                            const runtimeMismatch = Boolean(
+                              projectRuntimeChoices &&
+                              !projectRuntimeChoices.some(
+                                (runtime) =>
+                                  runtime.provider === item.runtimeProvider &&
+                                  (!item.runtimeId ||
+                                    item.runtimeId === runtime.runtimeId),
+                              ),
+                            );
+                            return (
+                              <SelectItem
+                                value={item.id}
+                                key={item.id}
+                                disabled={runtimeMismatch}
+                                title={
+                                  runtimeMismatch
+                                    ? t(
+                                        'This Agent is unavailable on the conversation machine',
+                                      )
+                                    : undefined
+                                }
+                              >
+                                {item.name}
+                                {runtimeMismatch
+                                  ? ` · ${t('Different machine')}`
+                                  : ''}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={project}
+                        disabled={
+                          working || hasMessages || executionLocked || readOnly
+                        }
+                        onValueChange={(value) => onProject(value ?? 'none')}
+                      >
+                        <SelectTrigger
+                          className="ws-composer-project"
+                          aria-label={t('Select Project')}
+                          title={projectLabel}
+                        >
+                          <Folder aria-hidden="true" />
+                          <span>
+                            {selectedProject
+                              ? `${selectedProject.name}${selectedProject.deletedAt ? ' (deleted)' : ''}`
+                              : t('Select project')}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent
+                          className="ws-select-popup"
+                          alignItemWithTrigger={false}
+                        >
+                          <SelectItem value="none">
+                            {t('No project')}
+                          </SelectItem>
+                          {projects
+                            .filter((item) => !item.deletedAt)
+                            .map((item) => (
+                              <SelectItem value={item.id} key={item.id}>
+                                {item.name} · {item.workspaceSource}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      {!hasMessages && !executionLocked && (
+                        <button
+                          type="button"
+                          className="ws-add-project"
+                          onClick={onAddProject}
+                        >
+                          <Plus aria-hidden="true" />
+                          {t('Add project')}
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      className="ws-chat-send"
+                      type={working ? 'button' : 'submit'}
+                      aria-label={
+                        working ? t('Stop generating') : t('Send message')
+                      }
+                      disabled={
+                        readOnly ||
+                        (!working && !draftInput.trim() && images.length === 0)
+                      }
+                      onClick={() => working && onStop()}
+                    >
+                      {working ? (
+                        <Square
+                          aria-hidden="true"
+                          fill="currentColor"
+                          strokeWidth={0}
+                        />
+                      ) : (
+                        <Send aria-hidden="true" />
+                      )}
+                    </button>
+                  </footer>
+                </form>
+              )}
+            </ComposerDraft>
             <p className="ws-chat-mode-note">
               {readOnly
                 ? t(

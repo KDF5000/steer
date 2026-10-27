@@ -2,10 +2,40 @@
 
 /* oxlint-disable jsx-a11y/prefer-tag-over-role -- inline rich input and custom keyboard autocomplete require ARIA roles */
 /* oxlint-disable typescript/no-deprecated -- keyCode 229 is needed for Safari IME confirmation */
-import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { useI18n } from '@/lib/i18n';
 import { X } from 'lucide-react';
 import type { AgentProfile as AgentItem, ChatMessage } from '@/lib/domain';
+
+// Keep ordinary keystrokes below the conversation tree. A revision identifies
+// explicit draft replacement (new chat, handoff, submit, or failed submission),
+// so unrelated message updates cannot overwrite the user's in-progress text.
+export function ComposerDraft({
+  input,
+  revision,
+  readInput,
+  onInput,
+  children,
+}: {
+  input: string;
+  revision: number;
+  readInput: () => string;
+  onInput: (text: string) => void;
+  children: (text: string, onChange: (text: string) => void) => ReactNode;
+}) {
+  const [draft, setDraft] = useState(() => ({ text: readInput(), revision }));
+  if (draft.revision !== revision) setDraft({ text: input, revision });
+  return children(draft.text, (text) => {
+    setDraft({ text, revision });
+    onInput(text);
+  });
+}
 
 export function quotationSummary(text: string, limit = 56) {
   const plain = text
@@ -21,6 +51,9 @@ export function focusInlineComposer(editor: HTMLSpanElement | null) {
   editor.focus();
   const range = document.createRange();
   range.selectNodeContents(editor);
+  const end = editor.lastChild;
+  if (end instanceof HTMLBRElement && end.dataset.composerBreak)
+    range.setEndBefore(end);
   range.collapse(false);
   const selection = window.getSelection();
   selection?.removeAllRanges();
@@ -67,11 +100,24 @@ export function InlineComposer({
   const open = Boolean(query && !dismissed && !disabled);
   useLayoutEffect(() => {
     const editor = editorRef.current;
-    if (
-      editor &&
-      (editor.textContent !== input || (!input && editor.childNodes.length > 0))
-    )
-      editor.textContent = input;
+    if (!editor || composing.current) return;
+    const replacing =
+      editor.textContent !== input || (!input && editor.childNodes.length > 0);
+    const focused = document.activeElement === editor;
+    if (replacing) editor.textContent = input;
+    // A trailing newline needs an editing break so Chrome places the next
+    // character on the new line. The break contributes no text to the prompt.
+    const end = editor.lastChild;
+    if (input.endsWith('\n')) {
+      if (!(end instanceof HTMLBRElement)) {
+        const lineBreak = document.createElement('br');
+        lineBreak.dataset.composerBreak = 'true';
+        editor.appendChild(lineBreak);
+      }
+    } else if (end instanceof HTMLBRElement && end.dataset.composerBreak) {
+      end.remove();
+    }
+    if (replacing && focused) focusInlineComposer(editor);
   }, [input, editorRef]);
   const focus = () => focusInlineComposer(editorRef.current);
   useLayoutEffect(() => {
@@ -121,7 +167,7 @@ export function InlineComposer({
     range.deleteContents();
     const node = document.createTextNode(text);
     range.insertNode(node);
-    range.setStartAfter(node);
+    range.setStart(node, node.length);
     range.collapse(true);
     selection.removeAllRanges();
     selection.addRange(range);
@@ -253,7 +299,13 @@ export function InlineComposer({
               .map((item) => item.getAsFile())
               .filter((file): file is File => file !== null);
             if (files.length) onImages(files);
-            else insert(event.clipboardData.getData('text/plain'));
+            else {
+              const text = event.clipboardData
+                .getData('text/plain')
+                .replace(/\r\n?/g, '\n')
+                .replace(/(?:\n[^\S\n]*)+$/, '');
+              if (text) insert(text);
+            }
           }}
           onKeyDown={(event) => {
             // Safari can report isComposing=false on the IME confirmation Enter.
