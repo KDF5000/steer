@@ -2158,36 +2158,31 @@
   font-size: var(--ws-font-caption);
 }
 .ws-footprint-usage-details {
-  position: relative;
-}
-.ws-footprint-usage-details summary {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 3px;
+  border: 0;
+  padding: 0;
+  background: transparent;
   cursor: pointer;
   color: var(--ws-text-secondary);
-  list-style: none;
+  font: inherit;
 }
-.ws-footprint-usage-details summary::-webkit-details-marker {
-  display: none;
-}
-.ws-footprint-usage-details summary svg {
+.ws-footprint-usage-details svg {
   width: 12px;
   height: 12px;
 }
-.ws-footprint-usage-details[open] summary svg {
+.ws-footprint-usage-details[data-popup-open] svg {
   transform: rotate(180deg);
 }
 .ws-footprint-usage-popover {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
-  z-index: 10;
   width: min(260px, calc(100vw - 40px));
+  gap: 0;
   border: 1px solid var(--ws-border);
   border-radius: 8px;
   background: var(--ws-surface);
   padding: 12px;
+  font-size: var(--ws-font-caption);
   box-shadow: 0 4px 16px rgb(0 0 0 / 7%);
 }
 .ws-footprint-usage-popover dl {
@@ -2207,7 +2202,8 @@
   color: var(--ws-text);
   font-variant-numeric: tabular-nums;
 }
-.ws-footprint-metrics .ws-footprint-usage-popover p {
+.ws-footprint-usage-popover p {
+  color: var(--ws-text-tertiary);
   white-space: normal;
   line-height: 1.6;
   margin-top: 4px;

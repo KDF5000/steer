@@ -51,6 +51,12 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverTitle,
+} from '@/components/ui/popover';
+import {
   steer,
   type AgentActivityRecord,
   type ChatSessionRecord,
@@ -1338,17 +1344,6 @@ export function WorkLogView({
     'messages' | 'sessions' | 'tokens'
   >('messages');
   const [selectedDay, setSelectedDay] = useState('');
-  const usageDetailsRef = useRef<HTMLDetailsElement>(null);
-  useEffect(() => {
-    const dismiss = (event: PointerEvent) => {
-      const details = usageDetailsRef.current;
-      if (details?.open && !details.contains(event.target as Node))
-        details.open = false;
-    };
-    document.addEventListener('pointerdown', dismiss);
-    return () => document.removeEventListener('pointerdown', dismiss);
-  }, []);
-
   const [sessionPagination, setSessionPagination] = useState({
     scope: '',
     page: 1,
@@ -2054,27 +2049,19 @@ export function WorkLogView({
                         {overview.totals.totalRuns || 0}
                       </span>
                       {overview.totals.tokenCount != null && (
-                        <details
-                          className="ws-footprint-usage-details"
-                          ref={usageDetailsRef}
-                        >
-                          <summary
-                            onKeyDown={(event) => {
-                              if (
-                                event.key === 'Escape' &&
-                                usageDetailsRef.current
-                              )
-                                usageDetailsRef.current.open = false;
-                            }}
-                            onBlur={() => {
-                              if (usageDetailsRef.current)
-                                usageDetailsRef.current.open = false;
-                            }}
-                          >
+                        <Popover>
+                          <PopoverTrigger className="ws-footprint-usage-details">
                             {t('Usage details')}
-                            <ChevronDown />
-                          </summary>
-                          <div className="ws-footprint-usage-popover">
+                            <ChevronDown aria-hidden="true" />
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="ws-footprint-usage-popover"
+                            align="end"
+                            sideOffset={8}
+                          >
+                            <PopoverTitle className="sr-only">
+                              {t('Usage details')}
+                            </PopoverTitle>
                             <dl>
                               <div>
                                 <dt>{t('Cache read')}</dt>
@@ -2112,8 +2099,8 @@ export function WorkLogView({
                                 })}
                               </p>
                             )}
-                          </div>
-                        </details>
+                          </PopoverContent>
+                        </Popover>
                       )}
                     </div>
                   </article>
