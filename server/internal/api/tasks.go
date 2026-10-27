@@ -127,6 +127,31 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	if (in.Prompt == "" && len(attachments) == 0) || in.AgentID == "" {
 		return submittedTask{}, false, taskRequestError{Status: http.StatusBadRequest, Message: "a prompt or image, and agentId are required"}
 	}
+	executionWid, sharedGrant, accessErr := s.sharedAgentExecution(ctx, wid, in)
+	if accessErr != nil {
+		return submittedTask{}, false, accessErr
+	}
+	if g, ok := ctx.Value(collaborationKey{}).(store.ResourceShare); ok {
+		session, err := s.store.Session(ctx, wid, g.ResourceID)
+		if err != nil {
+			return submittedTask{}, false, err
+		}
+		if value(in.SessionID) != session.ID || in.AgentID != session.AgentID || in.TargetAgentID != "" || in.ProjectID != nil && value(in.ProjectID) != value(session.ProjectID) {
+			return submittedTask{}, false, taskRequestError{Status: 403, Message: "Shared tasks must use this conversation's Agent and project."}
+		}
+		in.IdempotencyKey = "shared:" + g.ID + ":" + userFromContext(ctx).ID + ":" + in.IdempotencyKey
+		if strings.HasSuffix(in.IdempotencyKey, ":") {
+			in.IdempotencyKey = ""
+		}
+	}
+	var grantRelease func()
+	if sharedGrant != nil {
+		grantRelease, accessErr = s.store.TryConversationLock(ctx, executionWid, "share:"+sharedGrant.ID)
+		if accessErr != nil {
+			return submittedTask{}, false, accessErr
+		}
+		defer grantRelease()
+	}
 	if in.IdempotencyKey != "" {
 		existing, err := s.store.TaskByIdempotencyKey(ctx, wid, in.IdempotencyKey)
 		if err == nil {
@@ -149,7 +174,7 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 		}
 	}
 
-	agent, err := s.store.Agent(ctx, wid, in.AgentID)
+	agent, err := s.store.Agent(ctx, executionWid, in.AgentID)
 	if err != nil {
 		return submittedTask{}, false, err
 	}
@@ -181,6 +206,22 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 		}
 		project = &selected
 	}
+	if sharedGrant != nil {
+		active, err := s.store.SharedAgentActiveRuns(ctx, sharedGrant.ID)
+		if err != nil {
+			return submittedTask{}, false, err
+		}
+		for _, link := range active {
+			_, _ = s.syncRelayRun(ctx, link.WorkspaceID, link.RelayRunID)
+		}
+		busy, err := s.store.ShareHasActiveTask(ctx, sharedGrant.ID)
+		if err != nil {
+			return submittedTask{}, false, err
+		}
+		if busy {
+			return submittedTask{}, false, store.ErrConversationBusy
+		}
+	}
 	title := in.Prompt
 	if title == "" {
 		title = attachments[0].Name
@@ -189,7 +230,7 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	var workspaceKey *string
 	if project != nil {
 		if project.WorkspaceKind == "local" {
-			resolved, resolveErr := s.projectAgentRuntime(ctx, wid, *project, agent)
+			resolved, resolveErr := s.projectAgentRuntime(ctx, executionWid, *project, agent)
 			if resolveErr != nil {
 				return submittedTask{}, false, resolveErr
 			}
@@ -200,7 +241,7 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 		}
 	}
 	if executionRuntimeID == nil || strings.TrimSpace(*executionRuntimeID) == "" {
-		resolvedRuntimeID, resolveErr := s.firstWorkspaceRuntime(ctx, wid, agent.RuntimeProvider)
+		resolvedRuntimeID, resolveErr := s.firstWorkspaceRuntime(ctx, executionWid, agent.RuntimeProvider)
 		if resolveErr != nil {
 			return submittedTask{}, false, resolveErr
 		}
@@ -221,17 +262,17 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 		project = &selected
 	}
 	if project != nil && project.WorkspaceKind == "local" {
-		resolved, resolveErr := s.projectAgentRuntime(ctx, wid, *project, agent)
+		resolved, resolveErr := s.projectAgentRuntime(ctx, executionWid, *project, agent)
 		if resolveErr != nil {
 			return submittedTask{}, false, resolveErr
 		}
 		executionRuntimeID = &resolved
 	} else if session.ExecutionRuntimeID != nil && strings.TrimSpace(*session.ExecutionRuntimeID) != "" {
-		physical, resolveErr := s.physicalRuntimeID(ctx, wid, *session.ExecutionRuntimeID)
+		physical, resolveErr := s.physicalRuntimeID(ctx, executionWid, *session.ExecutionRuntimeID)
 		if resolveErr != nil {
 			return submittedTask{}, false, resolveErr
 		}
-		resolved, resolveErr := s.agentRuntimeOnNode(ctx, wid, runtimeNodeID(physical), agent)
+		resolved, resolveErr := s.agentRuntimeOnNode(ctx, executionWid, runtimeNodeID(physical), agent)
 		if resolveErr != nil {
 			return submittedTask{}, false, resolveErr
 		}
@@ -241,7 +282,7 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 		return submittedTask{}, false, taskRequestError{Status: http.StatusConflict, Message: "The selected Agent is fixed to a different Runtime. Fork the conversation to change execution location."}
 	}
 	if executionRuntimeID != nil {
-		provider, providerErr := s.runtimeProvider(ctx, wid, *executionRuntimeID)
+		provider, providerErr := s.runtimeProvider(ctx, executionWid, *executionRuntimeID)
 		if providerErr != nil {
 			return submittedTask{}, false, providerErr
 		}
@@ -249,7 +290,7 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 			return submittedTask{}, false, taskRequestError{Status: http.StatusConflict, Message: "The selected Agent uses a provider that is unavailable on this conversation's Runtime."}
 		}
 	}
-	physicalRuntimeID, err := s.physicalRuntimeID(ctx, wid, value(executionRuntimeID))
+	physicalRuntimeID, err := s.physicalRuntimeID(ctx, executionWid, value(executionRuntimeID))
 	if err != nil {
 		return submittedTask{}, false, err
 	}
@@ -293,7 +334,7 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	if runPrompt == "" {
 		runPrompt = "Please inspect the attached image and respond to it."
 	}
-	messageContext := &store.MessageContext{AgentID: agent.ID, AgentName: agent.Name, OwnerAgentID: owner.ID, Delegated: delegated}
+	messageContext := &store.MessageContext{UserID: userFromContext(ctx).ID, UserName: userFromContext(ctx).DisplayName, AgentID: agent.ID, AgentName: agent.Name, OwnerAgentID: owner.ID, Delegated: delegated}
 	reference, referenceErr := resolveMessageReference(previous, strings.TrimSpace(in.ReferencedMessageID), in.ReferenceMode, delegated)
 	if referenceErr != nil {
 		return submittedTask{}, false, referenceErr
@@ -342,7 +383,7 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 		IdempotencyKey: relayIdempotencyKey,
 		Runtime:        relay.RuntimeRequirement{ID: physicalRuntimeID, Provider: agent.RuntimeProvider, Model: value(agent.Model)},
 		Source:         relay.Source{Kind: relaySourceKind, ExternalID: conversationID}, Input: input,
-		Principal: relay.Principal{Type: "user", ID: "workspace:" + wid},
+		Principal: relay.Principal{Type: "user", ID: firstNonEmpty(userFromContext(ctx).ID, "workspace:"+wid)},
 	}
 	var childSession *store.Session
 	if delegated {
@@ -361,7 +402,7 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	if agent.Instructions != "" {
 		request.Instructions.Agent = []relay.InstructionFragment{{ID: agent.ID, Version: "1", Title: agent.Name, Content: agent.Instructions}}
 	}
-	assignedSkills, err := s.store.AgentSkills(ctx, wid, agent.ID)
+	assignedSkills, err := s.store.AgentSkills(ctx, executionWid, agent.ID)
 	if err != nil {
 		return submittedTask{}, false, err
 	}
@@ -418,6 +459,11 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	// not suppress history synchronization on the next attempt to switch Agents.
 	if !delegated && value(session.ExecutionRuntimeID) != value(executionRuntimeID) {
 		if err := s.store.UpdateSessionRuntime(ctx, wid, conversationID, value(executionRuntimeID)); err != nil {
+			return submittedTask{}, false, err
+		}
+	}
+	if sharedGrant != nil {
+		if err := s.store.UpdateSessionSharedGrant(ctx, wid, conversationID, sharedGrant.ID); err != nil {
 			return submittedTask{}, false, err
 		}
 	}

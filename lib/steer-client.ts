@@ -6,6 +6,39 @@ export const steerAPIBaseURL =
 const baseURL = steerAPIBaseURL;
 
 let selectedWorkspaceId = '';
+let collaborationScope = '';
+function chatPath(path: string) {
+  return collaborationScope &&
+    /^\/(sessions\/[^/]+$|runs\/|tasks\/|conversations\/|messages\/[^/]+\/attachments\/|artifacts\/)/.test(
+      path,
+    )
+    ? `/collaboration-access/${encodeURIComponent(collaborationScope)}${path}`
+    : path;
+}
+export type ResourceShare = {
+  ownerId?: string;
+  recipientName?: string;
+  model?: string;
+  agentRole?: string;
+  id: string;
+  kind: 'session' | 'agent';
+  resourceId: string;
+  ownerName: string;
+  recipientEmail: string;
+  permission: 'view' | 'execute';
+  status: 'pending' | 'accepted' | 'revoked';
+  projectId: string | null;
+  maxConcurrency: number;
+  resourceName: string;
+  projectName: string;
+  runtimeProvider: string;
+  projectSource: string;
+  projectKind: string;
+  runtimeLabel: string;
+  createdAt: string;
+  updatedAt: string;
+  owned?: boolean;
+};
 
 export type AuthUser = {
   id: string;
@@ -73,6 +106,7 @@ export class SteerHTTPError extends Error {
 }
 
 export type AgentRecord = {
+  shared?: boolean;
   id: string;
   workspaceId: string;
   name: string;
@@ -99,6 +133,8 @@ export type ArtifactRecord = {
 };
 
 export type ChatSessionRecord = {
+  sharedAgentGrantId?: string | null;
+  sharedAgentAccess?: 'pending' | 'accepted' | 'revoked' | 'unavailable' | null;
   parentConversationId?: string | null;
   id: string;
   title: string;
@@ -116,6 +152,10 @@ export type ChatSessionRecord = {
 };
 
 export type ProjectRecord = {
+  sharedSourceProjectId?: string | null;
+  sharedAgentGrantIds?: string[];
+  sharedAgentGrantId?: string | null;
+  sharedAgentAccess?: 'pending' | 'accepted' | 'revoked' | 'unavailable' | null;
   id: string;
   name: string;
   workspaceKind: string;
@@ -338,6 +378,7 @@ export type Bootstrap = {
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  path = chatPath(path);
   const headers = new Headers(init?.headers);
   headers.set('Accept', 'application/json');
   if (selectedWorkspaceId)
@@ -368,6 +409,7 @@ async function streamEvents(
   signal: AbortSignal,
   onEvent: (event: RelayEvent) => void,
 ) {
+  path = chatPath(path);
   const response = await fetch(`${baseURL}${path}?after=${after}`, {
     headers: {
       Accept: 'text/event-stream',
@@ -438,8 +480,47 @@ const streamRunEvents = (
 export const steer = {
   setWorkspace: (workspaceId: string) => {
     selectedWorkspaceId = workspaceId;
+    collaborationScope = '';
   },
   workspace: () => selectedWorkspaceId,
+  setCollaboration: (id: string) => {
+    collaborationScope = id;
+  },
+  collaboration: () => collaborationScope,
+  resourceShares: () => request<ResourceShare[]>('/resource-shares'),
+  inviteResource: (
+    kind: 'session' | 'agent',
+    id: string,
+    input: {
+      email: string;
+      permission: 'view' | 'execute';
+      projectId?: string;
+      maxConcurrency?: number;
+    },
+  ) =>
+    request<ResourceShare>(
+      `/resource-shares/${kind}/${encodeURIComponent(id)}`,
+      { method: 'POST', body: JSON.stringify(input) },
+    ),
+  acceptResourceShare: (id: string) =>
+    request<ResourceShare>(
+      `/resource-shares/${encodeURIComponent(id)}/accept`,
+      { method: 'POST' },
+    ),
+  revokeResourceShare: (id: string) =>
+    request<void>(`/resource-shares/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  updateResourceShare: (id: string, permission: 'view' | 'execute') =>
+    request<void>(`/resource-shares/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ permission }),
+    }),
+  sharedAgentConversation: (id: string) =>
+    request<ChatSessionRecord>(
+      `/resource-shares/${encodeURIComponent(id)}/conversations`,
+      { method: 'POST' },
+    ),
   me: () =>
     request<{ user: AuthUser; workspaces: WorkspaceRecord[] }>('/auth/me'),
   login: (input: { email: string; password: string }) =>
@@ -790,12 +871,14 @@ export const steer = {
       content: string;
     }>(`/artifacts/${artifactId}/content`),
   artifactDownloadURL: (artifactId: string) =>
-    `${baseURL}/artifacts/${encodeURIComponent(artifactId)}/download?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`,
+    `${baseURL}${chatPath(`/artifacts/${encodeURIComponent(artifactId)}/download`)}?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`,
   session: (sessionId: string) =>
     request<{
       session: ChatSessionRecord;
       messages: ChatMessageRecord[];
       project?: ProjectRecord;
+      agent?: AgentRecord;
+      sharingPermission?: 'view' | 'execute';
     }>(`/sessions/${encodeURIComponent(sessionId)}`),
   deleteSession: (sessionId: string) =>
     request<ChatSessionRecord>(`/sessions/${encodeURIComponent(sessionId)}`, {
@@ -875,14 +958,19 @@ export const steer = {
         attachments?: ChatMessageRecord['attachments'];
       };
       assistantMessage: { id: string; context?: MessageContext };
-    }>('/tasks', {
-      method: 'POST',
-      headers: { 'Idempotency-Key': idempotencyKey },
-      body,
-    });
+    }>(
+      collaborationScope && input.conversationId
+        ? `/conversations/${encodeURIComponent(input.conversationId)}/tasks`
+        : '/tasks',
+      {
+        method: 'POST',
+        headers: { 'Idempotency-Key': idempotencyKey },
+        body,
+      },
+    );
   },
   messageAttachmentURL: (messageId: string, attachmentId: string) =>
-    `${baseURL}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`,
+    `${baseURL}${chatPath(`/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`)}?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`,
   run: (id: string) =>
     request<{
       run: RelayRun;

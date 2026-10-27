@@ -18,6 +18,108 @@ const storageKey = 'steer.interface-language';
 const languageEvent = 'steer:interface-language';
 
 const zhCN: Record<string, string> = {
+  'Collaborative projects': '协作项目',
+  'Shared project': '共享项目',
+  'Access revoked': '授权已收回',
+  'Agent access has been revoked. You can still view this conversation.':
+    '智能体授权已收回，你仍可查看此会话的历史记录。',
+  'Accept Agent invitation': '接受智能体邀请',
+  'Authorized project unavailable.': '授权项目暂不可用。',
+  'Accepting adds the authorized project to your workspace. Click the project to start a private conversation.':
+    '接受后，授权项目会出现在你的工作区中。点击项目即可开始私密对话。',
+  'No collaborative projects yet.': '暂无协作项目',
+  'Unable to load collaborative projects.': '协作项目加载失败',
+  You: '你',
+  'Accept conversation invitation': '接受会话邀请',
+  'You can view messages and start tasks with this conversation’s Agent.':
+    '你可以查看消息，并使用此会话的 Agent 发起任务。',
+  'You can view this conversation’s messages and results.':
+    '你可以查看此会话的消息和结果。',
+  'View collaborators': '查看协作者',
+  'Can collaborate': '可协作',
+  '{count} people': '{count} 人',
+  'Conversations shared with you, organized by project.':
+    '别人与你共享的会话，按项目组织。',
+  'Search projects, conversations, or providers…': '搜索项目、会话或提供者…',
+  'Your shared conversations stay in your projects. Manage members from the conversation avatars.':
+    '你共享的会话仍在自己的项目下，可通过顶部协作者头像管理成员。',
+  'Agents are authorized by their providers. Using one creates a private conversation in your workspace.':
+    '智能体由提供者授权；使用时会在你的工作区创建私密会话。',
+  'Invite collaboration': '邀请协作',
+  'This person is already invited.': '这个成员已经在邀请列表中。',
+  'This conversation can only be shared for viewing.':
+    '此会话仅支持共享查看权限。',
+  'Collaborators can start Agent tasks in this conversation.':
+    '可协作的成员可以在此会话发起 Agent 任务。',
+  Collaborators: '协作者',
+  Owner: '所有者',
+  'Only this resource is shared. Your workspace stays private.':
+    '仅开放此资源，个人工作区保持私有。',
+  'Share view-only link': '分享查看链接',
+  'Share a read-only snapshot of this conversation.':
+    '分享当前会话的只读内容。',
+  'View-only link': '查看链接',
+  'Creating link…': '正在生成链接…',
+  'Copy the link from the field.': '请从输入框手动复制链接。',
+  'Anyone with this link can view the snapshot. Invite collaborators separately.':
+    '拿到链接的人可以查看这份内容；参与协作需另行邀请。',
+  'Runtime default': 'Runtime 默认模型',
+  'Conversation access': '会话访问权限',
+  'Access is limited to this conversation and its authorized execution environment.':
+    '仅开放此会话和授权执行环境。',
+  'Collaborative conversations': '协作会话',
+  Participating: '我参与的',
+  'Shared by me': '我共享的',
+  'My Agents': '我的智能体',
+  'Shared with me': '共享给我',
+  'Access shared conversations while keeping your workspace private.':
+    '访问共享会话，个人工作区保持私有。',
+  'Search shared conversations': '搜索协作会话',
+  'Share a conversation from its header to invite someone.':
+    '在会话顶部管理共享，邀请其他人参与。',
+  'Conversation invitations will appear here.': '收到的会话邀请会显示在这里。',
+  'Your conversation': '你的会话',
+  'Can execute': '可执行',
+  'View only': '可查看',
+  Invitations: '个邀请',
+  'Pending invitation': '待接受邀请',
+  Joined: '已加入',
+  'Could not open shared conversation.': '无法打开共享会话。',
+  'Accept and open': '接受并打开',
+  'Manage sharing': '管理共享',
+  'Leave sharing': '退出共享',
+  'Agents shared with you will appear here.': '别人共享的智能体会显示在这里。',
+  Available: '可使用',
+  'View capability': '查看能力',
+  'Creates a private conversation in your workspace using the authorized environment.':
+    '使用授权环境，在你的工作区创建独立私密会话。',
+  'Provided by': '提供者',
+  'Directory or repository': '目录或仓库',
+  'Execution directory': '执行目录',
+  'Independent Git worktree': '独立 Git worktree',
+  'Authorized local directory': '授权本地目录',
+  'Concurrent tasks': '并发任务数',
+  'The provider manages the machine and native execution logs. This does not share your workspace or conversation.':
+    '运行机器和原生执行日志由提供者管理。你的工作区和会话不会因此共享。',
+  'Decline or leave': '拒绝或退出',
+  'Accept and start chatting': '接受并开始聊天',
+  'Authorize this Agent for a specific project. Other resources remain private.':
+    '指定此智能体可使用的项目，其他资源保持私有。',
+  'Invite people to this conversation. Other workspace resources remain private.':
+    '邀请其他人访问此会话，工作区其他资源保持私有。',
+  'Authorized project': '授权项目',
+  'Git projects use independent worktrees. Local projects use the authorized directory.':
+    'Git 项目使用独立 worktree，本地项目使用授权目录。',
+  Permission: '权限',
+  Invite: '邀请',
+  'Revoke access': '撤销访问',
+  'Share Agent': '共享智能体',
+  Shared: '已共享',
+  'Private conversation': '私密会话',
+  'Back to collaborative conversations': '返回协作会话',
+  'This conversation is shared with view permission.': '此会话仅授予查看权限。',
+  'This delegated conversation has not been shared.':
+    '此委派会话尚未单独共享。',
   'Loading image…': '正在加载图片…',
   'Image preview unavailable': '图片暂时无法预览',
   'Open image preview: {name}': '查看图片：{name}',

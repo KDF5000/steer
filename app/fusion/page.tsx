@@ -49,6 +49,7 @@ import {
   Server,
   Settings,
   Share2,
+  Users,
   LogOut,
   Library,
   KeyRound,
@@ -159,6 +160,16 @@ import {
 } from '@/lib/steer-client';
 import { useChatViewport } from './use-chat-viewport';
 import { AssetsView, WorkLogView } from './workspace-library';
+import {
+  AgentTable,
+  CollaborationTree,
+  CollaborationAvatars,
+  SharedSessionAccessDialog,
+  ResourceSharingDialog,
+  SharedAgentsList,
+  type SharingTarget,
+} from './resource-sharing';
+import type { ResourceShare } from '@/lib/steer-client';
 import './fusion.css';
 
 type View = 'chat' | 'artifacts' | 'agents' | 'assets' | 'notes' | 'settings';
@@ -650,7 +661,9 @@ function SessionNavigationItem({
   active,
   onOpen,
   onDelete,
+  shared = false,
 }: {
+  shared?: boolean;
   session: ChatSessionRecord;
   active: boolean;
   onOpen: () => void;
@@ -668,6 +681,12 @@ function SessionNavigationItem({
         title={session.title}
       >
         <span>{sessionDisplayTitle(session)}</span>
+        {shared && (
+          <Users
+            className="ws-session-shared-marker"
+            aria-label="Collaborative conversation"
+          />
+        )}
         {session.parentConversationId && (
           <span className="ws-session-delegation-marker" title={session.title}>
             <ArrowUpRight aria-label="Delegated conversation" />
@@ -687,6 +706,7 @@ function SessionNavigationItem({
 }
 
 function SessionNavigationList({
+  shares = [],
   sessions,
   activeSessionID,
   expanded,
@@ -694,6 +714,7 @@ function SessionNavigationList({
   onOpen,
   onDelete,
 }: {
+  shares?: ResourceShare[];
   sessions: ChatSessionRecord[];
   activeSessionID: string;
   expanded: boolean;
@@ -714,6 +735,12 @@ function SessionNavigationList({
         <SessionNavigationItem
           key={session.id}
           session={session}
+          shared={shares.some(
+            (share) =>
+              share.owned &&
+              share.kind === 'session' &&
+              share.resourceId === session.id,
+          )}
           active={activeSessionID === session.id}
           onOpen={() => onOpen(session)}
           onDelete={() => onDelete(session)}
@@ -841,6 +868,83 @@ export default function Fusion() {
   const [chatSession, setChatSession] = useState('');
   const [chatSessions, setChatSessions] = useState<ChatSessionRecord[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [resourceShares, setResourceShares] = useState<ResourceShare[]>([]);
+  const [sharingTarget, setSharingTarget] = useState<SharingTarget | null>(
+    null,
+  );
+  const [sharingLoading, setSharingLoading] = useState(false);
+  const [sharingError, setSharingError] = useState('');
+  const [accessShare, setAccessShare] = useState<ResourceShare | null>(null);
+  const [collaborationShare, setCollaborationShare] =
+    useState<ResourceShare | null>(null);
+  const [collaborationSession, setCollaborationSession] =
+    useState<ChatSessionRecord>();
+  const [collaborationAgent, setCollaborationAgent] = useState<AgentItem>();
+  const [collaborationProject, setCollaborationProject] =
+    useState<ProjectRecord>();
+  const sharedAgentResourcesPresent = useRef(false);
+  const sharingRefreshInFlight = useRef(new Set<string>());
+  useEffect(() => {
+    sharedAgentResourcesPresent.current = projectList.some(
+      (project) => project.sharedAgentGrantId,
+    );
+  }, [projectList]);
+  const refreshSharing = useCallback(async () => {
+    const wid = steer.workspace();
+    if (sharingRefreshInFlight.current.has(wid)) return;
+    sharingRefreshInFlight.current.add(wid);
+    setSharingLoading(true);
+    try {
+      const shares = await steer.resourceShares();
+      if (wid === steer.workspace()) {
+        setResourceShares(shares);
+        setSharingError('');
+        if (
+          sharedAgentResourcesPresent.current ||
+          shares.some(
+            (share) =>
+              share.kind === 'agent' &&
+              !share.owned &&
+              share.status === 'accepted',
+          )
+        ) {
+          const data = await steer.bootstrap();
+          if (wid === steer.workspace()) {
+            setAgentList(data.agents.map(agentFromRecord));
+            setProjectList(data.projects);
+            setChatSessions(data.sessions);
+          }
+        }
+      }
+    } catch (error) {
+      if (wid === steer.workspace())
+        setSharingError(error instanceof Error ? error.message : String(error));
+    } finally {
+      sharingRefreshInFlight.current.delete(wid);
+      if (wid === steer.workspace()) setSharingLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (authUser && workspaceID) void Promise.resolve().then(refreshSharing);
+  }, [authUser, workspaceID, refreshSharing]);
+  useEffect(() => {
+    if (!authUser || !workspaceID) return;
+    const refresh = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        sharedAgentResourcesPresent.current
+      )
+        void refreshSharing();
+    };
+    const timer = window.setInterval(refresh, 10000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [authUser, workspaceID, refreshSharing]);
   const [agentDialog, setAgentDialog] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentItem | null>(null);
   const [deletingAgent, setDeletingAgent] = useState<AgentItem | null>(null);
@@ -878,6 +982,7 @@ export default function Fusion() {
   const [agentModel, setAgentModel] = useState('Runtime default');
   const activeRun = useRef('');
   const activeTask = useRef('');
+  const pendingChatSubmission = useRef(false);
   const activeRunContext = useRef<{
     project?: ProjectRecord;
     executionRuntimeID: string | null;
@@ -894,8 +999,18 @@ export default function Fusion() {
   const skipRouteWrite = useRef(false);
   const createAgentLock = useRef(false);
 
-  const currentAgent =
-    agentList.find((agent) => agent.id === chatAgent) || agentList[0];
+  useEffect(() => {
+    if (view === 'chat' || !steer.collaboration()) return;
+    steer.setCollaboration('');
+    activeRun.current = '';
+    activeTask.current = '';
+    const frame = requestAnimationFrame(() => {
+      setActiveRunID('');
+      setChatWorking(false);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [view]);
+
   const unassignedSessions = chatSessions.filter(
     (session) =>
       !session.projectId ||
@@ -903,8 +1018,54 @@ export default function Fusion() {
         (project) => !project.deletedAt && project.id === session.projectId,
       ),
   );
-  const activeChatSession = chatSessions.find(
-    (session) => session.id === chatSession,
+  const activeChatSession = collaborationShare
+    ? collaborationSession
+    : chatSessions.find((session) => session.id === chatSession);
+  const sharedAgentProject = projectList.find(
+    (project) => project.id === chatProject && project.sharedAgentGrantId,
+  );
+  const sharedProjectGrants = resourceShares.filter(
+    (share) =>
+      share.kind === 'agent' &&
+      !share.owned &&
+      share.status === 'accepted' &&
+      (
+        sharedAgentProject?.sharedAgentGrantIds || [
+          sharedAgentProject?.sharedAgentGrantId,
+        ]
+      ).includes(share.id),
+  );
+  const sharedProjectAgents = agentList.filter((agent) =>
+    sharedProjectGrants.some((share) => share.resourceId === agent.id),
+  );
+  const currentAgent = collaborationShare
+    ? collaborationAgent
+    : sharedAgentProject && sharedProjectAgents.length
+      ? sharedProjectAgents.find((agent) => agent.id === chatAgent) ||
+        sharedProjectAgents[0]
+      : agentList.find((agent) => agent.id === chatAgent) || agentList[0];
+  const sharedAgentGrant =
+    sharedProjectGrants.find(
+      (share) => share.resourceId === currentAgent?.id,
+    ) ||
+    resourceShares.find(
+      (share) => share.id === activeChatSession?.sharedAgentGrantId,
+    );
+  const activeSharedAgentAccess =
+    sharedAgentProject?.sharedAgentAccess ||
+    activeChatSession?.sharedAgentAccess;
+  const sharedAgentRevoked = Boolean(
+    activeSharedAgentAccess && activeSharedAgentAccess !== 'accepted',
+  );
+  const sharedReadOnly = Boolean(
+    collaborationShare &&
+    !collaborationShare.owned &&
+    collaborationShare.permission !== 'execute',
+  );
+  const sharedExecutionLocked = Boolean(
+    collaborationShare ||
+    activeChatSession?.sharedAgentGrantId ||
+    sharedAgentProject?.sharedAgentGrantId,
   );
   const runtimeChoices = runtimeNodes.flatMap((node) =>
     (node.runtimes || []).map((runtime) => ({
@@ -916,9 +1077,9 @@ export default function Fusion() {
       defaultModel: runtime.default_model || '',
     })),
   );
-  const selectedProject = projectList.find(
-    (project) => project.id === chatProject,
-  );
+  const selectedProject = collaborationShare
+    ? collaborationProject
+    : projectList.find((project) => project.id === chatProject);
   const composerExecutionRuntimeId =
     activeChatSession?.executionRuntimeId || null;
   const automaticChoices: RuntimeChoice[] = [
@@ -1036,6 +1197,9 @@ export default function Fusion() {
   };
 
   const hydrateWorkspace = useCallback(async (id: string) => {
+    setCollaborationShare(null);
+    setResourceShares([]);
+    setSharingTarget(null);
     const sequence = ++workspaceHydrationSequence.current;
     gitStatusWorkspace.current = id;
     projectGitStatusController.current?.abort();
@@ -1398,12 +1562,20 @@ export default function Fusion() {
   }, [activeRunID, pollRun]);
 
   const openChatSession = useCallback(
-    async (sessionID: string) => {
-      if (sessionID === chatSession) {
+    async (sessionID: string, shared?: ResourceShare) => {
+      if (
+        sessionID === chatSession &&
+        (shared?.id || '') === steer.collaboration()
+      ) {
         setView('chat');
         return;
       }
 
+      steer.setCollaboration(shared?.id || '');
+      setCollaborationShare(shared || null);
+      setCollaborationAgent(undefined);
+      setCollaborationProject(undefined);
+      setCollaborationSession(undefined);
       activeRun.current = '';
       activeTask.current = '';
       pollingRun.current = '';
@@ -1434,6 +1606,17 @@ export default function Fusion() {
           return;
         chatImages.forEach((image) => URL.revokeObjectURL(image.url));
         setChatImages([]);
+        if (!shared) {
+          setChatSessions((current) => [
+            data.session,
+            ...current.filter((session) => session.id !== data.session.id),
+          ]);
+        }
+        if (shared) {
+          setCollaborationSession(data.session);
+          setCollaborationProject(data.project);
+          if (data.agent) setCollaborationAgent(agentFromRecord(data.agent));
+        }
         setChatAgent(data.session.agentId);
         setChatProject(data.session.projectId || 'none');
         const group = data.session.projectId || noProjectSessionGroup;
@@ -1443,7 +1626,7 @@ export default function Fusion() {
           next.add(group);
           return next;
         });
-        if (data.project) {
+        if (data.project && !shared) {
           setProjectList((current) =>
             current.some((project) => project.id === data.project?.id)
               ? current
@@ -1566,9 +1749,95 @@ export default function Fusion() {
   );
 
   useEffect(() => {
+    if (
+      !chatSession ||
+      view !== 'chat' ||
+      (!collaborationShare &&
+        !resourceShares.some(
+          (share) =>
+            share.kind === 'session' &&
+            share.owned &&
+            share.resourceId === chatSession,
+        ))
+    )
+      return;
+    let cancelled = false;
+    const poll = async () => {
+      if (pendingChatSubmission.current) return;
+      try {
+        const data = await steer.session(chatSession);
+        if (cancelled || pendingChatSubmission.current) return;
+        if (data.sharingPermission)
+          setCollaborationShare((current) =>
+            current && current.permission !== data.sharingPermission
+              ? { ...current, permission: data.sharingPermission! }
+              : current,
+          );
+        setMessages((current) => {
+          const previous = new Map(
+            current.map((message) => [message.id, message]),
+          );
+          return data.messages.map((message) => {
+            const known = previous.get(message.id);
+            return {
+              ...known,
+              id: message.id,
+              role: message.role,
+              text: isTerminalStatus(message.status)
+                ? message.content
+                : known?.text || '',
+              status: message.status,
+              runId: message.relayRunId || undefined,
+              context: message.context,
+              createdAt: message.createdAt,
+              updatedAt: message.updatedAt,
+              attachments: message.attachments?.map((attachment) => ({
+                ...attachment,
+                url: steer.messageAttachmentURL(message.id, attachment.id),
+              })),
+            };
+          });
+        });
+        const running = data.messages.findLast(
+          (message) =>
+            message.role === 'agent' &&
+            message.relayRunId &&
+            !isTerminalStatus(message.status),
+        );
+        if (running?.relayRunId && activeRun.current !== running.relayRunId) {
+          activeRun.current = running.relayRunId;
+          activeTask.current = '';
+          setActiveRunID(running.relayRunId);
+          setChatWorking(true);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setNotice(error instanceof Error ? error.message : String(error));
+          setCollaborationShare((current) =>
+            current ? { ...current, permission: 'view' } : current,
+          );
+        }
+      }
+    };
+    const timer = window.setInterval(() => void poll(), 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [collaborationShare, chatSession, view, resourceShares]);
+
+  useEffect(() => {
     if (!loaded) return;
     const readRoute = () => {
+      skipRouteWrite.current = true;
       const [section, id] = window.location.hash.slice(1).split('/');
+      if (section === 'shared' && id) {
+        const share = resourceShares.find(
+          (item) => item.id === id && item.kind === 'session',
+        );
+        if (share) void openChatSession(share.resourceId, share);
+        return;
+      }
       skipRouteWrite.current = true;
       if (section === 'runtimes') {
         setView('agents');
@@ -1593,13 +1862,22 @@ export default function Fusion() {
         if (section === 'chat' && id) void openChatSession(id);
       }
     };
-    if (!routeReady.current) {
+    if (
+      !routeReady.current ||
+      (window.location.hash.startsWith('#shared/') && !collaborationShare)
+    ) {
       readRoute();
       routeReady.current = true;
     }
     window.addEventListener('hashchange', readRoute);
     return () => window.removeEventListener('hashchange', readRoute);
-  }, [artifactList, loaded, openChatSession]);
+  }, [
+    artifactList,
+    loaded,
+    openChatSession,
+    resourceShares,
+    collaborationShare,
+  ]);
 
   useEffect(() => {
     if (!routeReady.current) return;
@@ -1615,9 +1893,19 @@ export default function Fusion() {
         : view === 'artifacts'
           ? artifactList[selectedArtifact]?.id
           : '';
-    const hash = `#${section}${id ? `/${id}` : ''}`;
+    const hash =
+      view === 'chat' && collaborationShare
+        ? `#shared/${collaborationShare.id}`
+        : `#${section}${id ? `/${id}` : ''}`;
     if (window.location.hash !== hash) window.history.pushState(null, '', hash);
-  }, [agentTab, artifactList, chatSession, selectedArtifact, view]);
+  }, [
+    agentTab,
+    artifactList,
+    chatSession,
+    selectedArtifact,
+    view,
+    collaborationShare,
+  ]);
 
   const loadProjectGitStatus = (projectID: string) => {
     if (
@@ -1658,7 +1946,37 @@ export default function Fusion() {
       });
   };
 
-  const startNewChat = (projectID = 'none') => {
+  const openCollaborativeSession = async (share: ResourceShare) => {
+    if (share.status === 'pending') {
+      share = {
+        ...share,
+        ...(await steer.acceptResourceShare(share.id)),
+        owned: share.owned,
+      };
+    }
+    await refreshSharing();
+    await openChatSession(share.resourceId, { ...share, status: 'accepted' });
+  };
+
+  const startNewChat = (projectID = 'none', authorizedAgentID?: string) => {
+    const authorizedProject = projectList.find(
+      (project) => project.id === projectID && project.sharedAgentGrantId,
+    );
+    const authorizedAgent =
+      authorizedAgentID ||
+      resourceShares.find(
+        (share) =>
+          (
+            authorizedProject?.sharedAgentGrantIds || [
+              authorizedProject?.sharedAgentGrantId,
+            ]
+          ).includes(share.id) && share.status === 'accepted',
+      )?.resourceId;
+    steer.setCollaboration('');
+    setCollaborationShare(null);
+    if (authorizedAgent) setChatAgent(authorizedAgent);
+    else if (currentAgent?.shared || collaborationShare)
+      setChatAgent(agentList.find((agent) => !agent.shared)?.id || '');
     sessionLoadSequence.current += 1;
     activeRun.current = '';
     activeTask.current = '';
@@ -1677,6 +1995,17 @@ export default function Fusion() {
   };
 
   const openProject = (projectID: string) => {
+    const project = projectList.find((project) => project.id === projectID);
+    if (
+      project?.sharedAgentAccess &&
+      project.sharedAgentAccess !== 'accepted'
+    ) {
+      const latest = chatSessions
+        .filter((session) => session.projectId === projectID)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+      if (latest) void openChatSession(latest.id);
+      return;
+    }
     loadProjectGitStatus(projectID);
     startNewChat(projectID);
   };
@@ -1689,8 +2018,15 @@ export default function Fusion() {
   const send = async (override?: string, options?: TaskMessageOptions) => {
     const text = (override ?? chatInput).trim();
     const images = override ? [] : chatImages;
-    if ((!text && images.length === 0) || chatWorking || !currentAgent)
+    if (
+      (!text && images.length === 0) ||
+      chatWorking ||
+      sharedAgentRevoked ||
+      !currentAgent ||
+      sharedReadOnly
+    )
       return false;
+    pendingChatSubmission.current = true;
     const optimisticID = `local-${Date.now()}`;
     const startedAt = new Date().toISOString();
     setMessages((current) => [
@@ -1712,12 +2048,27 @@ export default function Fusion() {
     setChatInput('');
     setChatWorking(true);
     try {
+      let conversationId = chatSession;
+      let createdSharedSession: ChatSessionRecord | undefined;
+      if (!conversationId && sharedAgentProject?.sharedAgentGrantId) {
+        if (!sharedAgentGrant)
+          throw new Error(t('Authorized project unavailable.'));
+        createdSharedSession = await steer.sharedAgentConversation(
+          sharedAgentGrant.id,
+        );
+        conversationId = createdSharedSession.id;
+        setChatSession(conversationId);
+        setChatSessions((current) => [
+          createdSharedSession!,
+          ...current.filter((session) => session.id !== conversationId),
+        ]);
+      }
       const result = await steer.createTask({
         prompt: text,
         ...options,
         agentId: currentAgent.id,
         ...(chatProject !== 'none' ? { projectId: chatProject } : {}),
-        ...(chatSession ? { conversationId: chatSession } : {}),
+        ...(conversationId ? { conversationId } : {}),
         images: images.map((image) => image.file),
       });
       const persistedAttachments = result.userMessage.attachments?.map(
@@ -1738,33 +2089,51 @@ export default function Fusion() {
         next.add(group);
         return next;
       });
-      setChatSessions((current) => {
-        const now = new Date().toISOString();
-        const session: ChatSessionRecord = {
-          id: result.sessionId,
-          title: (text || images[0]?.file.name || 'Image').slice(0, 72),
-          agentId: currentAgent.id,
-          projectId: chatProject === 'none' ? null : chatProject,
-          executionRuntimeId:
-            currentAgent.runtimeId ||
-            runtimeNodes
-              .find((node) => node.id === selectedProject?.nodeId)
-              ?.runtimes?.find(
-                (runtime) => runtime.provider === currentAgent.runtimeProvider,
-              )?.id ||
-            null,
-          workspaceKey: null,
-          createdAt: now,
-          updatedAt: now,
-        };
-        const existing = current.find((item) => item.id === session.id);
-        return [
-          existing
-            ? { ...existing, updatedAt: now, agentId: currentAgent.id }
-            : session,
-          ...current.filter((item) => item.id !== session.id),
-        ];
-      });
+      if (!collaborationShare)
+        setChatSessions((current) => {
+          const now = new Date().toISOString();
+          const session: ChatSessionRecord = {
+            ...createdSharedSession,
+            id: result.sessionId,
+            title: (text || images[0]?.file.name || 'Image').slice(0, 72),
+            agentId: currentAgent.id,
+            projectId: chatProject === 'none' ? null : chatProject,
+            executionRuntimeId:
+              currentAgent.runtimeId ||
+              runtimeNodes
+                .find((node) => node.id === selectedProject?.nodeId)
+                ?.runtimes?.find(
+                  (runtime) =>
+                    runtime.provider === currentAgent.runtimeProvider,
+                )?.id ||
+              null,
+            workspaceKey: null,
+            createdAt: now,
+            updatedAt: now,
+          };
+          const existing = current.find((item) => item.id === session.id);
+          return [
+            existing
+              ? {
+                  ...existing,
+                  title:
+                    existing.sharedAgentGrantId && !messages.length
+                      ? session.title
+                      : existing.title,
+                  updatedAt: now,
+                  agentId: currentAgent.id,
+                  sharedAgentGrantId:
+                    sharedAgentGrant?.id || existing.sharedAgentGrantId,
+                  sharedAgentAccess: sharedAgentGrant
+                    ? 'accepted'
+                    : existing.sharedAgentAccess,
+                  executionRuntimeId:
+                    currentAgent.runtimeId || existing.executionRuntimeId,
+                }
+              : session,
+            ...current.filter((item) => item.id !== session.id),
+          ];
+        });
       if (result.delegationSession) {
         const child = result.delegationSession;
         setChatSessions((current) => [
@@ -1836,6 +2205,8 @@ export default function Fusion() {
       );
       setChatWorking(false);
       return false;
+    } finally {
+      pendingChatSubmission.current = false;
     }
   };
 
@@ -2619,7 +2990,15 @@ export default function Fusion() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {projectList
-                  .filter((project) => !project.deletedAt)
+                  .filter(
+                    (project) =>
+                      !project.deletedAt &&
+                      (!project.sharedAgentAccess ||
+                        project.sharedAgentAccess === 'accepted' ||
+                        chatSessions.some(
+                          (session) => session.projectId === project.id,
+                        )),
+                  )
                   .map((project) => {
                     const projectSessions = chatSessions.filter(
                       (session) => session.projectId === project.id,
@@ -2659,13 +3038,28 @@ export default function Fusion() {
                             chatProject === project.id
                           }
                           onClick={() => openProject(project.id)}
-                          title={project.workspaceSource}
+                          title={
+                            project.sharedAgentGrantId
+                              ? `${t('Shared project')} · ${project.workspaceSource}`
+                              : project.workspaceSource
+                          }
                         >
-                          <Folder aria-hidden="true" />
+                          {project.sharedAgentGrantId ? (
+                            <Users aria-label={t('Shared project')} />
+                          ) : (
+                            <Folder aria-hidden="true" />
+                          )}
                           <span className="ws-project-name">
                             {project.name}
                           </span>
-                          <GitBranchLabel branch={branch} />
+                          {project.sharedAgentAccess &&
+                          project.sharedAgentAccess !== 'accepted' ? (
+                            <span className="ws-shared-agent-revoked">
+                              {t('Access revoked')}
+                            </span>
+                          ) : (
+                            <GitBranchLabel branch={branch} />
+                          )}
                         </SidebarMenuButton>
                         <DropdownMenu>
                           <DropdownMenuTrigger
@@ -2685,17 +3079,20 @@ export default function Fusion() {
                             alignOffset={10}
                             className="w-44 min-w-44 rounded-xl border border-[#e5e5e7] bg-white p-1.5 text-[#202124] shadow-[0_12px_32px_rgba(24,24,27,0.14),0_2px_8px_rgba(24,24,27,0.08)] ring-0"
                           >
-                            <DropdownMenuItem
-                              className="h-9 gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2 font-medium transition-colors hover:bg-[#f1f1f3]"
-                              onClick={() => {
-                                setFormError('');
-                                setEditingProject(project);
-                                setProjectDialog(true);
-                              }}
-                            >
-                              <Pencil aria-hidden="true" />
-                              {t('Edit project')}
-                            </DropdownMenuItem>
+                            {!project.sharedAgentGrantId && (
+                              <DropdownMenuItem
+                                className="h-9 gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2 font-medium transition-colors hover:bg-[#f1f1f3]"
+                                onClick={() => {
+                                  setFormError('');
+                                  setEditingProject(project);
+                                  setProjectDialog(true);
+                                }}
+                              >
+                                <Pencil aria-hidden="true" />
+                                {t('Edit project')}
+                              </DropdownMenuItem>
+                            )}
+
                             <DropdownMenuItem
                               className="h-9 gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-2 font-medium transition-colors hover:bg-[#f1f1f3]"
                               onClick={() => {
@@ -2718,6 +3115,7 @@ export default function Fusion() {
                         </DropdownMenu>
                         {!!projectSessions.length && sessionsExpanded && (
                           <SessionNavigationList
+                            shares={resourceShares}
                             sessions={projectSessions}
                             activeSessionID={view === 'chat' ? chatSession : ''}
                             expanded={expandedSessionLists.has(project.id)}
@@ -2753,6 +3151,7 @@ export default function Fusion() {
                     </div>
                     {expandedSessionGroups.has(noProjectSessionGroup) && (
                       <SessionNavigationList
+                        shares={resourceShares}
                         sessions={unassignedSessions}
                         activeSessionID={view === 'chat' ? chatSession : ''}
                         expanded={expandedSessionLists.has(
@@ -2781,6 +3180,35 @@ export default function Fusion() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          <SidebarGroup className="ws-collaborative-project-navigation">
+            <SidebarGroupLabel>{t('Collaborative projects')}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              {sharingError ? (
+                <div className="ws-collaborative-project-state" role="alert">
+                  <span>{t('Unable to load collaborative projects.')}</span>
+                  <button type="button" onClick={() => void refreshSharing()}>
+                    {t('Try again')}
+                  </button>
+                </div>
+              ) : sharingLoading &&
+                !resourceShares.some(
+                  (share) => share.kind === 'session' && !share.owned,
+                ) ? (
+                <output className="ws-collaborative-project-state">
+                  {t('Loading…')}
+                </output>
+              ) : (
+                <CollaborationTree
+                  compact
+                  shares={resourceShares}
+                  activeId={
+                    view === 'chat' ? collaborationShare?.id : undefined
+                  }
+                  onOpen={openCollaborativeSession}
+                />
+              )}
             </SidebarGroupContent>
           </SidebarGroup>
           <SidebarGroup>
@@ -2836,7 +3264,7 @@ export default function Fusion() {
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    isActive={view === 'agents' && agentTab === 'agents'}
+                    isActive={view === 'agents' && agentTab !== 'runtimes'}
                     onClick={() => {
                       setAgentTab('agents');
                       setView('agents');
@@ -2916,7 +3344,7 @@ export default function Fusion() {
                     ? t('Footprints')
                     : view === 'settings'
                       ? t('Settings')
-                      : agentTab === 'agents'
+                      : agentTab !== 'runtimes'
                         ? t('Agents')
                         : t('Runtimes')}
             </span>
@@ -2943,11 +3371,66 @@ export default function Fusion() {
           <WorkspaceChatView
             key={chatSession || 'new-chat'}
             sessionId={chatSession}
-            agents={agentList}
+            agents={
+              sharedAgentProject && sharedProjectAgents.length
+                ? sharedProjectAgents
+                : sharedExecutionLocked
+                  ? currentAgent
+                    ? [currentAgent]
+                    : []
+                  : agentList.filter((agent) => !agent.shared)
+            }
             agent={currentAgent}
+            showHumanAuthors={Boolean(
+              collaborationShare ||
+              resourceShares.some(
+                (share) =>
+                  share.owned &&
+                  share.kind === 'session' &&
+                  share.resourceId === chatSession,
+              ),
+            )}
+            readOnly={sharedReadOnly || sharedAgentRevoked}
+            readOnlyReason={
+              sharedAgentRevoked
+                ? 'Agent access has been revoked. You can still view this conversation.'
+                : undefined
+            }
+            executionLocked={sharedExecutionLocked}
+            agentSelectionLocked={Boolean(collaborationShare)}
+            sharingLabel={
+              sharedAgentRevoked
+                ? t('Access revoked')
+                : collaborationShare
+                  ? `${collaborationShare.ownerName} · ${t(sharedReadOnly ? 'View only' : 'Can collaborate')}`
+                  : sharedAgentGrant
+                    ? `${t('Provided by')} ${sharedAgentGrant.ownerName} · ${t('Private conversation')}`
+                    : undefined
+            }
+            collaborationMembers={resourceShares.filter(
+              (share) =>
+                share.owned &&
+                share.kind === 'session' &&
+                share.resourceId === chatSession,
+            )}
+            sharingUser={authUser}
+            publicShareAllowed={!collaborationShare}
+            onManageSharing={() => {
+              void refreshSharing();
+              if (collaborationShare) setAccessShare(collaborationShare);
+              else if (chatSession)
+                setSharingTarget({
+                  kind: 'session',
+                  id: chatSession,
+                  name: activeChatSession?.title || t('Conversation'),
+                  context: selectedProject?.name,
+                  viewOnly: Boolean(activeChatSession?.sharedAgentGrantId),
+                });
+            }}
             projectRuntimeChoices={
-              selectedProject?.workspaceKind === 'local' ||
-              composerExecutionRuntimeId
+              !sharedExecutionLocked &&
+              (selectedProject?.workspaceKind === 'local' ||
+                composerExecutionRuntimeId)
                 ? runtimeChoices.filter((runtime) =>
                     runtimeNodes.some(
                       (node) =>
@@ -2967,13 +3450,21 @@ export default function Fusion() {
                   )
                 : undefined
             }
-            projects={projectList}
+            projects={
+              collaborationShare
+                ? collaborationProject
+                  ? [collaborationProject]
+                  : []
+                : projectList
+            }
             project={chatProject}
             artifacts={conversationArtifacts}
             messages={messages}
             sessionTitle={activeChatSession?.title}
             parentConversationId={activeChatSession?.parentConversationId}
             runtimeLabel={
+              collaborationShare?.runtimeLabel ||
+              sharedAgentGrant?.runtimeLabel ||
               runtimeChoices.find(
                 (runtime) =>
                   runtime.runtimeId ===
@@ -2989,7 +3480,15 @@ export default function Fusion() {
             images={chatImages}
             working={chatWorking}
             onAgent={setChatAgent}
-            onDelegationSession={(id) => void openChatSession(id)}
+            onDelegationSession={(id) => {
+              if (collaborationShare) {
+                setNotice(
+                  t('This delegated conversation has not been shared.'),
+                );
+                return;
+              }
+              void openChatSession(id);
+            }}
             onProject={selectChatProject}
             onAddProject={() => setProjectDialog(true)}
             onInput={setChatInput}
@@ -3088,7 +3587,33 @@ export default function Fusion() {
           />
         ) : (
           <AgentsView
-            agents={agentList}
+            agents={agentList.filter((agent) => !agent.shared)}
+            shares={resourceShares}
+            sharingError={sharingError}
+            onShareAgent={(agent) => {
+              void refreshSharing();
+              setSharingTarget({
+                kind: 'agent',
+                id: agent.id,
+                name: agent.name,
+              });
+            }}
+            onUseSharedAgent={async (share) => {
+              await steer.acceptResourceShare(share.id);
+              const data = await steer.bootstrap();
+              setAgentList(data.agents.map(agentFromRecord));
+              setProjectList(data.projects);
+              setChatSessions(data.sessions);
+              const project = data.projects.find((project) =>
+                (
+                  project.sharedAgentGrantIds || [project.sharedAgentGrantId]
+                ).includes(share.id),
+              );
+              if (!project)
+                throw new Error(t('Authorized project unavailable.'));
+              startNewChat(project.id, share.resourceId);
+            }}
+            onRefreshSharing={refreshSharing}
             runtimes={runtimeRows}
             relayConnected={relayConnected}
             relayError={relayError}
@@ -3104,12 +3629,38 @@ export default function Fusion() {
             onNotice={setNotice}
             onChat={(id) => {
               setChatAgent(id);
-              startNewChat(chatProject);
+              startNewChat(
+                projectList.find((project) => project.id === chatProject)
+                  ?.sharedAgentGrantId
+                  ? 'none'
+                  : chatProject,
+              );
             }}
           />
         )}
       </SidebarInset>
 
+      <SharedSessionAccessDialog
+        key={accessShare?.id || 'no-access'}
+        share={accessShare}
+        onClose={() => setAccessShare(null)}
+        onLeave={async () => {
+          if (accessShare) {
+            await steer.revokeResourceShare(accessShare.id);
+            await refreshSharing();
+            startNewChat();
+          }
+        }}
+      />
+      <ResourceSharingDialog
+        key={`${sharingTarget?.kind}:${sharingTarget?.id}`}
+        target={sharingTarget}
+        user={authUser}
+        shares={resourceShares}
+        projects={projectList}
+        onClose={() => setSharingTarget(null)}
+        onRefresh={refreshSharing}
+      />
       <Dialog open={workspaceDialog} onOpenChange={setWorkspaceDialog}>
         <DialogContent className="ws-workspace-dialog">
           <DialogTitle>{t('Create workspace')}</DialogTitle>
@@ -3499,6 +4050,16 @@ function WorkspaceChatView(
 }
 
 function ChatView({
+  collaborationMembers = [],
+  sharingUser = null,
+  publicShareAllowed = true,
+  showHumanAuthors = false,
+  readOnly = false,
+  readOnlyReason,
+  executionLocked = false,
+  agentSelectionLocked = executionLocked,
+  sharingLabel,
+  onManageSharing,
   sessionId,
   agents,
   agent,
@@ -3528,6 +4089,16 @@ function ChatView({
   onArtifact,
   onToggleSidebar,
 }: {
+  collaborationMembers?: ResourceShare[];
+  sharingUser?: AuthUser | null;
+  publicShareAllowed?: boolean;
+  showHumanAuthors?: boolean;
+  readOnly?: boolean;
+  readOnlyReason?: string;
+  executionLocked?: boolean;
+  agentSelectionLocked?: boolean;
+  sharingLabel?: string;
+  onManageSharing?: () => void;
   sessionId: string;
   agents: AgentItem[];
   agent?: AgentItem;
@@ -3601,6 +4172,9 @@ function ChatView({
   const [copiedMessage, setCopiedMessage] = useState('');
   const [sharing, setSharing] = useState('');
   const [shared, setShared] = useState('');
+  const [publicShareDialog, setPublicShareDialog] = useState(false);
+  const [publicShareURL, setPublicShareURL] = useState('');
+  const [publicShareError, setPublicShareError] = useState('');
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [draggingImages, setDraggingImages] = useState(false);
   const [composerPreviewID, setComposerPreviewID] = useState('');
@@ -3678,7 +4252,7 @@ function ChatView({
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage>();
   const [delegationTarget, setDelegationTarget] = useState<AgentItem>();
   const [referenceRemoved, setReferenceRemoved] = useState(false);
-  const eligibleDelegates = agents.filter(
+  const eligibleDelegates = (executionLocked ? [] : agents).filter(
     (item) =>
       Boolean(
         sessionId && (selectedProject || agent?.workspaceKind === 'local'),
@@ -3710,7 +4284,7 @@ function ChatView({
       );
   };
   const submitMessage = async () => {
-    if (working || (!input.trim() && images.length === 0)) return;
+    if (readOnly || working || (!input.trim() && images.length === 0)) return;
     if (
       delegationTarget &&
       !eligibleDelegates.some((item) => item.id === delegationTarget.id)
@@ -3809,6 +4383,26 @@ function ChatView({
     setPreview('');
     setPreviewError('');
   };
+  const preparePublicShare = async () => {
+    if (!sessionId || !publicShareAllowed || sharing) return;
+    setPublicShareDialog(true);
+    setPublicShareURL('');
+    setPublicShareError('');
+    setSharing('conversation');
+    try {
+      const result = await steer.shareSession(sessionId);
+      const url = new URL('/share', window.location.origin);
+      url.searchParams.set('token', result.token);
+      setPublicShareURL(url.toString());
+    } catch (error) {
+      setPublicShareError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setSharing('');
+    }
+  };
+
   const copyShareLink = async (
     kind: 'conversation' | 'message',
     id: string,
@@ -3924,35 +4518,51 @@ function ChatView({
               <strong title={conversationTitle}>{conversationTitle}</strong>
               <span title={projectLabel}>
                 <Folder aria-hidden="true" />
-                <small>{projectLabel}</small>
+                <small>
+                  {sharingLabel
+                    ? `${sharingLabel} · ${selectedProject?.name || projectLabel}`
+                    : projectLabel}
+                </small>
               </span>
             </div>
             <div className="ws-grow" />
+            <CollaborationAvatars
+              members={collaborationMembers}
+              user={sharingUser}
+              onClick={() => onManageSharing?.()}
+            />
             <Button
               variant="ghost"
               size="icon"
-              className="ws-chat-share-trigger"
-              aria-label={
-                shared === 'conversation'
-                  ? 'Conversation share link copied'
-                  : 'Share conversation'
-              }
-              title={
-                shared === 'conversation'
-                  ? 'Share link copied'
-                  : 'Share conversation'
-              }
-              disabled={!sessionId || working || sharing === 'conversation'}
-              onClick={() =>
-                void copyShareLink('conversation', sessionId, 'conversation')
-              }
-            >
-              {shared === 'conversation' ? (
-                <Check aria-hidden="true" />
-              ) : (
-                <Share2 aria-hidden="true" />
+              className="ws-chat-collaboration-trigger"
+              aria-label={t(
+                !publicShareAllowed
+                  ? 'Conversation access'
+                  : 'Invite collaboration',
               )}
+              title={t(
+                !publicShareAllowed
+                  ? 'Conversation access'
+                  : 'Invite collaboration',
+              )}
+              disabled={!sessionId || !onManageSharing}
+              onClick={onManageSharing}
+            >
+              <Users aria-hidden="true" />
             </Button>
+            {publicShareAllowed && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="ws-chat-share-trigger"
+                aria-label={t('Share view-only link')}
+                title={t('Share view-only link')}
+                disabled={!sessionId || working || sharing === 'conversation'}
+                onClick={() => void preparePublicShare()}
+              >
+                <Share2 aria-hidden="true" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -3966,6 +4576,47 @@ function ChatView({
               <PanelLeft className="ws-panel-toggle-right" aria-hidden="true" />
             </Button>
           </header>
+          <Dialog open={publicShareDialog} onOpenChange={setPublicShareDialog}>
+            <DialogContent className="ws-sharing-dialog ws-view-link-dialog">
+              <DialogTitle>{t('Share view-only link')}</DialogTitle>
+              <DialogDescription>
+                {t('Share a read-only snapshot of this conversation.')}
+              </DialogDescription>
+              <div className="ws-view-link-row">
+                <input
+                  aria-label={t('View-only link')}
+                  value={publicShareURL}
+                  readOnly
+                  placeholder={t('Creating link…')}
+                />
+                <Button
+                  disabled={!publicShareURL}
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(publicShareURL);
+                      onNotice(t('Share link copied'));
+                    } catch {
+                      onNotice(t('Copy the link from the field.'));
+                    }
+                  }}
+                >
+                  <Copy />
+                  {t('Copy')}
+                </Button>
+              </div>
+              {publicShareError && (
+                <p role="alert" className="ws-form-error">
+                  {publicShareError}
+                </p>
+              )}
+              <p className="ws-sharing-note">
+                {t(
+                  'Anyone with this link can view the snapshot. Invite collaborators separately.',
+                )}
+              </p>
+            </DialogContent>
+          </Dialog>
+
           <Dialog
             open={Boolean(composerPreview)}
             onOpenChange={(open) => !open && setComposerPreviewID('')}
@@ -4055,6 +4706,13 @@ function ChatView({
                       className={`ws-chat-message ${message.role}`}
                       key={messageKey}
                     >
+                      {showHumanAuthors &&
+                        message.role === 'user' &&
+                        message.context?.userName && (
+                          <span className="ws-shared-user-name">
+                            {message.context.userName}
+                          </span>
+                        )}
                       <span className="ws-agent-avatar">
                         {message.role === 'user'
                           ? 'K'
@@ -4347,7 +5005,7 @@ function ChatView({
                                     aria-pressed={
                                       quotedMessage?.id === message.id
                                     }
-                                    disabled={working}
+                                    disabled={working || readOnly}
                                     className={
                                       quotedMessage?.id === message.id
                                         ? 'is-quoted'
@@ -4369,7 +5027,7 @@ function ChatView({
                                     title={t('Hand back to {agent}', {
                                       agent: agent.name,
                                     })}
-                                    disabled={working}
+                                    disabled={working || readOnly}
                                     onClick={() => {
                                       setDelegationTarget(undefined);
                                       setQuotedMessage(message);
@@ -4609,7 +5267,7 @@ function ChatView({
                   reference={quotedMessage}
                   target={delegationTarget}
                   agents={eligibleDelegates}
-                  disabled={working}
+                  disabled={working || readOnly}
                   onReferenceRemove={() => {
                     setQuotedMessage(undefined);
                     setReferenceRemoved(true);
@@ -4618,14 +5276,19 @@ function ChatView({
                   onSend={submitMessage}
                   onImages={onImages}
                   editorRef={composer}
-                  placeholder={t('Ask a question or describe a task…')}
+                  placeholder={t(
+                    readOnly
+                      ? readOnlyReason ||
+                          'This conversation is shared with view permission.'
+                      : 'Ask a question or describe a task…',
+                  )}
                 />
               </div>
               <footer className="ws-chatbox-footer">
                 <div className="ws-chatbox-context">
                   <Select
                     value={agent.id}
-                    disabled={working}
+                    disabled={working || readOnly || agentSelectionLocked}
                     onValueChange={(value) => {
                       setDelegationTarget(undefined);
                       onAgent(value ?? agent.id);
@@ -4679,7 +5342,9 @@ function ChatView({
                   </Select>
                   <Select
                     value={project}
-                    disabled={working || hasMessages}
+                    disabled={
+                      working || hasMessages || executionLocked || readOnly
+                    }
                     onValueChange={(value) => onProject(value ?? 'none')}
                   >
                     <SelectTrigger
@@ -4708,7 +5373,7 @@ function ChatView({
                         ))}
                     </SelectContent>
                   </Select>
-                  {!hasMessages && (
+                  {!hasMessages && !executionLocked && (
                     <button
                       type="button"
                       className="ws-add-project"
@@ -4725,7 +5390,10 @@ function ChatView({
                   aria-label={
                     working ? t('Stop generating') : t('Send message')
                   }
-                  disabled={!working && !input.trim() && images.length === 0}
+                  disabled={
+                    readOnly ||
+                    (!working && !input.trim() && images.length === 0)
+                  }
                   onClick={() => working && onStop()}
                 >
                   {working ? (
@@ -4741,7 +5409,12 @@ function ChatView({
               </footer>
             </form>
             <p className="ws-chat-mode-note">
-              {agent.name} · {runtimeLabel} · {agent.model}
+              {readOnly
+                ? t(
+                    readOnlyReason ||
+                      'This conversation is shared with view permission.',
+                  )
+                : `${agent.name} · ${runtimeLabel} · ${agent.model}`}
             </p>
           </div>
         </section>
@@ -6189,6 +6862,11 @@ function RuntimeCapacityStepper({
 }
 
 function AgentsView({
+  shares,
+  sharingError,
+  onShareAgent,
+  onUseSharedAgent,
+  onRefreshSharing,
   agents,
   runtimes,
   relayConnected,
@@ -6205,6 +6883,11 @@ function AgentsView({
   onNotice,
   onChat,
 }: {
+  shares: ResourceShare[];
+  sharingError: string;
+  onShareAgent: (agent: AgentItem) => void;
+  onUseSharedAgent: (share: ResourceShare) => Promise<void>;
+  onRefreshSharing: () => Promise<void>;
   agents: AgentItem[];
   runtimes: RuntimeSummary[];
   relayConnected: boolean;
@@ -6252,9 +6935,9 @@ function AgentsView({
     <div className="ws-page">
       <PageIntro
         eyebrow={t('System').toUpperCase()}
-        title={tab === 'agents' ? t('Agents') : t('Runtimes')}
+        title={tab !== 'runtimes' ? t('Agents') : t('Runtimes')}
         description={
-          tab === 'agents'
+          tab !== 'runtimes'
             ? t(
                 'Configure reusable roles, models, and Runtime scheduling preferences.',
               )
@@ -6267,38 +6950,59 @@ function AgentsView({
             type="button"
             className="ws-primary-button"
             data-onboarding={tab === 'agents' ? 'agent' : 'runtime'}
-            onClick={tab === 'agents' ? onCreate : onAddRuntime}
+            onClick={tab !== 'runtimes' ? onCreate : onAddRuntime}
           >
             <Plus />
-            {tab === 'agents' ? t('New Agent') : t('Add Runtime')}
+            {tab !== 'runtimes' ? t('New Agent') : t('Add Runtime')}
           </button>
         }
       />
       <Tabs value={tab} onValueChange={(value) => onTab(String(value))}>
         <TabsList variant="line" className="ws-system-tabs">
           <TabsTrigger value="agents">
-            {t('Agents')} · {agents.length}
+            {t('My Agents')} · {agents.length}
+          </TabsTrigger>
+          <TabsTrigger value="shared-agents">
+            {t('Shared with me')} ·{' '}
+            {
+              shares.filter((share) => share.kind === 'agent' && !share.owned)
+                .length
+            }
           </TabsTrigger>
           <TabsTrigger value="runtimes">
             {t('Runtime nodes')} · {runtimes.length}
           </TabsTrigger>
         </TabsList>
       </Tabs>
-      {tab === 'agents' ? (
-        <div className="ws-agents-table">
-          <div className="ws-table-head">
-            <span>{t('Agent')}</span>
-            <span>{t('Runtime')}</span>
-            <span>{t('Model')}</span>
-            <span>{t('Status')}</span>
-            <span />
-          </div>
+      {sharingError && (
+        <p role="alert" className="ws-form-error">
+          {sharingError}
+        </p>
+      )}
+      {tab === 'shared-agents' ? (
+        <SharedAgentsList
+          shares={shares}
+          onUse={onUseSharedAgent}
+          onRefresh={onRefreshSharing}
+        />
+      ) : tab === 'agents' ? (
+        <AgentTable>
           {agents.map((agent) => (
             <div key={agent.id}>
               <span className="ws-agent-avatar">{agent.name[0]}</span>
               <span>
                 <strong>{agent.name}</strong>
-                <small>{agent.role}</small>
+                <small>
+                  {agent.role}
+                  {shares.some(
+                    (share) =>
+                      share.owned &&
+                      share.kind === 'agent' &&
+                      share.resourceId === agent.id,
+                  )
+                    ? ` · ${t('Shared')}`
+                    : ''}
+                </small>
               </span>
               <span>{runtimeName(agent)}</span>
               <span>{agent.model}</span>
@@ -6307,6 +7011,14 @@ function AgentsView({
                 {agent.state}
               </span>
               <span className="ws-agent-actions">
+                <button
+                  type="button"
+                  aria-label={t('Share Agent')}
+                  title={t('Share Agent')}
+                  onClick={() => onShareAgent(agent)}
+                >
+                  <Share2 aria-hidden="true" />
+                </button>
                 <button
                   type="button"
                   aria-label={t('Edit Agent')}
@@ -6346,7 +7058,7 @@ function AgentsView({
               </span>
             </div>
           ))}
-        </div>
+        </AgentTable>
       ) : runtimes.length ? (
         <div className="ws-runtime-table">
           <div className="ws-table-head">

@@ -15,6 +15,7 @@ export type Artifact = {
 };
 
 export type AgentProfile = {
+  shared?: boolean;
   id: string;
   name: string;
   role: string;
@@ -47,6 +48,8 @@ export type ChatActivity = {
 };
 
 export type MessageContext = {
+  userId?: string;
+  userName?: string;
   delegationSessionId?: string;
   parentConversationId?: string;
   taskId?: string;

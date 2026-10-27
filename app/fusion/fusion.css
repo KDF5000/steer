@@ -6336,6 +6336,35 @@ button.ws-chat-response-meta:focus-visible {
   font-size: var(--ws-font-control) !important;
 }
 
+.ws-system-tabs button::after {
+  content: '';
+  position: absolute;
+  right: 1px;
+  bottom: 0;
+  left: 1px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--ws-text);
+  opacity: 0;
+}
+
+.ws-system-tabs button:hover,
+.ws-system-tabs button[aria-selected='true'] {
+  color: var(--ws-text) !important;
+}
+
+.ws-system-tabs button[aria-selected='true'] {
+  font-weight: 600;
+}
+
+.ws-system-tabs button[aria-selected='true']::after {
+  opacity: 1;
+}
+
+.ws-shared-agent-note {
+  margin-bottom: 16px !important;
+}
+
 .ws-agents-table,
 .ws-runtime-table {
   overflow: hidden;
@@ -9127,4 +9156,576 @@ button.ws-chat-response-meta:focus-visible {
   .ws-chat-split[data-keyboard-open='true'] .ws-chatbox-wrap {
     margin-bottom: 0;
   }
+}
+
+/* Account-scoped resource sharing; preserve chat typography. */
+.ws-sharing-page {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+.ws-sharing-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.ws-sharing-heading h1 {
+  font-size: 24px;
+  font-weight: 600;
+}
+.ws-sharing-heading p {
+  color: var(--ws-text-secondary);
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.ws-sharing-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(360px, 100%);
+  margin: 20px 0;
+  border: 1px solid var(--ws-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.ws-sharing-search svg {
+  width: 16px;
+  height: 16px;
+  color: var(--ws-text-tertiary);
+}
+.ws-sharing-search input {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+}
+.ws-sharing-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 4px;
+  border-bottom: 1px solid var(--ws-border);
+}
+.ws-sharing-row > svg {
+  width: 22px;
+  height: 22px;
+  color: var(--ws-text-secondary);
+  flex-shrink: 0;
+}
+.ws-sharing-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.ws-sharing-row strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.ws-sharing-row small {
+  display: block;
+  margin-top: 5px;
+  color: var(--ws-text-tertiary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.ws-sharing-row button svg {
+  width: 16px;
+  height: 16px;
+}
+.ws-sharing-empty {
+  padding: 64px 16px;
+  text-align: center;
+  color: var(--ws-text-secondary);
+  font-size: 13px;
+}
+.ws-sharing-dialog {
+  max-width: 620px !important;
+}
+.ws-sharing-dialog form {
+  display: grid;
+  gap: 14px;
+}
+.ws-sharing-dialog label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--ws-text-secondary);
+}
+.ws-sharing-dialog input,
+.ws-sharing-dialog select,
+.ws-sharing-members select {
+  padding: 8px 10px;
+  background: var(--ws-surface);
+  border: 1px solid var(--ws-border);
+  border-radius: 7px;
+  color: var(--ws-text);
+  font: inherit;
+  width: 100%;
+}
+.ws-sharing-dialog .ws-form-actions {
+  margin-top: 4px;
+}
+.ws-sharing-note {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ws-text-tertiary);
+}
+.ws-sharing-members > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--ws-border);
+  padding: 14px 0;
+}
+.ws-sharing-members > div > span {
+  flex: 1;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.ws-sharing-members small {
+  display: block;
+  font-size: 11px;
+  color: var(--ws-text-tertiary);
+  margin-top: 4px;
+}
+.ws-sharing-members select {
+  width: 120px;
+  font-size: 12px;
+}
+.ws-sharing-scope {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 12px;
+  font-size: 13px;
+}
+.ws-sharing-scope dt {
+  color: var(--ws-text-tertiary);
+}
+.ws-sharing-scope dd {
+  overflow-wrap: anywhere;
+}
+.ws-shared-user-name {
+  display: block;
+  font-size: 11px;
+  color: var(--ws-text-tertiary);
+  margin-bottom: 5px;
+  text-align: right;
+}
+.ws-chat-message.user:has(> .ws-shared-user-name) {
+  flex-direction: column;
+  align-items: flex-end;
+}
+@media (max-width: 767px) {
+  .ws-sharing-heading {
+    gap: 12px;
+  }
+  .ws-sharing-heading h1 {
+    font-size: 21px;
+  }
+  .ws-sharing-row {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .ws-sharing-row > div {
+    flex-basis: calc(100% - 40px);
+  }
+  .ws-sharing-members > div {
+    flex-wrap: wrap;
+  }
+  .ws-sharing-members > div > span {
+    flex-basis: calc(100% - 50px);
+  }
+  .ws-sharing-scope {
+    grid-template-columns: 100px 1fr;
+    gap: 10px;
+  }
+}
+
+/* Approved sharing UI refinement. Chat typography remains unchanged. */
+.ws-collaboration-avatars {
+  display: flex;
+  align-items: center;
+  background: transparent;
+  border: 0;
+  padding: 0 6px 0 0;
+  margin-right: 7px;
+  cursor: pointer;
+}
+.ws-collaboration-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--ws-surface);
+  border-radius: 50%;
+  background: #eef0f5;
+  color: #687080;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.ws-collaboration-avatars .ws-collaboration-avatar + .ws-collaboration-avatar {
+  margin-left: -5px;
+}
+.ws-collaboration-avatar.pending {
+  background: #fafafb;
+  border: 1px dashed #bcc1cc;
+  color: #9299a5;
+}
+.ws-collaboration-avatars .ws-collaboration-avatar.pending {
+  border: 2px dashed #d1d5de;
+}
+.ws-session-shared-marker {
+  width: 12px !important;
+  height: 12px !important;
+  margin-left: auto;
+  color: var(--ws-text-tertiary);
+  flex-shrink: 0;
+}
+.ws-chat-collaboration-trigger {
+  color: var(--ws-text-tertiary);
+  margin-right: 3px;
+}
+.ws-collaboration-tree section {
+  margin: 10px 0 18px;
+}
+.ws-collaboration-project {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 0;
+  color: var(--ws-text-secondary);
+  font-size: 13px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.ws-collaboration-project > svg:first-child {
+  width: 12px;
+  height: 12px;
+  color: var(--ws-text-tertiary);
+}
+.ws-collaboration-project > svg:first-child.is-open {
+  transform: rotate(90deg);
+}
+.ws-collaboration-project > svg:nth-child(2) {
+  width: 16px;
+  height: 16px;
+}
+.ws-collaboration-project strong {
+  font-weight: 500;
+  color: var(--ws-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-collaboration-project > span {
+  font-size: 11px;
+  color: var(--ws-text-tertiary);
+  margin-left: 3px;
+  white-space: nowrap;
+}
+.ws-collaboration-project > small {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ws-text-tertiary);
+  white-space: nowrap;
+}
+.ws-collaboration-sessions {
+  margin: 4px 0 0 20px;
+  border-left: 1px solid var(--ws-border);
+  padding-left: 9px;
+}
+.ws-collaboration-session {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  color: var(--ws-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  min-width: 0;
+}
+.ws-collaboration-session:hover,
+.ws-collaboration-session.is-active {
+  background: var(--ws-sidebar-active);
+  color: var(--ws-text);
+}
+.ws-collaboration-session > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.ws-collaboration-session small {
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--ws-text-tertiary);
+}
+.ws-collaboration-session .pending {
+  color: #80795f;
+}
+.ws-collaboration-session svg {
+  width: 14px;
+  height: 14px;
+}
+.ws-collaboration-tree.compact {
+  margin: 5px 0 9px 4px;
+}
+.ws-collaboration-tree.compact section {
+  margin: 0 0 3px;
+}
+.ws-collaboration-tree.compact .ws-collaboration-project {
+  gap: 5px;
+  padding: 5px 3px;
+  font-size: 12px;
+}
+.ws-collaboration-tree.compact .ws-collaboration-sessions {
+  margin-left: 14px;
+  padding-left: 5px;
+  margin-top: 2px;
+}
+.ws-collaboration-tree.compact .ws-collaboration-session {
+  font-size: 12px;
+  padding: 6px 8px;
+  gap: 5px;
+}
+.ws-collaboration-tree.compact .ws-collaboration-session small {
+  font-size: 10px;
+}
+.ws-agent-state i.ws-agent-pending {
+  background: #b2a78c;
+}
+.ws-sharing-invite-dialog {
+  max-width: 560px !important;
+  padding: 22px 24px;
+  gap: 0;
+}
+.ws-sharing-invite-dialog [data-slot='dialog-title'] {
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 600;
+  padding-right: 20px;
+}
+.ws-sharing-summary {
+  color: var(--ws-text-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 7px 0 20px;
+  line-height: 1.6;
+}
+.ws-sharing-invite-dialog form {
+  gap: 0;
+}
+.ws-sharing-invite-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 94px 60px;
+  align-items: end;
+  gap: 8px;
+}
+.ws-sharing-invite-row label {
+  font-size: 12px;
+  gap: 6px;
+}
+.ws-sharing-invite-row input,
+.ws-sharing-invite-row select,
+.ws-sharing-invite-row > button {
+  height: 36px;
+  font-size: 13px;
+}
+.ws-sharing-invite-row > button {
+  font-size: 12px;
+  padding: 0 12px;
+}
+.ws-sharing-invite-dialog > .ws-sharing-note {
+  font-size: 11px;
+  line-height: 1.6;
+  margin: 9px 0 24px;
+}
+.ws-sharing-invite-dialog > .ws-sharing-note:last-child {
+  margin: 16px 0 0;
+}
+.ws-sharing-member-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--ws-text-secondary);
+}
+.ws-sharing-member-heading small {
+  font-size: 11px;
+  color: var(--ws-text-tertiary);
+}
+.ws-sharing-invite-dialog .ws-sharing-members > div {
+  gap: 9px;
+  padding: 11px 0;
+  border-top: 1px solid #eef0f3;
+}
+.ws-sharing-invite-dialog .ws-sharing-members > div > .ws-collaboration-avatar {
+  flex: 0 0 24px;
+  margin: 0;
+  width: 24px;
+  font-size: 10px;
+  color: #687080;
+}
+.ws-sharing-invite-dialog .ws-sharing-members > div > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+.ws-sharing-members strong {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.7;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-sharing-members strong small {
+  display: inline;
+  font-size: 10px;
+  font-weight: 400;
+  margin-left: 3px;
+}
+.ws-sharing-invite-dialog .ws-sharing-members select {
+  width: 88px;
+  height: 30px;
+  padding: 4px 5px;
+  font-size: 11px;
+  border-color: transparent;
+  color: var(--ws-text-secondary);
+  flex-shrink: 0;
+}
+.ws-sharing-invite-dialog .ws-sharing-members select:hover {
+  border-color: #e5e5e7;
+}
+.ws-sharing-invite-dialog .ws-sharing-members button {
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  flex-shrink: 0;
+}
+.ws-sharing-invite-dialog .ws-sharing-members button svg {
+  width: 13px;
+  height: 13px;
+}
+.ws-sharing-owner > small {
+  padding-right: 29px;
+}
+.ws-agent-share-scope {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.ws-view-link-dialog {
+  max-width: 560px !important;
+}
+.ws-view-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ws-view-link-row input {
+  min-width: 0;
+  flex: 1;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--ws-border);
+  border-radius: 7px;
+}
+.ws-view-link-row button {
+  height: 36px;
+  font-size: 12px;
+}
+.ws-sharing-page > .ws-sharing-note {
+  margin-top: 28px;
+}
+@media (max-width: 767px) {
+  .ws-collaboration-avatars {
+    margin-right: 3px;
+    padding-right: 2px;
+  }
+  .ws-collaboration-avatars .ws-collaboration-avatar {
+    width: 20px;
+    height: 20px;
+    font-size: 9px;
+  }
+  .ws-sharing-invite-dialog {
+    padding: 18px 16px;
+  }
+  .ws-sharing-invite-row {
+    grid-template-columns: minmax(0, 1fr) 82px;
+  }
+  .ws-sharing-invite-row > button {
+    grid-column: 1/-1;
+    justify-self: end;
+    margin-top: 3px;
+  }
+  .ws-sharing-invite-dialog .ws-sharing-members > div {
+    flex-wrap: nowrap;
+    gap: 7px;
+  }
+  .ws-sharing-invite-dialog .ws-sharing-members > div > span:nth-child(2) {
+    flex-basis: auto;
+  }
+  .ws-sharing-invite-dialog .ws-sharing-members select {
+    width: 76px;
+  }
+  .ws-collaboration-session {
+    padding: 9px 7px;
+  }
+  .ws-agent-share-scope {
+    grid-template-columns: minmax(0, 1fr) 90px;
+  }
+}
+.ws-sharing-invite-dialog {
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.ws-sharing-invited-title {
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.ws-collaborative-project-state {
+  display: block;
+  margin: 0;
+  padding: 6px 8px;
+  color: var(--ws-text-tertiary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ws-collaborative-project-state button {
+  display: block;
+  margin-top: 4px;
+  color: var(--ws-text-secondary);
+  cursor: pointer;
+}
+
+.ws-shared-agent-revoked {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--ws-text-tertiary);
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
 }

@@ -27,6 +27,7 @@ var (
 type Store struct{ pool *pgxpool.Pool }
 
 type Agent struct {
+	Shared          bool      `json:"shared,omitempty"`
 	ID              string    `json:"id"`
 	WorkspaceID     string    `json:"workspaceId"`
 	Name            string    `json:"name"`
@@ -50,22 +51,29 @@ type WorkspaceSettings struct {
 }
 
 type Project struct {
-	ID              string     `json:"id"`
-	WorkspaceID     string     `json:"workspaceId"`
-	Name            string     `json:"name"`
-	WorkspaceKind   string     `json:"workspaceKind"`
-	WorkspaceSource string     `json:"workspaceSource"`
-	WorkspaceRef    *string    `json:"workspaceRef"`
-	WorkspaceSubdir *string    `json:"workspaceSubdir"`
-	ExecutionMode   string     `json:"executionMode"`
-	RuntimeID       *string    `json:"runtimeId"`
-	NodeID          *string    `json:"nodeId"`
-	DeletedAt       *time.Time `json:"deletedAt"`
-	CreatedAt       time.Time  `json:"createdAt"`
-	UpdatedAt       time.Time  `json:"updatedAt"`
+	SharedSourceProjectID   *string    `json:"sharedSourceProjectId,omitempty"`
+	SharedSourceWorkspaceID *string    `json:"-"`
+	SharedAgentGrantIDs     []string   `json:"sharedAgentGrantIds,omitempty"`
+	SharedAgentAccess       *string    `json:"sharedAgentAccess,omitempty"`
+	SharedAgentGrantID      *string    `json:"sharedAgentGrantId,omitempty"`
+	ID                      string     `json:"id"`
+	WorkspaceID             string     `json:"workspaceId"`
+	Name                    string     `json:"name"`
+	WorkspaceKind           string     `json:"workspaceKind"`
+	WorkspaceSource         string     `json:"workspaceSource"`
+	WorkspaceRef            *string    `json:"workspaceRef"`
+	WorkspaceSubdir         *string    `json:"workspaceSubdir"`
+	ExecutionMode           string     `json:"executionMode"`
+	RuntimeID               *string    `json:"runtimeId"`
+	NodeID                  *string    `json:"nodeId"`
+	DeletedAt               *time.Time `json:"deletedAt"`
+	CreatedAt               time.Time  `json:"createdAt"`
+	UpdatedAt               time.Time  `json:"updatedAt"`
 }
 
 type Session struct {
+	SharedAgentAccess    *string   `json:"sharedAgentAccess,omitempty"`
+	SharedAgentGrantID   *string   `json:"sharedAgentGrantId,omitempty"`
 	ParentConversationID *string   `json:"parentConversationId,omitempty"`
 	ID                   string    `json:"id"`
 	WorkspaceID          string    `json:"workspaceId"`
@@ -85,11 +93,16 @@ type Session struct {
 
 func scanProject(row pgx.Row) (Project, error) {
 	var project Project
-	err := row.Scan(&project.ID, &project.WorkspaceID, &project.Name, &project.WorkspaceKind, &project.WorkspaceSource, &project.WorkspaceRef, &project.WorkspaceSubdir, &project.ExecutionMode, &project.RuntimeID, &project.NodeID, &project.DeletedAt, &project.CreatedAt, &project.UpdatedAt)
+	err := row.Scan(&project.ID, &project.WorkspaceID, &project.Name, &project.WorkspaceKind, &project.WorkspaceSource, &project.WorkspaceRef, &project.WorkspaceSubdir, &project.ExecutionMode, &project.RuntimeID, &project.NodeID, &project.SharedAgentGrantID, &project.DeletedAt, &project.CreatedAt, &project.UpdatedAt, &project.SharedAgentAccess, &project.SharedSourceProjectID, &project.SharedSourceWorkspaceID, &project.SharedAgentGrantIDs)
 	return project, err
 }
 
-const projectColumns = `id,workspace_id,name,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,runtime_id,node_id,deleted_at,created_at,updated_at`
+const projectGrantFilter = `g.kind='agent' AND g.project_id=projects.shared_source_project_id AND g.workspace_id=projects.shared_source_workspace_id AND g.recipient_user_id=(SELECT owner_user_id FROM workspaces WHERE id=projects.workspace_id)`
+const projectColumns = `id,workspace_id,name,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,runtime_id,node_id,shared_agent_grant_id,deleted_at,created_at,updated_at,
+ CASE WHEN shared_source_project_id IS NULL THEN NULL
+ WHEN EXISTS(SELECT 1 FROM resource_shares g WHERE ` + projectGrantFilter + ` AND g.status='accepted') THEN 'accepted' ELSE 'revoked' END,
+ shared_source_project_id,shared_source_workspace_id,
+ ARRAY(SELECT g.id FROM resource_shares g WHERE ` + projectGrantFilter + ` ORDER BY g.id)`
 
 func (s *Store) Projects(ctx context.Context, wid string) ([]Project, error) {
 	rows, err := s.pool.Query(ctx, `SELECT `+projectColumns+` FROM projects WHERE workspace_id=$1 AND deleted_at IS NULL ORDER BY updated_at DESC`, wid)
@@ -124,7 +137,7 @@ func (s *Store) CreateProject(ctx context.Context, wid string, project Project) 
 }
 
 func (s *Store) UpdateProject(ctx context.Context, wid, id string, project Project) (Project, error) {
-	updated, err := scanProject(s.pool.QueryRow(ctx, `UPDATE projects SET name=$3,workspace_kind=$4,workspace_source=$5,workspace_ref=$6,workspace_subdir=$7,execution_mode=$8,runtime_id=$9,node_id=$10,updated_at=now() WHERE workspace_id=$1 AND id=$2 AND deleted_at IS NULL RETURNING `+projectColumns,
+	updated, err := scanProject(s.pool.QueryRow(ctx, `UPDATE projects SET name=$3,workspace_kind=$4,workspace_source=$5,workspace_ref=$6,workspace_subdir=$7,execution_mode=$8,runtime_id=$9,node_id=$10,updated_at=now() WHERE workspace_id=$1 AND id=$2 AND deleted_at IS NULL AND shared_source_project_id IS NULL RETURNING `+projectColumns,
 		wid, id, project.Name, project.WorkspaceKind, project.WorkspaceSource, project.WorkspaceRef, project.WorkspaceSubdir, project.ExecutionMode, project.RuntimeID, project.NodeID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Project{}, ErrNotFound
@@ -142,6 +155,8 @@ func (s *Store) DeleteProject(ctx context.Context, wid, id string) (Project, err
 
 // MessageContext snapshots authorship and the selected quotation for a turn.
 type MessageContext struct {
+	UserID               string            `json:"userId,omitempty"`
+	UserName             string            `json:"userName,omitempty"`
 	SeenDelegationIDs    []string          `json:"seenDelegationIds,omitempty"`
 	DelegationSessionID  string            `json:"delegationSessionId,omitempty"`
 	ParentConversationID string            `json:"parentConversationId,omitempty"`
@@ -535,14 +550,14 @@ func (s *Store) SharedConversationByToken(ctx context.Context, hash string) (Sha
 	return share, err
 }
 
-const sessionColumns = `id,workspace_id,title,agent_id,project_id,execution_runtime_id,workspace_key,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,parent_conversation_id,created_at,updated_at`
+const sessionColumns = `id,workspace_id,title,agent_id,project_id,execution_runtime_id,workspace_key,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,parent_conversation_id,shared_agent_grant_id,created_at,updated_at,CASE WHEN shared_agent_grant_id IS NULL THEN NULL ELSE COALESCE((SELECT status FROM resource_shares WHERE id=chat_sessions.shared_agent_grant_id),'unavailable') END`
 
 type rowScanner interface {
 	Scan(...any) error
 }
 
 func scanSessionFields(row rowScanner, x *Session) error {
-	return row.Scan(&x.ID, &x.WorkspaceID, &x.Title, &x.AgentID, &x.ProjectID, &x.ExecutionRuntimeID, &x.WorkspaceKey, &x.WorkspaceKind, &x.WorkspaceSource, &x.WorkspaceRef, &x.WorkspaceSubdir, &x.ExecutionMode, &x.ParentConversationID, &x.CreatedAt, &x.UpdatedAt)
+	return row.Scan(&x.ID, &x.WorkspaceID, &x.Title, &x.AgentID, &x.ProjectID, &x.ExecutionRuntimeID, &x.WorkspaceKey, &x.WorkspaceKind, &x.WorkspaceSource, &x.WorkspaceRef, &x.WorkspaceSubdir, &x.ExecutionMode, &x.ParentConversationID, &x.SharedAgentGrantID, &x.CreatedAt, &x.UpdatedAt, &x.SharedAgentAccess)
 }
 
 func (s *Store) EnsureSession(ctx context.Context, wid, sessionID, title, agentID string, projectID, executionRuntimeID, workspaceKey *string, project *Project) (Session, error) {
@@ -556,6 +571,9 @@ func (s *Store) EnsureSession(ctx context.Context, wid, sessionID, title, agentI
 	}
 	_, err := s.pool.Exec(ctx, `INSERT INTO chat_sessions(id,workspace_id,title,agent_id,project_id,execution_runtime_id,workspace_key,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 		ON CONFLICT(id) DO UPDATE SET
+			title=CASE WHEN chat_sessions.shared_agent_grant_id IS NOT NULL
+				AND NOT EXISTS(SELECT 1 FROM messages m WHERE m.session_id=chat_sessions.id)
+				THEN EXCLUDED.title ELSE chat_sessions.title END,
 			execution_runtime_id=COALESCE(chat_sessions.execution_runtime_id, EXCLUDED.execution_runtime_id),
 			workspace_key=COALESCE(chat_sessions.workspace_key, EXCLUDED.workspace_key),
 			workspace_kind=COALESCE(chat_sessions.workspace_kind, EXCLUDED.workspace_kind),
@@ -573,6 +591,14 @@ func (s *Store) EnsureSession(ctx context.Context, wid, sessionID, title, agentI
 		return Session{}, ErrNotFound
 	}
 	return x, err
+}
+
+func (s *Store) UpdateSessionSharedGrant(ctx context.Context, wid, sessionID, grantID string) error {
+	cmd, err := s.pool.Exec(ctx, `UPDATE chat_sessions SET shared_agent_grant_id=$3 WHERE workspace_id=$1 AND id=$2`, wid, sessionID, grantID)
+	if err == nil && cmd.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return err
 }
 
 // UpdateSessionAgent records the Agent selected for the next turn. Runtime and

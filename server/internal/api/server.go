@@ -101,6 +101,13 @@ func (s *Server) decryptCredential(ciphertext []byte) (string, error) {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/resource-shares", s.listResourceShares)
+	mux.HandleFunc("POST /api/v1/resource-shares/{kind}/{id}", s.inviteResource)
+	mux.HandleFunc("POST /api/v1/resource-shares/{id}/accept", s.acceptResourceShare)
+	mux.HandleFunc("POST /api/v1/resource-shares/{id}/conversations", s.createSharedAgentConversation)
+	mux.HandleFunc("DELETE /api/v1/resource-shares/{id}", s.revokeResourceShare)
+	mux.HandleFunc("PUT /api/v1/resource-shares/{id}", s.updateResourceShare)
+	mux.Handle("/api/v1/collaboration-access/{shareID}/{path...}", s.collaborationAccess(mux))
 	mux.HandleFunc("GET /health", s.health)
 	mux.HandleFunc("POST /api/v1/auth/register", s.register)
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
@@ -199,6 +206,14 @@ func (s *Server) chatSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response := map[string]any{"session": session, "messages": messages}
+	if grant, shared := r.Context().Value(collaborationKey{}).(store.ResourceShare); shared {
+		response["sharingPermission"] = grant.Permission
+		if a, err := s.store.Agent(r.Context(), wid, session.AgentID); err == nil {
+			a.Instructions = ""
+			a.WorkspaceSource = nil
+			response["agent"] = a
+		}
+	}
 	if session.ProjectID != nil {
 		if project, projectErr := s.store.Project(r.Context(), wid, *session.ProjectID); projectErr == nil {
 			response["project"] = project
@@ -248,11 +263,21 @@ func (s *Server) bootstrap(w http.ResponseWriter, r *http.Request) {
 		}
 		workspaceName = workspace.Name
 	}
+	if err := s.importAcceptedAgentProjects(ctx, wid); err != nil {
+		writeError(w, err)
+		return
+	}
 	agents, err := s.store.Agents(ctx, wid)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
+	sessionAgents, err := s.store.SharedSessionAgents(ctx, wid)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	agents = append(agents, sessionAgents...)
 	projects, err := s.store.Projects(ctx, wid)
 	if err != nil {
 		writeError(w, err)
@@ -383,6 +408,15 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) updateProject(w http.ResponseWriter, r *http.Request) {
+	existing, err := s.store.Project(r.Context(), s.workspace(r), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if existing.SharedSourceProjectID != nil {
+		writeJSON(w, 403, map[string]string{"error": "Shared projects are managed by their provider and cannot be edited."})
+		return
+	}
 	var project store.Project
 	if err := decodeJSON(r, &project); err != nil {
 		writeError(w, err)
@@ -944,6 +978,12 @@ func (s *Server) streamRunEventsForID(w http.ResponseWriter, r *http.Request, ru
 	flusher.Flush()
 
 	err := s.relay.StreamEvents(r.Context(), runID, after, func(event relay.Event) error {
+		if g, ok := r.Context().Value(collaborationKey{}).(store.ResourceShare); ok {
+			latest, err := s.store.ResourceShare(r.Context(), g.ID)
+			if err != nil || latest.Status == "revoked" {
+				return errors.New("conversation sharing has been revoked")
+			}
+		}
 		encoded, err := json.Marshal(event)
 		if err != nil {
 			return err
@@ -1238,6 +1278,13 @@ func conversationSpeaker(item store.Message) string {
 			return "Assistant (" + item.Context.AgentName + ")"
 		}
 		return "Assistant"
+	}
+	if item.Context != nil && item.Context.UserName != "" {
+		name := truncate(strings.Join(strings.Fields(item.Context.UserName), " "), 80)
+		if item.Context.Delegated {
+			return "User (" + name + ", to " + item.Context.AgentName + ")"
+		}
+		return "User (" + name + ")"
 	}
 	if item.Context != nil && item.Context.Delegated {
 		return "User (to " + item.Context.AgentName + ")"
