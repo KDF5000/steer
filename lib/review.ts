@@ -1,4 +1,5 @@
 import type { RelayEvent } from './domain';
+import { withRuntimeToolEvents } from './runtime-events';
 
 export function runFileChanges(events?: RelayEvent[] | null) {
   let workspaceDiff = '';
@@ -13,7 +14,7 @@ export function runFileChanges(events?: RelayEvent[] | null) {
       patches?: string[];
     }
   >();
-  for (const event of events || []) {
+  for (const event of withRuntimeToolEvents(events)) {
     const data = event.data || {};
     const item =
       data.item && typeof data.item === 'object'

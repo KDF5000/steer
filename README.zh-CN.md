@@ -69,10 +69,13 @@ Node 运行包含 Qoder 适配器的 Relay 版本后，Qoder（`qodercli`）和�
 ## 检查
 
 ```bash
+npm test
 npm run lint
 npm run build
 cd server && go test ./... && go vet ./...
 ```
+
+`npm test` 使用 Node.js 内置测试运行器验证流式客户端，覆盖分片解码、完成信号、取消和异常断流，无需启动后端或 AI Runtime。
 
 ## Vercel 部署
 

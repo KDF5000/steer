@@ -76,10 +76,14 @@ Qoder (`qodercli`) and QwenWork / 千问办公 (`qoderclicn`) appear as the `qod
 ## Checks
 
 ```bash
+npm test
 npm run lint
 npm run build
 cd server && go test ./... && go vet ./...
 ```
+
+`npm test` uses Node.js's built-in test runner to check stream decoding,
+completion, cancellation, and interrupted connections without a backend or AI Runtime.
 
 PostgreSQL workflow tests are opt-in and use a disposable database (never point this at a production database):
 

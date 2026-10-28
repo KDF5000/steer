@@ -70,6 +70,7 @@ import {
 } from './inline-composer';
 import type { TaskMessageOptions } from '@/lib/domain';
 import hljs from 'highlight.js/lib/common';
+import { withRuntimeToolEvents } from '@/lib/runtime-events';
 import 'highlight.js/styles/github.css';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -1369,10 +1370,17 @@ export default function Fusion() {
     )
       return null;
     pollingRun.current = runID;
+    const loadSequence = sessionLoadSequence.current;
+    const requestedWorkspace = steer.workspace();
+    const isCurrent = () =>
+      mounted.current &&
+      activeRun.current === runID &&
+      sessionLoadSequence.current === loadSequence &&
+      steer.workspace() === requestedWorkspace;
     try {
       const taskID = activeTask.current;
       const result = taskID ? await steer.task(taskID) : await steer.run(runID);
-      if (activeRun.current !== runID || !mounted.current) return;
+      if (!isCurrent()) return;
       const terminal = isTerminalStatus(result.run.status);
       const finalDraft = terminal
         ? result.content
@@ -1408,6 +1416,7 @@ export default function Fusion() {
       );
       if (['succeeded', 'failed', 'cancelled'].includes(result.run.status)) {
         const refreshed = await steer.bootstrap().catch(() => null);
+        if (!isCurrent()) return;
         if (refreshed)
           setArtifactList(refreshed.artifacts.map(artifactFromRecord));
         const projectID = activeRunContext.current.project?.id;
@@ -1428,6 +1437,7 @@ export default function Fusion() {
       }
       return result;
     } catch (error) {
+      if (!isCurrent()) return null;
       setNotice(
         error instanceof Error
           ? error.message
@@ -1435,7 +1445,11 @@ export default function Fusion() {
       );
       return null;
     } finally {
-      if (pollingRun.current === runID) pollingRun.current = '';
+      if (
+        pollingRun.current === runID &&
+        sessionLoadSequence.current === loadSequence
+      )
+        pollingRun.current = '';
     }
   }, []);
 
@@ -2042,6 +2056,12 @@ export default function Fusion() {
       return false;
     pendingChatSubmission.current = true;
     const optimisticID = `local-${Date.now()}`;
+    const loadSequence = sessionLoadSequence.current;
+    const requestedWorkspace = steer.workspace();
+    const isCurrent = () =>
+      mounted.current &&
+      sessionLoadSequence.current === loadSequence &&
+      steer.workspace() === requestedWorkspace;
     const startedAt = new Date().toISOString();
     setMessages((current) => [
       ...current,
@@ -2085,6 +2105,7 @@ export default function Fusion() {
         ...(conversationId ? { conversationId } : {}),
         images: images.map((image) => image.file),
       });
+      if (!isCurrent()) return false;
       const persistedAttachments = result.userMessage.attachments?.map(
         (attachment) => ({
           ...attachment,
@@ -2210,6 +2231,7 @@ export default function Fusion() {
       ]);
       return true;
     } catch (error) {
+      if (!isCurrent()) return false;
       setMessages((current) =>
         current.filter((message) => message.id !== optimisticID),
       );
@@ -2816,6 +2838,7 @@ export default function Fusion() {
   const activateWorkspace = async (workspace: WorkspaceRecord) => {
     if (workspace.id === workspaceID) return;
     gettingStartedWorkspace.current = '';
+    sessionLoadSequence.current += 1;
     setLoaded(false);
     workspaceHydrationSequence.current += 1;
     setLoadError('');
@@ -2826,8 +2849,10 @@ export default function Fusion() {
     setMessages([]);
     activeRun.current = '';
     activeTask.current = '';
+    pollingRun.current = '';
     setActiveRunID('');
     setChatWorking(false);
+    setChatSessionLoading(false);
     try {
       await hydrateWorkspace(workspace.id);
     } catch (error) {
@@ -2859,6 +2884,13 @@ export default function Fusion() {
 
   const logout = async () => {
     workspaceHydrationSequence.current += 1;
+    sessionLoadSequence.current += 1;
+    activeRun.current = '';
+    activeTask.current = '';
+    pollingRun.current = '';
+    setActiveRunID('');
+    setChatWorking(false);
+    setChatSessionLoading(false);
     await steer.logout().catch(() => undefined);
     steer.setWorkspace('');
     window.localStorage.removeItem('steer.workspace');
@@ -3884,7 +3916,7 @@ export default function Fusion() {
         </AlertDialogContent>
       </AlertDialog>
       <RuntimeDialog
-        key={`${relayEnrollmentNodeID || 'existing'}:${runtimeDialog ? 'open' : 'closed'}`}
+        key={`runtime:${relayEnrollmentNodeID || 'existing'}:${runtimeDialog ? 'open' : 'closed'}`}
         open={runtimeDialog}
         connected={relayConnected}
         error={relayError}
@@ -9119,7 +9151,7 @@ function responseStatusLabel(message: ChatMessage, now: number) {
 }
 
 function runActivity(events?: RelayEvent[] | null) {
-  for (const event of [...(events || [])].reverse()) {
+  for (const event of withRuntimeToolEvents(events).reverse()) {
     const eventType = event.type.toLowerCase();
     const item = event.data?.item;
     const itemType =
@@ -9207,7 +9239,7 @@ function runActivityLog(
     });
   };
 
-  for (const event of events || []) {
+  for (const event of withRuntimeToolEvents(events)) {
     const eventType = event.type.toLowerCase();
     const data = event.data || {};
     const item =
@@ -9217,7 +9249,7 @@ function runActivityLog(
     const itemType = (typeof item.type === 'string' ? item.type : '')
       .toLowerCase()
       .replace(/[^a-z]/g, '');
-    const id = String(event.sequence);
+    const id = `${event.sequence}:${typeof item.id === 'string' ? item.id : ''}`;
 
     if (eventType === 'attempt.queued') add(id, 'Queued for a Runtime');
     else if (eventType === 'attempt.leased')
@@ -9246,7 +9278,20 @@ function runActivityLog(
       eventType.endsWith('item.started') ||
       eventType.endsWith('item.completed')
     ) {
-      if (itemType.includes('command'))
+      if (item.status === 'failed')
+        add(
+          id,
+          itemType.includes('command')
+            ? 'Command failed'
+            : itemType.includes('filechange')
+              ? 'File update failed'
+              : itemType.includes('search')
+                ? 'Search failed'
+                : 'Tool failed',
+          item.command || item.path || item.query || item.name,
+          'action',
+        );
+      else if (itemType.includes('command'))
         add(
           id,
           eventType.endsWith('item.completed')

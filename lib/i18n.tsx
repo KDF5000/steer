@@ -18,6 +18,10 @@ const storageKey = 'steer.interface-language';
 const languageEvent = 'steer:interface-language';
 
 const zhCN: Record<string, string> = {
+  'Command failed': '命令执行失败',
+  'File update failed': '文件更新失败',
+  'Search failed': '搜索失败',
+  'Tool failed': '工具调用失败',
   'Collaborative projects': '协作项目',
   'Shared project': '共享项目',
   'Access revoked': '授权已收回',
