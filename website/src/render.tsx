@@ -6,7 +6,7 @@ export function render(locale: Locale, appUrl: string) {
   const titleKey =
     'Steer — Different machines. Different agents. One workspace.';
   const descriptionKey =
-    'Steer brings agents and runtimes across your machines into one open-source workspace. Connect Codex, Trae, Claude Code, OpenCode, Pi, Qoder, and QwenWork, run tasks locally or remotely, and organize work through projects and conversations.';
+    'Steer brings agents and runtimes across your machines into one open-source workspace. Connect Codex, Trae, Claude Code, OpenCode, Pi, Qoder, and QwenWork, run tasks locally or remotely, collaborate in shared sessions, and share agents for private project conversations.';
   return {
     title: locale === 'zh' ? homeZhCN[titleKey] : titleKey,
     description: locale === 'zh' ? homeZhCN[descriptionKey] : descriptionKey,

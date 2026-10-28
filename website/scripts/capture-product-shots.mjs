@@ -10,8 +10,8 @@ const { chromium } = await import(
     : 'playwright'
 );
 const output = path.resolve(import.meta.dirname, '../public');
-const now = '2026-10-24T02:24:00.000Z';
-const later = '2026-10-24T02:24:37.000Z';
+const now = '2026-10-28T02:24:00.000Z';
+const later = '2026-10-28T02:24:37.000Z';
 const guidePath = 'docs/getting-started.md';
 const copy = {
   en: {
@@ -68,6 +68,142 @@ const copy = {
           createdAt: now,
           updatedAt: later,
         };
+        let scene = 'workspace';
+        const sharedCopy =
+          locale === 'zh'
+            ? {
+                title: '一起准备发布',
+                request: '已完成实现，帮我检查发布前还需要哪些验证。',
+                reply:
+                  '建议先确认核心流程和部署步骤。\n\n- 验证运行环境连接、项目选择和任务执行。\n- 检查数据库迁移与前后端版本。\n- 最后整理发布说明和回滚步骤。',
+                followup: '我来验证会话协作和智能体共享，请你整理部署清单。',
+                final:
+                  '部署清单已整理：\n\n1. 备份数据库，更新 Steer 前后端。\n2. 确认迁移成功，检查服务健康状态。\n3. 验证共享权限和协作消息同步。\n\n验证结果可以继续补充在这段会话中。',
+                draft: '验证完成后，我们一起确认发布说明。',
+              }
+            : {
+                title: 'Prepare the release together',
+                request:
+                  'Implementation is ready. What should we verify before release?',
+                reply:
+                  'Start with the core workflow and deployment checks.\n\n- Verify Runtime connections, project selection, and task execution.\n- Check database migrations and frontend/backend versions.\n- Prepare release notes and rollback steps.',
+                followup:
+                  'I will test session collaboration and shared Agents. Please prepare the deployment checklist.',
+                final:
+                  'The deployment checklist is ready:\n\n1. Back up the database and update Steer frontend and backend.\n2. Confirm migrations and service health.\n3. Verify sharing permissions and message synchronization.\n\nWe can add our verification results in this conversation.',
+                draft:
+                  'Once verification is done, let’s review the release notes together.',
+              };
+        const shareBase = {
+          ownerId: 'sam',
+          ownerName: 'Sam Chen',
+          recipientEmail: 'alex@example.com',
+          recipientName: 'Alex',
+          permission: 'execute',
+          status: 'accepted',
+          projectId: 'team-project',
+          projectName: 'Release toolkit',
+          projectSource: '/workspace/release-toolkit',
+          projectKind: 'git',
+          runtimeLabel: 'team-machine / Codex',
+          runtimeProvider: 'codex',
+          maxConcurrency: 2,
+          createdAt: now,
+          updatedAt: later,
+        };
+        const shares = [
+          {
+            ...shareBase,
+            id: 'own-session',
+            kind: 'session',
+            resourceId: 'main',
+            owned: true,
+            ownerId: 'demo-user',
+            ownerName: 'Alex',
+            recipientName: 'Sam Chen',
+            recipientEmail: 'sam@example.com',
+            projectId: 'steer',
+            projectName: 'Steer',
+            resourceName: sharedCopy.title,
+          },
+          {
+            ...shareBase,
+            id: 'incoming-session',
+            kind: 'session',
+            resourceId: 'team-session',
+            owned: false,
+            resourceName:
+              locale === 'zh' ? '核对发布清单' : 'Review the release checklist',
+          },
+          ...[
+            ['shared-builder', 'Release Builder', 'Codex', 'gpt-5.4'],
+            [
+              'shared-reviewer',
+              'Code Reviewer',
+              'Claude Code',
+              'claude-sonnet-4-6',
+            ],
+          ].map(([id, name, runtime, model]) => ({
+            ...shareBase,
+            id,
+            kind: 'agent',
+            resourceId: id,
+            resourceName: name,
+            owned: false,
+            runtimeLabel: `team-machine / ${runtime}`,
+            model,
+            agentRole:
+              locale === 'zh'
+                ? '发布与项目验证'
+                : 'Release and project verification',
+          })),
+        ];
+        const collaborationMessages = [
+          {
+            id: 'collab-request',
+            role: 'user',
+            content: sharedCopy.request,
+            status: 'complete',
+            createdAt: now,
+            updatedAt: now,
+            context: { userName: 'Alex', userId: 'demo-user' },
+          },
+          {
+            id: 'collab-answer',
+            role: 'agent',
+            content: sharedCopy.reply,
+            status: 'succeeded',
+            createdAt: now,
+            updatedAt: later,
+            context: {
+              agentId: 'builder',
+              agentName: 'Builder',
+              ownerAgentId: 'builder',
+            },
+          },
+          {
+            id: 'sam-request',
+            role: 'user',
+            content: sharedCopy.followup,
+            status: 'complete',
+            createdAt: now,
+            updatedAt: now,
+            context: { userName: 'Sam Chen', userId: 'sam' },
+          },
+          {
+            id: 'sam-answer',
+            role: 'agent',
+            content: sharedCopy.final,
+            status: 'succeeded',
+            createdAt: now,
+            updatedAt: later,
+            context: {
+              agentId: 'builder',
+              agentName: 'Builder',
+              ownerAgentId: 'builder',
+            },
+          },
+        ];
         const messages = [
           {
             id: 'request',
@@ -117,13 +253,29 @@ const copy = {
               },
               workspaces: [{ id: 'demo', name: 'Steer Demo' }],
             };
+          else if (p.endsWith('/resource-shares')) result = shares;
           else if (p.endsWith('/bootstrap'))
             result = {
               workspace: { id: 'demo', name: 'Steer Demo' },
               agents,
-              projects: [project],
+              projects: [
+                project,
+                {
+                  ...project,
+                  id: 'imported',
+                  name: 'Release toolkit',
+                  workspaceKind: 'git',
+                  workspaceSource: '/workspace/release-toolkit',
+                  sharedSourceProjectId: 'team-project',
+                  sharedAgentGrantIds: ['shared-builder', 'shared-reviewer'],
+                  sharedAgentAccess: 'accepted',
+                },
+              ],
               sessions: [
-                session,
+                {
+                  ...session,
+                  title: scene === 'session' ? sharedCopy.title : session.title,
+                },
                 {
                   ...session,
                   id: 'setup',
@@ -153,7 +305,14 @@ const copy = {
               },
             };
           else if (p.endsWith('/sessions/main'))
-            result = { session, project, messages };
+            result = {
+              session: {
+                ...session,
+                title: scene === 'session' ? sharedCopy.title : session.title,
+              },
+              project,
+              messages: scene === 'session' ? collaborationMessages : messages,
+            };
           else if (p.endsWith('/runs/demo-run'))
             result = {
               run: {
@@ -262,6 +421,44 @@ const copy = {
           console.log(locale, 'handoff', box);
           await page.locator('.ws-chat-page').screenshot({
             path: path.join(output, `steer-handoff-${locale}.png`),
+          });
+          scene = 'session';
+          await page.reload();
+          const expandProject = page.getByRole('button', {
+            name: /(?:Expand|Collapse) conversations for Steer/,
+          });
+          if ((await expandProject.getAttribute('aria-expanded')) !== 'true')
+            await expandProject.click();
+          await page
+            .getByText(sharedCopy.title, { exact: true })
+            .first()
+            .click();
+          await page
+            .locator('.ws-shared-user-name')
+            .filter({ hasText: 'Sam Chen' })
+            .waitFor();
+          await page
+            .getByRole('textbox', { name: 'Message Agent', exact: true })
+            .fill(sharedCopy.draft);
+          await page.evaluate(() => document.fonts.ready);
+          await page.addStyleTag({
+            content: 'nextjs-portal { display: none !important; }',
+          });
+          await page.screenshot({
+            path: path.join(output, `steer-session-${locale}.png`),
+          });
+          await page
+            .getByRole('button', {
+              name: locale === 'zh' ? '智能体' : 'Agents',
+              exact: true,
+            })
+            .click();
+          await page
+            .getByRole('tab', { name: /Shared with me|共享给我/ })
+            .click();
+          await page.getByText('Release Builder', { exact: true }).waitFor();
+          await page.screenshot({
+            path: path.join(output, `steer-agents-${locale}.png`),
           });
         }
         assert.deepEqual(errors, []);

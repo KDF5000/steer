@@ -64,10 +64,10 @@ export const homeZhCN = {
   'Bring Codex, Trae, Claude Code, OpenCode, Pi, Qoder, and QwenWork into one workspace.':
     '把 Codex、Trae、Claude Code、OpenCode、Pi、Qoder 和千问办公接入同一个工作台。',
   QwenWork: '千问办公',
-  'Run tasks on local or remote machines. Organize your work through projects and conversations.':
-    '在本地或远程机器上执行任务，通过项目和会话统一管理工作。',
-  'Steer brings agents and runtimes across your machines into one open-source workspace. Connect Codex, Trae, Claude Code, OpenCode, Pi, Qoder, and QwenWork, run tasks locally or remotely, and organize work through projects and conversations.':
-    'Steer 将不同机器上的 Agent 和 Runtime 接入同一个开源工作台。连接 Codex、Trae、Claude Code、OpenCode、Pi、Qoder 和千问办公，在本地或远程执行任务，通过项目和会话统一管理工作。',
+  'Run tasks on your machines. Collaborate in a session, or share an agent for others to use.':
+    '在自己的机器上执行任务，邀请同事协作，或共享 Agent 供他人使用。',
+  'Steer brings agents and runtimes across your machines into one open-source workspace. Connect Codex, Trae, Claude Code, OpenCode, Pi, Qoder, and QwenWork, run tasks locally or remotely, collaborate in shared sessions, and share agents for private project conversations.':
+    'Steer 将不同机器上的 Agent 和 Runtime 接入同一个开源工作台。连接 Codex、Trae、Claude Code、OpenCode、Pi、Qoder 和千问办公，在本地或远程执行任务，邀请同事参与会话协作，或共享 Agent 供对方开启私人项目会话。',
   'Choose a project. ': '选好项目，',
   'Give your agent a task.': '把具体任务交给 Agent。',
   'Choose a project and an agent': '选择项目和 Agent',
@@ -100,7 +100,7 @@ export const homeZhCN = {
   'Separate changes for each conversation': '不同会话的改动互不干扰',
   'See the process. Keep the result.': '过程看得见，结果留得住。',
   'Preview, download, revisit': '可预览、下载，方便日后查看',
-  'Switch agents or @mention a teammate. Delegate a task in its own session, then bring the result back to the conversation.':
+  'Switch agents or @mention another agent. Delegate a task in its own session, then bring the result back to the conversation.':
     '切换 Agent，或通过 @ 临时委派。任务在独立会话中执行，结果回到当前对话，继续推进。',
   'Start with a task. Review the result, ask follow-up questions, and keep going.':
     '提出任务、查看结果，再接着追问和调整。',
@@ -127,6 +127,44 @@ export const homeZhCN = {
     '项目、对话和文档，一屏查看。',
   'Your agents and machines, brought together.':
     '把你的 Agent 和机器，连接在一起。',
+  Collaboration: '协作与共享',
+  'Work together. Stay in control.': '一起推进工作，保留你的控制权。',
+  'Invite someone into a conversation, or let them use your agent in their own. Your workspace stays personal.':
+    '邀请同事加入对话，或让对方使用你的 Agent 开始自己的工作。工作区始终属于你自己。',
+  'SESSION COLLABORATION': '会话协作',
+  'One conversation. A shared next step.': '同一段对话，一起接着做。',
+  'Invite a colleague by email address to view a session or continue its tasks. Everyone sees the same conversation, results, and who sent each message.':
+    '通过邮箱地址邀请同事查看会话或继续执行任务。双方看到同一段对话和结果，每条消息都标明实际发送者。',
+  'Choose view or execute permission': '选择仅查看或可执行权限',
+  'Continue with the session’s existing agent and project':
+    '沿用会话已有的 Agent 和项目',
+  'Received sessions appear under Collaborative projects':
+    '收到的会话归入侧栏「协作项目」',
+  'Collaborative tasks run one at a time in the same session.':
+    '同一协作会话中的任务依次执行。',
+  'Real interface · colleagues working in one session':
+    '真实界面 · 同事在同一会话中协作',
+  'Real Steer shared conversation with participant authorship and collaborator avatars':
+    '真实 Steer 协作会话：消息标明参与者身份，顶部显示协作者头像',
+  'SHARED AGENTS': '智能体共享',
+  'Share your agent. Let others start their own work.':
+    '共享你的 Agent，让同事独立开展工作。',
+  'Share a configured agent with access to a specific project. After accepting, the recipient can start private conversations using your agent’s instructions, Skills, and Runtime.':
+    '将配置好的 Agent 与指定项目的执行权限共享给同事。接受邀请后，对方可使用你的 Agent 指令、Skills 和 Runtime，开启自己的私人会话。',
+  'Authorized project appears in the recipient’s workspace':
+    '授权项目直接出现在对方工作区',
+  'Choose among shared agents for the same project':
+    '同一项目可选择多个已授权 Agent',
+  'Set concurrency limits and revoke future execution':
+    '设置并发上限，随时收回后续执行权限',
+  'Git conversations use independent worktrees. Local projects use the authorized directory.':
+    'Git 会话使用独立 worktree；本地目录项目使用明确授权的目录。',
+  'Real interface · accepted agents and their authorized projects':
+    '真实界面 · 已接受的 Agent 与授权项目',
+  'Real Steer Shared with me Agent list showing authorized projects and execution access':
+    '真实 Steer「共享给我」智能体列表：展示授权项目和执行权限',
+  'Share only the resource you choose. Your other projects, conversations, and Runtime settings stay private.':
+    '只共享指定资源，其他项目、会话与 Runtime 配置保持私有。',
 } as const;
 
 export type HomeMessage = keyof typeof homeZhCN;

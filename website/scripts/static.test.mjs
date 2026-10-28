@@ -47,7 +47,7 @@ test('both languages are complete HTML documents before JavaScript runs', async 
     }
     assert.ok(!/(_next\/|\/api\/|localhost:8080)/.test(html));
     for (const [, path] of html.matchAll(
-      /(?:src|href)="(\/(?:assets\/[^" ]+|favicon\.svg|steer-handoff-(?:en|zh)\.png|steer-workspace(?:-zh)?(?:-1x)?\.png))"/g,
+      /(?:src|href)="(\/(?:assets\/[^" ]+|favicon\.svg|steer-(?:handoff|session|agents)-(?:en|zh)\.png|steer-workspace(?:-zh)?(?:-1x)?\.png))"/g,
     )) {
       assert.ok((await readFile(resolve(dist, path.slice(1)))).length > 0);
     }
@@ -151,5 +151,39 @@ test('supported runtimes and delegation semantics are present in both languages'
     assert.equal(png.readUInt32BE(16), 2032);
     assert.equal(png.readUInt32BE(20), 1600);
     assert.ok(html.includes(locale === 'zh' ? '独立会话' : 'own session'));
+  }
+});
+
+test('collaboration and shared Agents describe separate scoped workflows', async () => {
+  for (const locale of ['en', 'zh']) {
+    const html = await read(`${locale}/index.html`);
+    for (const term of locale === 'zh'
+      ? [
+          '会话协作',
+          '智能体共享',
+          '私人会话',
+          '仅查看或可执行',
+          '工作区始终属于你自己',
+          '并发上限',
+          'Runtime 配置保持私有',
+        ]
+      : [
+          'SESSION COLLABORATION',
+          'SHARED AGENTS',
+          'private conversations',
+          'view or execute',
+          'Your workspace stays personal',
+          'concurrency limits',
+          'Runtime settings stay private',
+        ]) {
+      assert.ok(html.includes(term), `${locale} missing ${term}`);
+    }
+    assert.match(html, /href="#collaboration"/);
+    for (const scene of ['session', 'agents']) {
+      assert.ok(html.includes(`src="/steer-${scene}-${locale}.png"`));
+      const png = await readFile(resolve(dist, `steer-${scene}-${locale}.png`));
+      assert.equal(png.readUInt32BE(16), 2560);
+      assert.equal(png.readUInt32BE(20), 1600);
+    }
   }
 });

@@ -16,6 +16,8 @@ import {
   Server,
   ShieldCheck,
   Terminal,
+  Users,
+  Bot,
 } from 'lucide-react';
 
 const channels = [
@@ -74,6 +76,7 @@ export default function HomeContent({
         </div>
         <nav className="website_nav" aria-label={t('Main navigation')}>
           <a href="#product">{t('Product')}</a>
+          <a href="#collaboration">{t('Collaboration')}</a>
           <a href="#relay">Relay</a>
           <a href="#channels">{t('Integrations')}</a>
           <a className="website_github" href="https://github.com/KDF5000/steer">
@@ -135,7 +138,7 @@ export default function HomeContent({
             )}
             <br />
             {t(
-              'Run tasks on local or remote machines. Organize your work through projects and conversations.',
+              'Run tasks on your machines. Collaborate in a session, or share an agent for others to use.',
             )}
           </p>
           <div className="website_actions">
@@ -354,7 +357,7 @@ export default function HomeContent({
             <h2>{t('Switch agents. Keep going.')}</h2>
             <p className="website_highlightCopy">
               {t(
-                'Switch agents or @mention a teammate. Delegate a task in its own session, then bring the result back to the conversation.',
+                'Switch agents or @mention another agent. Delegate a task in its own session, then bring the result back to the conversation.',
               )}
             </p>
             <div
@@ -447,9 +450,121 @@ export default function HomeContent({
         </div>
       </section>
 
+      <section
+        className="website_collaboration website_shell"
+        id="collaboration"
+        aria-labelledby="collaboration-title"
+      >
+        <div className="website_sectionHeading">
+          <p className="website_sectionLabel">02 / WORK TOGETHER</p>
+          <h2 id="collaboration-title">
+            {t('Work together. Stay in control.')}
+          </h2>
+          <p>
+            {t(
+              'Invite someone into a conversation, or let them use your agent in their own. Your workspace stays personal.',
+            )}
+          </p>
+        </div>
+        {(
+          [
+            {
+              id: 'session',
+              icon: Users,
+              label: 'SESSION COLLABORATION',
+              title: 'One conversation. A shared next step.',
+              copy: 'Invite a colleague by email address to view a session or continue its tasks. Everyone sees the same conversation, results, and who sent each message.',
+              points: [
+                'Choose view or execute permission',
+                'Continue with the session’s existing agent and project',
+                'Received sessions appear under Collaborative projects',
+              ],
+              note: 'Collaborative tasks run one at a time in the same session.',
+              caption: 'Real interface · colleagues working in one session',
+              alt: 'Real Steer shared conversation with participant authorship and collaborator avatars',
+            },
+            {
+              id: 'agents',
+              icon: Bot,
+              label: 'SHARED AGENTS',
+              title: 'Share your agent. Let others start their own work.',
+              copy: 'Share a configured agent with access to a specific project. After accepting, the recipient can start private conversations using your agent’s instructions, Skills, and Runtime.',
+              points: [
+                'Authorized project appears in the recipient’s workspace',
+                'Choose among shared agents for the same project',
+                'Set concurrency limits and revoke future execution',
+              ],
+              note: 'Git conversations use independent worktrees. Local projects use the authorized directory.',
+              caption:
+                'Real interface · accepted agents and their authorized projects',
+              alt: 'Real Steer Shared with me Agent list showing authorized projects and execution access',
+            },
+          ] as const
+        ).map(
+          ({
+            id,
+            icon: Icon,
+            label,
+            title,
+            copy,
+            points,
+            note,
+            caption,
+            alt,
+          }) => (
+            <article className="website_sharingRow" key={id}>
+              <div className="website_sharingCopy">
+                <p className="website_highlightLabel">
+                  <Icon size={16} />
+                  {t(label)}
+                </p>
+                <h3>{t(title)}</h3>
+                <p>{t(copy)}</p>
+                <ul>
+                  {points.map((point) => (
+                    <li key={point}>
+                      <Check size={15} />
+                      {t(point)}
+                    </li>
+                  ))}
+                </ul>
+                <p className="website_sharingNote">{t(note)}</p>
+              </div>
+              <figure className="website_handoffFigure">
+                <a
+                  href={`/steer-${id}-${locale}.png`}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={t('View full image')}
+                >
+                  <img
+                    src={`/steer-${id}-${locale}.png`}
+                    width={2560}
+                    height={1600}
+                    loading="lazy"
+                    decoding="async"
+                    alt={t(alt)}
+                  />
+                </a>
+                <figcaption>
+                  {t(caption)} · {t('View full image')}{' '}
+                  <ArrowUpRight size={12} />
+                </figcaption>
+              </figure>
+            </article>
+          ),
+        )}
+        <p className="website_sharingBoundary">
+          <ShieldCheck size={15} />
+          {t(
+            'Share only the resource you choose. Your other projects, conversations, and Runtime settings stay private.',
+          )}
+        </p>
+      </section>
+
       <section className="website_relay website_shell" id="relay">
         <div className="website_relayCopy">
-          <p className="website_sectionLabel">02 / POWERED BY RELAY</p>
+          <p className="website_sectionLabel">03 / POWERED BY RELAY</p>
           <h2>
             {t('One place to work.')}
             <br />
@@ -525,7 +640,7 @@ export default function HomeContent({
       <section className="website_channels website_shell" id="channels">
         <div className="website_channelHeading">
           <div>
-            <p className="website_sectionLabel">03 / CONNECT YOUR WAY</p>
+            <p className="website_sectionLabel">04 / CONNECT YOUR WAY</p>
             <h2>
               {t('Work with agents, ')}
               <br />

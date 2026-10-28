@@ -85,9 +85,13 @@ Vercel 仅托管静态官网。Steer Web、Go 后端、PostgreSQL、Relay、飞�
 
 产品亮点区的 `steer-handoff-en.png` / `steer-handoff-zh.png` 是真实工作台聊天区域的 2x 截图：用户引用 Builder 的回复，并通过 @mention 选择同机的 Reviewer，准备在独立会话中委派任务。项目指定机器，Agent 可以使用该机器上已接入工作区的不同 Runtime。截图使用演示任务，不代表已完成真实代码审查。
 
-当前支持的内置 Runtime：Codex、Trae、Claude Code、OpenCode、Pi、Qoder、QwenWork（千问办公）。列表按 Steer 使用的 Relay v0.5.6 核实。
+新增的协作与共享区域使用 `steer-session-en.png` / `steer-session-zh.png` 和 `steer-agents-en.png` / `steer-agents-zh.png`，均为当前工作台的 2560 × 1600 截图。前者展示同一会话的参与者身份与协作者头像，后者展示「共享给我」中的已授权 Agent 与项目。所有姓名、消息与授权均使用虚构数据。
 
-可复用 `scripts/capture-product-shots.mjs` 重新生成六张截图。先启动仓库根目录的 Next 开发服务，再指定地址及本机 Playwright 模块路径：
+会话协作只授予指定会话的查看或执行权限，任务沿用已有 Agent 和项目并串行执行。Agent 共享授予指定项目上的执行能力，接收者开启自己的私人会话。邀请在应用内接受，工作区保持个人所有；官网不宣传尚未实现的评论、讨论或邮件通知功能。
+
+当前支持的内置 Runtime：Codex、Trae、Claude Code、OpenCode、Pi、Qoder、QwenWork（千问办公）。列表按当前 Steer / Relay 的内置适配器核实。
+
+可复用 `scripts/capture-product-shots.mjs` 重新生成十张截图。先启动仓库根目录的 Next 开发服务，再指定地址及本机 Playwright 模块路径：
 
 ```bash
 STEER_CAPTURE_URL=http://localhost:3103/fusion \
