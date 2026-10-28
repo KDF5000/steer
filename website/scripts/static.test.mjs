@@ -164,7 +164,7 @@ test('collaboration and shared Agents describe separate scoped workflows', async
           '私人会话',
           '仅查看或可执行',
           '工作区始终属于你自己',
-          '并发上限',
+          '同时执行的任务上限',
           'Runtime 配置保持私有',
         ]
       : [
@@ -173,7 +173,7 @@ test('collaboration and shared Agents describe separate scoped workflows', async
           'private conversations',
           'view or execute',
           'Your workspace stays personal',
-          'concurrency limits',
+          'Limit concurrent tasks',
           'Runtime settings stay private',
         ]) {
       assert.ok(html.includes(term), `${locale} missing ${term}`);

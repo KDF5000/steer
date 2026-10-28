@@ -153,7 +153,7 @@ export default function HomeContent({
               className="website_secondaryButton"
               href="https://github.com/KDF5000/steer#readme"
             >
-              {t('Self-hosted')} <ArrowUpRight size={15} />
+              {t('Deploy Steer')} <ArrowUpRight size={15} />
             </a>
           </div>
           <p className="website_heroNote">
@@ -189,7 +189,7 @@ export default function HomeContent({
             >
               <img
                 alt={t(
-                  'The real Steer interface with an example project conversation and a generated getting-started guide in the document preview panel',
+                  'Steer workspace with a project conversation and a getting-started guide in the document preview panel',
                 )}
                 className="website_screenshot"
                 width={1280}
@@ -210,8 +210,9 @@ export default function HomeContent({
               {t('Projects, conversations, and documents in one view.')}
             </span>
             <span>
-              {t('Real Steer interface · example task')}{' '}
-              <ArrowUpRight size={12} />
+              <a href={`${screenshot}.png`} target="_blank" rel="noreferrer">
+                {t('View full image')} <ArrowUpRight size={12} />
+              </a>
             </span>
           </figcaption>
         </figure>
@@ -232,7 +233,9 @@ export default function HomeContent({
             <i />
             <strong>{t('QwenWork')}</strong>
           </div>
-          <span className="website_runtimePowered">Connected by Relay</span>
+          <span className="website_runtimePowered">
+            {t('Connected by Relay')}
+          </span>
         </div>
       </section>
 
@@ -357,7 +360,7 @@ export default function HomeContent({
             <h2>{t('Switch agents. Keep going.')}</h2>
             <p className="website_highlightCopy">
               {t(
-                'Switch agents or @mention another agent. Delegate a task in its own session, then bring the result back to the conversation.',
+                'Switch agents in the same conversation, or @mention another agent to delegate a task. Delegated tasks run in their own sessions and return results to the original conversation.',
               )}
             </p>
             <div
@@ -373,7 +376,7 @@ export default function HomeContent({
                 <CheckCheck size={15} />
                 {t('Review agent')}
               </span>
-              <small>{t('Same conversation')}</small>
+              <small>{t('Results return to your conversation')}</small>
             </div>
             <figure className="website_handoffFigure">
               <a
@@ -389,17 +392,20 @@ export default function HomeContent({
                   loading="lazy"
                   decoding="async"
                   alt={t(
-                    'Real Steer conversation with a quoted reply and a same-machine agent selected for delegation',
+                    'Steer conversation with a quoted reply and a same-machine agent selected for delegation',
                   )}
                 />
               </a>
               <figcaption>
-                {t('Real interface · quote and delegate to another agent')}
+                {t('Quote a reply and delegate to another agent')} ·{' '}
+                <a href={handoffScreenshot} target="_blank" rel="noreferrer">
+                  {t('View full image')} <ArrowUpRight size={12} />
+                </a>
               </figcaption>
             </figure>
             <p className="website_handoffNote">
               {t(
-                'Project stays on one machine; choose any connected agent on that machine.',
+                'Choose an available agent on the project’s machine. Delegated tasks use the current working directory.',
               )}
             </p>
           </article>
@@ -424,7 +430,9 @@ export default function HomeContent({
                   <GitBranch size={17} />
                   <span>
                     {t('Git worktree')}
-                    <small>{t('Separate changes for each conversation')}</small>
+                    <small>
+                      {t('Separate Git worktrees for new conversations')}
+                    </small>
                   </span>
                 </span>
               </div>
@@ -473,31 +481,30 @@ export default function HomeContent({
               icon: Users,
               label: 'SESSION COLLABORATION',
               title: 'One conversation. A shared next step.',
-              copy: 'Invite a colleague by email address to view a session or continue its tasks. Everyone sees the same conversation, results, and who sent each message.',
+              copy: 'Invite colleagues by email address to view a session or send follow-up tasks. They accept in Steer and see the same conversation, results, and message authors.',
               points: [
                 'Choose view or execute permission',
                 'Continue with the session’s existing agent and project',
                 'Received sessions appear under Collaborative projects',
               ],
               note: 'Collaborative tasks run one at a time in the same session.',
-              caption: 'Real interface · colleagues working in one session',
-              alt: 'Real Steer shared conversation with participant authorship and collaborator avatars',
+              caption: 'Colleagues working in one session',
+              alt: 'Shared conversation with participant names and collaborator avatars',
             },
             {
               id: 'agents',
               icon: Bot,
               label: 'SHARED AGENTS',
               title: 'Share your agent. Let others start their own work.',
-              copy: 'Share a configured agent with access to a specific project. After accepting, the recipient can start private conversations using your agent’s instructions, Skills, and Runtime.',
+              copy: 'Share a configured agent for a specific project. After accepting, colleagues can start their own private conversations using that agent’s instructions, Skills, and Runtime.',
               points: [
-                'Authorized project appears in the recipient’s workspace',
-                'Choose among shared agents for the same project',
-                'Set concurrency limits and revoke future execution',
+                'The shared project appears in their workspace',
+                'Choose an authorized agent for the same project',
+                'Limit concurrent tasks and revoke access when needed',
               ],
               note: 'Git conversations use independent worktrees. Local projects use the authorized directory.',
-              caption:
-                'Real interface · accepted agents and their authorized projects',
-              alt: 'Real Steer Shared with me Agent list showing authorized projects and execution access',
+              caption: 'Shared agents and authorized projects',
+              alt: 'Shared with me Agent list showing authorized projects and execution access',
             },
           ] as const
         ).map(
@@ -547,8 +554,14 @@ export default function HomeContent({
                   />
                 </a>
                 <figcaption>
-                  {t(caption)} · {t('View full image')}{' '}
-                  <ArrowUpRight size={12} />
+                  {t(caption)} ·{' '}
+                  <a
+                    href={`/steer-${id}-${locale}.png`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t('View full image')} <ArrowUpRight size={12} />
+                  </a>
                 </figcaption>
               </figure>
             </article>
@@ -606,7 +619,7 @@ export default function HomeContent({
             <img src="/favicon.svg" width={29} height={29} alt="" />
             <div>
               <strong>Steer</strong>
-              <span>Conversation · Project · Artifact</span>
+              <span>{t('Conversations · Projects · Results')}</span>
             </div>
             <small>{t('Workspace')}</small>
           </div>
@@ -648,7 +661,7 @@ export default function HomeContent({
             </h2>
           </div>
           <p>
-            {t('Start a task from the web, your team chat, or your own app. ')}
+            {t('Start a task from the web, Feishu, or your own app. ')}
             <br className="website_desktopBreak" />
             {t('Work with the agents and projects you already have in Steer.')}
           </p>
@@ -728,7 +741,7 @@ export default function HomeContent({
         <div className="website_footerBottom">
           <span>© 2026 Steer & Relay</span>
           <span>
-            <Globe2 size={12} /> Open source. On your terms.
+            <Globe2 size={12} /> {t('Open source. On your terms.')}
           </span>
         </div>
       </footer>

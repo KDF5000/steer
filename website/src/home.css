@@ -600,7 +600,7 @@
 .website_handoffFigure {
   margin: 0;
 }
-.website_handoffFigure a {
+.website_handoffFigure > a {
   display: block;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -1500,4 +1500,18 @@
   .website_sharingCopy h3 {
     font-size: 25px;
   }
+}
+
+.website_productVisual figcaption a,
+.website_handoffFigure figcaption a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+}
+.website_productVisual figcaption a:hover,
+.website_handoffFigure figcaption a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
