@@ -40,6 +40,10 @@ import {
   ChevronDown,
   ChevronLeft,
   Pencil,
+  Pin,
+  PinOff,
+  Archive,
+  ArchiveRestore,
   Plus,
   RefreshCw,
   Reply,
@@ -68,6 +72,7 @@ import {
   quotationSummary,
   focusInlineComposer,
 } from './inline-composer';
+import { SessionSearchDialog } from './session-search';
 import type { TaskMessageOptions } from '@/lib/domain';
 import hljs from 'highlight.js/lib/common';
 import { withRuntimeToolEvents } from '@/lib/runtime-events';
@@ -94,14 +99,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
+
 import {
   Dialog,
   DialogContent,
@@ -665,6 +663,8 @@ function SessionNavigationItem({
   active,
   onOpen,
   onDelete,
+  onUpdate,
+  onRename,
   shared = false,
 }: {
   shared?: boolean;
@@ -672,8 +672,11 @@ function SessionNavigationItem({
   active: boolean;
   onOpen: () => void;
   onDelete: () => void;
+  onUpdate: (update: { pinned?: boolean; archived?: boolean }) => void;
+  onRename: () => void;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
+  const { t } = useI18n();
   return (
     <SidebarMenuItem className="ws-session-nav-item">
       <SidebarMenuButton
@@ -685,6 +688,12 @@ function SessionNavigationItem({
         title={session.title}
       >
         <span>{sessionDisplayTitle(session)}</span>
+        {session.pinned && (
+          <Pin className="ws-session-pin" aria-label={t('Pinned')} />
+        )}
+        {session.archived && (
+          <Archive className="ws-session-pin" aria-label={t('Archived')} />
+        )}
         {shared && (
           <Users
             className="ws-session-shared-marker"
@@ -697,14 +706,44 @@ function SessionNavigationItem({
           </span>
         )}
       </SidebarMenuButton>
-      <SidebarMenuAction
-        className="ws-session-delete"
-        aria-label={`Delete ${session.title}`}
-        title="Delete conversation"
-        onClick={onDelete}
-      >
-        <Trash2 aria-hidden="true" />
-      </SidebarMenuAction>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <SidebarMenuAction
+              className="ws-session-actions"
+              aria-label={t('Conversation actions')}
+            />
+          }
+        >
+          <MoreHorizontal aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="start">
+          <DropdownMenuItem
+            onClick={() => onUpdate({ pinned: !session.pinned })}
+          >
+            {session.pinned ? <PinOff /> : <Pin />}
+            {t(session.pinned ? 'Unpin conversation' : 'Pin conversation')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onRename}>
+            <Pencil />
+            {t('Rename conversation')}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onUpdate({ archived: !session.archived })}
+          >
+            {session.archived ? <ArchiveRestore /> : <Archive />}
+            {t(
+              session.archived
+                ? 'Restore conversation'
+                : 'Archive conversation',
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onClick={onDelete}>
+            <Trash2 />
+            {t('Delete conversation')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </SidebarMenuItem>
   );
 }
@@ -717,6 +756,8 @@ function SessionNavigationList({
   onToggleExpanded,
   onOpen,
   onDelete,
+  onUpdate,
+  onRename,
 }: {
   shares?: ResourceShare[];
   sessions: ChatSessionRecord[];
@@ -725,6 +766,11 @@ function SessionNavigationList({
   onToggleExpanded: () => void;
   onOpen: (session: ChatSessionRecord) => void;
   onDelete: (session: ChatSessionRecord) => void;
+  onUpdate: (
+    session: ChatSessionRecord,
+    update: { pinned?: boolean; archived?: boolean },
+  ) => void;
+  onRename: (session: ChatSessionRecord) => void;
 }) {
   const visibleSessions = expanded
     ? sessions
@@ -748,6 +794,8 @@ function SessionNavigationList({
           active={activeSessionID === session.id}
           onOpen={() => onOpen(session)}
           onDelete={() => onDelete(session)}
+          onUpdate={(update) => onUpdate(session, update)}
+          onRename={() => onRename(session)}
         />
       ))}
       {hasMore && (
@@ -843,6 +891,28 @@ export default function Fusion() {
   const [loadError, setLoadError] = useState('');
   const [notice, setNotice] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [sessionSort, setSessionSort] = useState('message');
+  const [showArchived, setShowArchived] = useState(false);
+  const [renamingSession, setRenamingSession] =
+    useState<ChatSessionRecord | null>(null);
+  const [sessionName, setSessionName] = useState('');
+  const [sessionUpdateBusy, setSessionUpdateBusy] = useState(false);
+  const [sessionUpdateError, setSessionUpdateError] = useState('');
+  const [messageFocus, setMessageFocus] = useState<{
+    id: string;
+    revision: number;
+  } | null>(null);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const saved = localStorage.getItem(
+        `steer.sessionSort.v2:${authUser?.id}:${workspaceID}`,
+      );
+      setSessionSort(saved === 'created' ? 'created' : 'message');
+      setShowArchived(false);
+      setMessageFocus(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [authUser?.id, workspaceID]);
   const [agentList, setAgentList] = useState<AgentItem[]>([]);
   const [projectList, setProjectList] = useState<ProjectRecord[]>([]);
   const [projectGitStatuses, setProjectGitStatuses] = useState<
@@ -1026,7 +1096,42 @@ export default function Fusion() {
     return () => cancelAnimationFrame(frame);
   }, [view]);
 
-  const unassignedSessions = chatSessions.filter(
+  useEffect(() => {
+    if (!chatSession || collaborationShare) return;
+    const last = messages.reduce(
+      (latest, message) =>
+        message.createdAt && message.createdAt > latest
+          ? message.createdAt
+          : latest,
+      '',
+    );
+    if (!last) return;
+    const frame = requestAnimationFrame(() =>
+      setChatSessions((current) =>
+        current.map((session) =>
+          session.id === chatSession &&
+          last > (session.lastMessageAt || session.createdAt)
+            ? { ...session, lastMessageAt: last }
+            : session,
+        ),
+      ),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [chatSession, collaborationShare, messages]);
+
+  const navigationSessions = [...chatSessions]
+    .filter((session) => (showArchived ? session.archived : !session.archived))
+    .sort(
+      (a, b) =>
+        Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) ||
+        (sessionSort === 'created'
+          ? b.createdAt.localeCompare(a.createdAt)
+          : (b.lastMessageAt || b.createdAt).localeCompare(
+              a.lastMessageAt || a.createdAt,
+            )) ||
+        a.id.localeCompare(b.id),
+    );
+  const unassignedSessions = navigationSessions.filter(
     (session) =>
       !session.projectId ||
       !projectList.some(
@@ -1591,12 +1696,13 @@ export default function Fusion() {
 
   const openChatSession = useCallback(
     async (sessionID: string, shared?: ResourceShare) => {
+      setMessageFocus(null);
       if (
         sessionID === chatSession &&
         (shared?.id || '') === steer.collaboration()
       ) {
         setView('chat');
-        return;
+        return true;
       }
 
       steer.setCollaboration(shared?.id || '');
@@ -1635,10 +1741,13 @@ export default function Fusion() {
         chatImages.forEach((image) => URL.revokeObjectURL(image.url));
         setChatImages([]);
         if (!shared) {
-          setChatSessions((current) => [
-            data.session,
-            ...current.filter((session) => session.id !== data.session.id),
-          ]);
+          setChatSessions((current) =>
+            current.some((session) => session.id === data.session.id)
+              ? current.map((session) =>
+                  session.id === data.session.id ? data.session : session,
+                )
+              : [...current, data.session],
+          );
         }
         if (shared) {
           setCollaborationSession(data.session);
@@ -1762,6 +1871,7 @@ export default function Fusion() {
           setActiveRunID(runningMessage.runId);
           setChatWorking(true);
         }
+        return true;
       } catch (error) {
         if (loadSequence !== sessionLoadSequence.current || !mounted.current)
           return;
@@ -1771,6 +1881,7 @@ export default function Fusion() {
             ? error.message
             : 'Could not open this conversation.',
         );
+        return false;
       }
     },
     [chatImages, chatSession, chatSessions],
@@ -1987,6 +2098,7 @@ export default function Fusion() {
   };
 
   const startNewChat = (projectID = 'none', authorizedAgentID?: string) => {
+    setMessageFocus(null);
     const authorizedProject = projectList.find(
       (project) => project.id === projectID && project.sharedAgentGrantId,
     );
@@ -2145,6 +2257,7 @@ export default function Fusion() {
             workspaceKey: null,
             createdAt: now,
             updatedAt: now,
+            lastMessageAt: now,
           };
           const existing = current.find((item) => item.id === session.id);
           return [
@@ -2156,6 +2269,7 @@ export default function Fusion() {
                       ? session.title
                       : existing.title,
                   updatedAt: now,
+                  lastMessageAt: now,
                   agentId: currentAgent.id,
                   sharedAgentGrantId:
                     sharedAgentGrant?.id || existing.sharedAgentGrantId,
@@ -2359,6 +2473,32 @@ export default function Fusion() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const updateSessionNavigation = async (
+    session: ChatSessionRecord,
+    update: { title?: string; pinned?: boolean; archived?: boolean },
+  ) => {
+    try {
+      const updated = await steer.updateSession(session.id, update);
+      setChatSessions((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      return true;
+    } catch (error) {
+      const text =
+        error instanceof Error
+          ? error.message
+          : t('Could not update conversation.');
+      setNotice(text);
+      setSessionUpdateError(text);
+      return false;
+    }
+  };
+  const beginRename = (session: ChatSessionRecord) => {
+    setRenamingSession(session);
+    setSessionName(sessionDisplayTitle(session));
+    setSessionUpdateError('');
   };
 
   const deleteSelectedSession = async () => {
@@ -3033,6 +3173,37 @@ export default function Fusion() {
           </SidebarGroup>
           <SidebarGroup className="ws-project-navigation">
             <SidebarGroupLabel>{t('Projects')}</SidebarGroupLabel>
+            <div className="ws-session-navigation-controls">
+              <select
+                aria-label={t('Conversation order')}
+                value={sessionSort}
+                onChange={(event) => {
+                  const sort = event.target.value;
+                  setSessionSort(sort);
+                  localStorage.setItem(
+                    `steer.sessionSort.v2:${authUser?.id}:${workspaceID}`,
+                    sort,
+                  );
+                }}
+              >
+                <option value="message">{t('Latest message')}</option>
+                <option value="created">{t('Newest created')}</option>
+              </select>
+              <button
+                type="button"
+                aria-pressed={showArchived}
+                onClick={() => setShowArchived((v) => !v)}
+                title={t('Archived conversations')}
+              >
+                <Archive size={13} />
+                {t(showArchived ? 'Back to active' : 'Archived')}
+              </button>
+            </div>
+            {showArchived && !navigationSessions.length && (
+              <p className="ws-session-navigation-empty">
+                {t('No archived conversations.')}
+              </p>
+            )}
             <SidebarGroupContent>
               <SidebarMenu>
                 {projectList
@@ -3046,7 +3217,7 @@ export default function Fusion() {
                         )),
                   )
                   .map((project) => {
-                    const projectSessions = chatSessions.filter(
+                    const projectSessions = navigationSessions.filter(
                       (session) => session.projectId === project.id,
                     );
                     const sessionsExpanded = expandedSessionGroups.has(
@@ -3172,6 +3343,10 @@ export default function Fusion() {
                               void openChatSession(session.id)
                             }
                             onDelete={setDeletingSession}
+                            onUpdate={(session, update) =>
+                              void updateSessionNavigation(session, update)
+                            }
+                            onRename={beginRename}
                           />
                         )}
                       </SidebarMenuItem>
@@ -3208,6 +3383,10 @@ export default function Fusion() {
                         }
                         onOpen={(session) => void openChatSession(session.id)}
                         onDelete={setDeletingSession}
+                        onUpdate={(session, update) =>
+                          void updateSessionNavigation(session, update)
+                        }
+                        onRename={beginRename}
                       />
                     )}
                   </SidebarMenuItem>
@@ -3417,6 +3596,7 @@ export default function Fusion() {
           <WorkspaceChatView
             key={chatSession || 'new-chat'}
             sessionId={chatSession}
+            messageFocus={messageFocus}
             agents={
               sharedAgentProject && sharedProjectAgents.length
                 ? sharedProjectAgents
@@ -3745,10 +3925,107 @@ export default function Fusion() {
           </form>
         </DialogContent>
       </Dialog>
-      <SearchDialog
+      <Dialog
+        open={Boolean(renamingSession)}
+        onOpenChange={(open) => {
+          if (!open && !sessionUpdateBusy) setRenamingSession(null);
+        }}
+      >
+        <DialogContent className="ws-workspace-dialog">
+          <DialogTitle>{t('Rename conversation')}</DialogTitle>
+          <DialogDescription>
+            {t('Use a short name that describes the task.')}
+          </DialogDescription>
+          <form
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (!renamingSession || sessionUpdateBusy) return;
+              setSessionUpdateBusy(true);
+              setSessionUpdateError('');
+              if (
+                await updateSessionNavigation(renamingSession, {
+                  title: sessionName.trim(),
+                })
+              )
+                setRenamingSession(null);
+              setSessionUpdateBusy(false);
+            }}
+          >
+            <label>
+              {t('Name')}
+              <input
+                value={sessionName}
+                onChange={(event) => setSessionName(event.target.value)}
+                maxLength={160}
+                required
+              />
+            </label>
+            {sessionUpdateError && (
+              <p role="alert" className="ws-form-error">
+                {sessionUpdateError}
+              </p>
+            )}
+            <div className="ws-form-actions">
+              <button
+                type="button"
+                disabled={sessionUpdateBusy}
+                onClick={() => setRenamingSession(null)}
+              >
+                {t('Cancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={sessionUpdateBusy || !sessionName.trim()}
+              >
+                {t('Save')}
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <SessionSearchDialog
+        key={workspaceID}
+        onSession={async (result) => {
+          let shared: ResourceShare | undefined;
+          if (result.shareId) {
+            shared = (await steer.resourceShares()).find(
+              (share) =>
+                share.id === result.shareId && share.status === 'accepted',
+            );
+            if (!shared)
+              throw new Error(t('Conversation access is no longer available.'));
+          }
+          setMessageFocus(null);
+          if (!(await openChatSession(result.id, shared)))
+            throw new Error(t('Could not open this conversation.'));
+          if (result.messageId)
+            setMessageFocus({ id: result.messageId, revision: Date.now() });
+        }}
         open={searchOpen}
         onOpen={setSearchOpen}
-        projects={projectList}
+        projects={[
+          ...projectList,
+          ...resourceShares
+            .filter(
+              (share) =>
+                share.kind === 'session' &&
+                !share.owned &&
+                share.status === 'accepted' &&
+                share.projectId &&
+                !projectList.some((project) => project.id === share.projectId),
+            )
+            .filter(
+              (share, index, list) =>
+                list.findIndex((item) => item.projectId === share.projectId) ===
+                index,
+            )
+            .map((share) => ({
+              id: share.projectId!,
+              name: share.projectName,
+              deletedAt: null,
+              navigationDisabled: true,
+            })),
+        ]}
         artifacts={artifactList}
         onProject={openProject}
         onArtifact={(index) => {
@@ -4099,6 +4376,7 @@ function WorkspaceChatView(
 }
 
 function ChatView({
+  messageFocus,
   collaborationMembers = [],
   sharingUser = null,
   publicShareAllowed = true,
@@ -4151,6 +4429,7 @@ function ChatView({
   agentSelectionLocked?: boolean;
   sharingLabel?: string;
   onManageSharing?: () => void;
+  messageFocus?: { id: string; revision: number } | null;
   sessionId: string;
   agents: AgentItem[];
   agent?: AgentItem;
@@ -4537,6 +4816,22 @@ function ChatView({
     };
   }, [hasMessages, sessionLoading]);
   useEffect(() => {
+    if (!messageFocus || sessionLoading || !hasMessages) return;
+    followBottom.current = false;
+    const frame = requestAnimationFrame(() => {
+      const element = Array.from(
+        thread.current?.querySelectorAll<HTMLElement>('[data-message-id]') ||
+          [],
+      ).find((node) => node.dataset.messageId === messageFocus.id);
+      if (!element) return;
+      element.scrollIntoView({ block: 'center', behavior: 'instant' });
+      element.classList.remove('ws-message-search-hit');
+      void element.offsetWidth;
+      element.classList.add('ws-message-search-hit');
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [messageFocus, sessionLoading, hasMessages]);
+  useEffect(() => {
     if (!reviewOpen || !previewID) return;
     let cancelled = false;
     steer
@@ -4775,6 +5070,7 @@ function ChatView({
                   return (
                     <div
                       className={`ws-chat-message ${message.role}`}
+                      data-message-id={message.id}
                       key={messageKey}
                     >
                       {showHumanAuthors &&
@@ -8126,91 +8422,6 @@ function SystemSettingsView({
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
-}
-
-function SearchDialog({
-  open,
-  onOpen,
-  projects,
-  artifacts,
-  onProject,
-  onArtifact,
-  onAgents,
-}: {
-  open: boolean;
-  onOpen: (open: boolean) => void;
-  projects: ProjectRecord[];
-  artifacts: Artifact[];
-  onProject: (id: string) => void;
-  onArtifact: (index: number) => void;
-  onAgents: (tab: string) => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpen}>
-      <DialogContent className="ws-search-dialog">
-        <DialogTitle className="sr-only">Search workspace</DialogTitle>
-        <DialogDescription className="sr-only">
-          Search projects, conversations, artifacts, and system pages
-        </DialogDescription>
-        <Command>
-          <CommandInput placeholder="Search projects, artifacts, or pages…" />
-          <CommandList>
-            <CommandEmpty>No results.</CommandEmpty>
-            <CommandGroup heading="Projects">
-              {projects
-                .filter((project) => !project.deletedAt)
-                .map((project) => (
-                  <CommandItem
-                    key={project.id}
-                    onSelect={() => {
-                      onProject(project.id);
-                      onOpen(false);
-                    }}
-                  >
-                    <Folder />
-                    {project.name}
-                  </CommandItem>
-                ))}
-            </CommandGroup>
-            <CommandGroup heading="Workspace">
-              {artifacts.map((artifact, index) => (
-                <CommandItem
-                  key={artifact.id}
-                  onSelect={() => {
-                    onArtifact(index);
-                    onOpen(false);
-                  }}
-                >
-                  <FileText />
-                  {artifact.title}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-            <CommandGroup heading="System">
-              <CommandItem
-                onSelect={() => {
-                  onAgents('agents');
-                  onOpen(false);
-                }}
-              >
-                <Bot />
-                Agents
-              </CommandItem>
-              <CommandItem
-                onSelect={() => {
-                  onAgents('runtimes');
-                  onOpen(false);
-                }}
-              >
-                <Server />
-                Runtimes
-              </CommandItem>
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </DialogContent>
-    </Dialog>
   );
 }
 

@@ -174,6 +174,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/artifacts/{id}/content", s.artifactContent)
 	mux.HandleFunc("GET /api/v1/artifacts/{id}/download", s.artifactContent)
 	mux.HandleFunc("GET /api/v1/sessions/{id}", s.chatSession)
+	mux.HandleFunc("PATCH /api/v1/sessions/{id}/navigation", s.updateChatSession)
+	mux.HandleFunc("GET /api/v1/session-search", s.searchSessions)
 	mux.HandleFunc("POST /api/v1/sessions/{id}/share", s.shareSession)
 	mux.HandleFunc("DELETE /api/v1/sessions/{id}", s.deleteChatSession)
 	mux.HandleFunc("POST /api/v1/messages/{id}/share", s.shareMessage)

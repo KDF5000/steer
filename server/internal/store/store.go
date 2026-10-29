@@ -72,6 +72,9 @@ type Project struct {
 }
 
 type Session struct {
+	LastMessageAt        time.Time `json:"lastMessageAt"`
+	Pinned               bool      `json:"pinned"`
+	Archived             bool      `json:"archived"`
 	SharedAgentAccess    *string   `json:"sharedAgentAccess,omitempty"`
 	SharedAgentGrantID   *string   `json:"sharedAgentGrantId,omitempty"`
 	ParentConversationID *string   `json:"parentConversationId,omitempty"`
@@ -420,7 +423,7 @@ func (s *Store) SetWorkspaceSettings(ctx context.Context, workspaceID string, ag
 }
 
 func (s *Store) Sessions(ctx context.Context, wid string) ([]Session, error) {
-	rows, err := s.pool.Query(ctx, `SELECT `+sessionColumns+` FROM chat_sessions WHERE workspace_id=$1 ORDER BY updated_at DESC`, wid)
+	rows, err := s.pool.Query(ctx, `SELECT `+sessionColumns+` FROM chat_sessions WHERE workspace_id=$1 ORDER BY pinned DESC,last_message_at DESC,created_at DESC,id`, wid)
 	if err != nil {
 		return nil, err
 	}
@@ -550,14 +553,14 @@ func (s *Store) SharedConversationByToken(ctx context.Context, hash string) (Sha
 	return share, err
 }
 
-const sessionColumns = `id,workspace_id,title,agent_id,project_id,execution_runtime_id,workspace_key,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,parent_conversation_id,shared_agent_grant_id,created_at,updated_at,CASE WHEN shared_agent_grant_id IS NULL THEN NULL ELSE COALESCE((SELECT status FROM resource_shares WHERE id=chat_sessions.shared_agent_grant_id),'unavailable') END`
+const sessionColumns = `id,workspace_id,title,agent_id,project_id,execution_runtime_id,workspace_key,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,parent_conversation_id,shared_agent_grant_id,created_at,updated_at,pinned,archived,CASE WHEN shared_agent_grant_id IS NULL THEN NULL ELSE COALESCE((SELECT status FROM resource_shares WHERE id=chat_sessions.shared_agent_grant_id),'unavailable') END,COALESCE((SELECT MAX(m.created_at) FROM messages m WHERE m.workspace_id=chat_sessions.workspace_id AND m.session_id=chat_sessions.id),created_at) AS last_message_at`
 
 type rowScanner interface {
 	Scan(...any) error
 }
 
 func scanSessionFields(row rowScanner, x *Session) error {
-	return row.Scan(&x.ID, &x.WorkspaceID, &x.Title, &x.AgentID, &x.ProjectID, &x.ExecutionRuntimeID, &x.WorkspaceKey, &x.WorkspaceKind, &x.WorkspaceSource, &x.WorkspaceRef, &x.WorkspaceSubdir, &x.ExecutionMode, &x.ParentConversationID, &x.SharedAgentGrantID, &x.CreatedAt, &x.UpdatedAt, &x.SharedAgentAccess)
+	return row.Scan(&x.ID, &x.WorkspaceID, &x.Title, &x.AgentID, &x.ProjectID, &x.ExecutionRuntimeID, &x.WorkspaceKey, &x.WorkspaceKind, &x.WorkspaceSource, &x.WorkspaceRef, &x.WorkspaceSubdir, &x.ExecutionMode, &x.ParentConversationID, &x.SharedAgentGrantID, &x.CreatedAt, &x.UpdatedAt, &x.Pinned, &x.Archived, &x.SharedAgentAccess, &x.LastMessageAt)
 }
 
 func (s *Store) EnsureSession(ctx context.Context, wid, sessionID, title, agentID string, projectID, executionRuntimeID, workspaceKey *string, project *Project) (Session, error) {

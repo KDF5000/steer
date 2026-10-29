@@ -133,6 +133,9 @@ export type ArtifactRecord = {
 };
 
 export type ChatSessionRecord = {
+  lastMessageAt?: string;
+  pinned?: boolean;
+  archived?: boolean;
   sharedAgentGrantId?: string | null;
   sharedAgentAccess?: 'pending' | 'accepted' | 'revoked' | 'unavailable' | null;
   parentConversationId?: string | null;
@@ -149,6 +152,20 @@ export type ChatSessionRecord = {
   executionMode?: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type SessionSearchResult = {
+  id: string;
+  title: string;
+  projectId: string | null;
+  projectName: string;
+  updatedAt: string;
+  archived: boolean;
+  pinned: boolean;
+  shareId?: string;
+  messageId?: string;
+  snippet: string;
+  matchCount: number;
 };
 
 export type ProjectRecord = {
@@ -895,6 +912,19 @@ export const steer = {
       agent?: AgentRecord;
       sharingPermission?: 'view' | 'execute';
     }>(`/sessions/${encodeURIComponent(sessionId)}`),
+  updateSession: (
+    id: string,
+    update: { title?: string; pinned?: boolean; archived?: boolean },
+  ) =>
+    request<ChatSessionRecord>(
+      `/sessions/${encodeURIComponent(id)}/navigation`,
+      { method: 'PATCH', body: JSON.stringify(update) },
+    ),
+  searchSessions: (query: URLSearchParams, signal?: AbortSignal) =>
+    request<{ results: SessionSearchResult[]; hasMore: boolean }>(
+      `/session-search?${query}`,
+      { signal },
+    ),
   deleteSession: (sessionId: string) =>
     request<ChatSessionRecord>(`/sessions/${encodeURIComponent(sessionId)}`, {
       method: 'DELETE',
