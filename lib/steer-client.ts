@@ -452,16 +452,31 @@ async function streamEvents(
     }
   };
 
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done });
-    const blocks = buffer.split(/\r?\n\r?\n/);
-    buffer = blocks.pop() || '';
-    for (const block of blocks) consume(block);
-    if (done) break;
+  try {
+    while (!completed) {
+      signal.throwIfAborted();
+      const { done, value } = await reader.read();
+      signal.throwIfAborted();
+      buffer += decoder.decode(value, { stream: !done });
+      const blocks = buffer.split(/\r?\n\r?\n/);
+      buffer = blocks.pop() || '';
+      for (const block of blocks) {
+        signal.throwIfAborted();
+        consume(block);
+        if (completed) break;
+      }
+      if (done) {
+        if (!completed && buffer.trim()) consume(buffer);
+        break;
+      }
+    }
+    if (!completed) throw new Error('Run event stream ended unexpectedly.');
+  } finally {
+    // Completion is a protocol event; a proxy may keep the body open after it.
+    // Cancel on errors too so failed parses/callbacks do not leak connections.
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
   }
-  if (buffer.trim()) consume(buffer);
-  if (!completed) throw new Error('Run event stream ended unexpectedly.');
 }
 
 const streamRunEvents = (
