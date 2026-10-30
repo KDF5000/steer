@@ -10,15 +10,14 @@ import (
 )
 
 type SessionUpdate struct {
-	Title    *string `json:"title"`
-	Pinned   *bool   `json:"pinned"`
-	Archived *bool   `json:"archived"`
+	Title  *string `json:"title"`
+	Pinned *bool   `json:"pinned"`
 }
 
 // Navigation changes do not change activity timestamps or execution context.
 func (s *Store) UpdateSessionNavigation(ctx context.Context, wid, id string, in SessionUpdate) (Session, error) {
 	var session Session
-	err := scanSessionFields(s.pool.QueryRow(ctx, `UPDATE chat_sessions SET title=COALESCE($3,title),pinned=COALESCE($4,pinned),archived=COALESCE($5,archived) WHERE workspace_id=$1 AND id=$2 RETURNING `+sessionColumns, wid, id, in.Title, in.Pinned, in.Archived), &session)
+	err := scanSessionFields(s.pool.QueryRow(ctx, `UPDATE chat_sessions SET title=COALESCE($3,title),pinned=COALESCE($4,pinned) WHERE workspace_id=$1 AND id=$2 RETURNING `+sessionColumns, wid, id, in.Title, in.Pinned), &session)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = ErrNotFound
 	}
@@ -30,7 +29,6 @@ type SessionSearchInput struct {
 	ProjectID string
 	From      *time.Time
 	To        *time.Time
-	Archive   string
 	Offset    int
 }
 type SessionSearchResult struct {
@@ -39,7 +37,6 @@ type SessionSearchResult struct {
 	ProjectID   *string   `json:"projectId"`
 	ProjectName string    `json:"projectName"`
 	UpdatedAt   time.Time `json:"updatedAt"`
-	Archived    bool      `json:"archived"`
 	Pinned      bool      `json:"pinned"`
 	ShareID     *string   `json:"shareId,omitempty"`
 	MessageID   *string   `json:"messageId,omitempty"`
@@ -62,22 +59,20 @@ func (s *Store) SearchSessions(ctx context.Context, wid string, user User, in Se
  AND ($4='' OR c.project_id=$4)
  AND ($5::timestamptz IS NULL OR c.updated_at >= $5)
  AND ($6::timestamptz IS NULL OR c.updated_at < $6)
- AND ($7='all' OR ($7='archived' AND c.workspace_id=$1 AND c.archived) OR ($7='active' AND (c.workspace_id<>$1 OR NOT c.archived)))
  ) SELECT c.id,c.title,c.project_id,COALESCE(c.project_name,''),c.updated_at,
- CASE WHEN c.workspace_id=$1 THEN c.archived ELSE false END,
  CASE WHEN c.workspace_id=$1 THEN c.pinned ELSE false END,c.share_id,
  hit.id,COALESCE(hit.snippet,''),COALESCE(hit.count,0)::int
  FROM accessible c
  LEFT JOIN LATERAL (
- SELECT m.id,substring(m.content FROM greatest(1,strpos(lower(m.content),$9)-70) FOR 260) AS snippet,count(*) OVER() AS count
+ SELECT m.id,substring(m.content FROM greatest(1,strpos(lower(m.content),$8)-70) FOR 260) AS snippet,count(*) OVER() AS count
  FROM messages m WHERE m.workspace_id=c.workspace_id AND m.session_id=c.id
  AND (m.role='user' OR (m.role='agent' AND m.status IN ('succeeded','complete','completed')))
- AND cardinality($8::text[])>0 AND lower(m.content) LIKE ALL($8::text[])
+ AND cardinality($7::text[])>0 AND lower(m.content) LIKE ALL($7::text[])
  ORDER BY m.created_at DESC,m.id LIMIT 1
  ) hit ON true
- WHERE cardinality($8::text[])=0 OR lower(c.title) LIKE ALL($8::text[]) OR hit.id IS NOT NULL
- ORDER BY (lower(c.title) LIKE ALL($8::text[])) DESC,c.pinned DESC,c.updated_at DESC,c.id
- LIMIT 51 OFFSET $10`, wid, user.ID, user.Email, in.ProjectID, in.From, in.To, in.Archive, patterns, firstSearchTerm(in.Query), in.Offset)
+ WHERE cardinality($7::text[])=0 OR lower(c.title) LIKE ALL($7::text[]) OR hit.id IS NOT NULL
+ ORDER BY (lower(c.title) LIKE ALL($7::text[])) DESC,c.pinned DESC,c.updated_at DESC,c.id
+ LIMIT 51 OFFSET $9`, wid, user.ID, user.Email, in.ProjectID, in.From, in.To, patterns, firstSearchTerm(in.Query), in.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +80,7 @@ func (s *Store) SearchSessions(ctx context.Context, wid string, user User, in Se
 	results := []SessionSearchResult{}
 	for rows.Next() {
 		var x SessionSearchResult
-		if err := rows.Scan(&x.ID, &x.Title, &x.ProjectID, &x.ProjectName, &x.UpdatedAt, &x.Archived, &x.Pinned, &x.ShareID, &x.MessageID, &x.Snippet, &x.MatchCount); err != nil {
+		if err := rows.Scan(&x.ID, &x.Title, &x.ProjectID, &x.ProjectName, &x.UpdatedAt, &x.Pinned, &x.ShareID, &x.MessageID, &x.Snippet, &x.MatchCount); err != nil {
 			return nil, err
 		}
 		results = append(results, x)

@@ -9738,46 +9738,11 @@ button.ws-chat-response-meta:focus-visible {
   white-space: nowrap;
 }
 
-.ws-session-navigation-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  margin: 0 8px 8px;
-  color: #717680;
-  font-size: 11px;
-}
-.ws-session-navigation-controls select,
-.ws-session-navigation-controls button {
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-.ws-session-navigation-controls select {
-  min-width: 0;
-  max-width: 130px;
-}
-.ws-session-navigation-controls button {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-}
-.ws-session-navigation-controls button[aria-pressed='true'] {
-  color: var(--ws-accent);
-}
 .ws-session-pin {
   width: 12px !important;
   height: 12px !important;
   flex-shrink: 0;
   color: #818894;
-}
-.ws-session-navigation-empty {
-  margin: 12px 20px;
-  font-size: 12px;
-  color: #8b9099;
 }
 .ws-session-search-dialog {
   max-width: min(680px, calc(100vw - 32px)) !important;

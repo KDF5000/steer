@@ -42,8 +42,6 @@ import {
   Pencil,
   Pin,
   PinOff,
-  Archive,
-  ArchiveRestore,
   Plus,
   RefreshCw,
   Reply,
@@ -672,7 +670,7 @@ function SessionNavigationItem({
   active: boolean;
   onOpen: () => void;
   onDelete: () => void;
-  onUpdate: (update: { pinned?: boolean; archived?: boolean }) => void;
+  onUpdate: (update: { pinned?: boolean }) => void;
   onRename: () => void;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
@@ -690,9 +688,6 @@ function SessionNavigationItem({
         <span>{sessionDisplayTitle(session)}</span>
         {session.pinned && (
           <Pin className="ws-session-pin" aria-label={t('Pinned')} />
-        )}
-        {session.archived && (
-          <Archive className="ws-session-pin" aria-label={t('Archived')} />
         )}
         {shared && (
           <Users
@@ -728,16 +723,6 @@ function SessionNavigationItem({
             <Pencil />
             {t('Rename conversation')}
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => onUpdate({ archived: !session.archived })}
-          >
-            {session.archived ? <ArchiveRestore /> : <Archive />}
-            {t(
-              session.archived
-                ? 'Restore conversation'
-                : 'Archive conversation',
-            )}
-          </DropdownMenuItem>
           <DropdownMenuItem variant="destructive" onClick={onDelete}>
             <Trash2 />
             {t('Delete conversation')}
@@ -766,10 +751,7 @@ function SessionNavigationList({
   onToggleExpanded: () => void;
   onOpen: (session: ChatSessionRecord) => void;
   onDelete: (session: ChatSessionRecord) => void;
-  onUpdate: (
-    session: ChatSessionRecord,
-    update: { pinned?: boolean; archived?: boolean },
-  ) => void;
+  onUpdate: (session: ChatSessionRecord, update: { pinned?: boolean }) => void;
   onRename: (session: ChatSessionRecord) => void;
 }) {
   const visibleSessions = expanded
@@ -891,8 +873,6 @@ export default function Fusion() {
   const [loadError, setLoadError] = useState('');
   const [notice, setNotice] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
-  const [sessionSort, setSessionSort] = useState('message');
-  const [showArchived, setShowArchived] = useState(false);
   const [renamingSession, setRenamingSession] =
     useState<ChatSessionRecord | null>(null);
   const [sessionName, setSessionName] = useState('');
@@ -904,11 +884,6 @@ export default function Fusion() {
   } | null>(null);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      const saved = localStorage.getItem(
-        `steer.sessionSort.v2:${authUser?.id}:${workspaceID}`,
-      );
-      setSessionSort(saved === 'created' ? 'created' : 'message');
-      setShowArchived(false);
       setMessageFocus(null);
     });
     return () => cancelAnimationFrame(frame);
@@ -1119,18 +1094,14 @@ export default function Fusion() {
     return () => cancelAnimationFrame(frame);
   }, [chatSession, collaborationShare, messages]);
 
-  const navigationSessions = [...chatSessions]
-    .filter((session) => (showArchived ? session.archived : !session.archived))
-    .sort(
-      (a, b) =>
-        Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) ||
-        (sessionSort === 'created'
-          ? b.createdAt.localeCompare(a.createdAt)
-          : (b.lastMessageAt || b.createdAt).localeCompare(
-              a.lastMessageAt || a.createdAt,
-            )) ||
-        a.id.localeCompare(b.id),
-    );
+  const navigationSessions = [...chatSessions].sort(
+    (a, b) =>
+      Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) ||
+      (b.lastMessageAt || b.createdAt).localeCompare(
+        a.lastMessageAt || a.createdAt,
+      ) ||
+      a.id.localeCompare(b.id),
+  );
   const unassignedSessions = navigationSessions.filter(
     (session) =>
       !session.projectId ||
@@ -2477,7 +2448,7 @@ export default function Fusion() {
 
   const updateSessionNavigation = async (
     session: ChatSessionRecord,
-    update: { title?: string; pinned?: boolean; archived?: boolean },
+    update: { title?: string; pinned?: boolean },
   ) => {
     try {
       const updated = await steer.updateSession(session.id, update);
@@ -3173,37 +3144,6 @@ export default function Fusion() {
           </SidebarGroup>
           <SidebarGroup className="ws-project-navigation">
             <SidebarGroupLabel>{t('Projects')}</SidebarGroupLabel>
-            <div className="ws-session-navigation-controls">
-              <select
-                aria-label={t('Conversation order')}
-                value={sessionSort}
-                onChange={(event) => {
-                  const sort = event.target.value;
-                  setSessionSort(sort);
-                  localStorage.setItem(
-                    `steer.sessionSort.v2:${authUser?.id}:${workspaceID}`,
-                    sort,
-                  );
-                }}
-              >
-                <option value="message">{t('Latest message')}</option>
-                <option value="created">{t('Newest created')}</option>
-              </select>
-              <button
-                type="button"
-                aria-pressed={showArchived}
-                onClick={() => setShowArchived((v) => !v)}
-                title={t('Archived conversations')}
-              >
-                <Archive size={13} />
-                {t(showArchived ? 'Back to active' : 'Archived')}
-              </button>
-            </div>
-            {showArchived && !navigationSessions.length && (
-              <p className="ws-session-navigation-empty">
-                {t('No archived conversations.')}
-              </p>
-            )}
             <SidebarGroupContent>
               <SidebarMenu>
                 {projectList

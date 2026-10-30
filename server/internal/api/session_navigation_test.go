@@ -130,24 +130,21 @@ func TestSessionNavigationAndSearch(t *testing.T) {
 		t.Fatal(err)
 	}
 	var updated store.Session
-	if err = json.Unmarshal(call(owner, ow.ID, "PATCH", "/sessions/"+first.ID+"/navigation", `{"title":"Renamed requirement","pinned":true,"archived":true}`, 200), &updated); err != nil {
+	if err = json.Unmarshal(call(owner, ow.ID, "PATCH", "/sessions/"+first.ID+"/navigation", `{"title":"Renamed requirement","pinned":true}`, 200), &updated); err != nil {
 		t.Fatal(err)
 	}
-	if updated.Title != "Renamed requirement" || !updated.Pinned || !updated.Archived || !updated.UpdatedAt.Equal(before.UpdatedAt) || !updated.CreatedAt.Equal(before.CreatedAt) || updated.AgentID != before.AgentID {
+	if updated.Title != "Renamed requirement" || !updated.Pinned || !updated.UpdatedAt.Equal(before.UpdatedAt) || !updated.CreatedAt.Equal(before.CreatedAt) || updated.AgentID != before.AgentID {
 		t.Fatal("navigation update changed execution or timestamps")
 	}
+	// Flags from the retired archive feature must not hide existing history.
+	if _, err := pool.Exec(ctx, `UPDATE chat_sessions SET archived=true WHERE id=$1`, first.ID); err != nil {
+		t.Fatal(err)
+	}
 	results, _ = search(owner, ow.ID, "Renamed", "")
-	if len(results) != 1 || !results[0].Archived {
-		t.Fatal("archived history must stay searchable")
-	}
-	results, _ = search(owner, ow.ID, "Renamed", "&archive=active")
-	if len(results) != 0 {
-		t.Fatal("archive filter failed")
-	}
-	results, _ = search(owner, ow.ID, "Renamed", "&archive=archived")
 	if len(results) != 1 {
-		t.Fatal("archived-only search failed")
+		t.Fatal("previously archived sessions must remain searchable")
 	}
+
 	sessions, err := st.Sessions(ctx, ow.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -155,7 +152,7 @@ func TestSessionNavigationAndSearch(t *testing.T) {
 	if sessions[0].ID != first.ID {
 		t.Fatal("pinned session must lead")
 	}
-	call(owner, ow.ID, "PATCH", "/sessions/"+first.ID+"/navigation", `{"pinned":false,"archived":false}`, 200)
+	call(owner, ow.ID, "PATCH", "/sessions/"+first.ID+"/navigation", `{"pinned":false}`, 200)
 	sessions, err = st.Sessions(ctx, ow.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -233,7 +230,6 @@ func TestSessionNavigationAndSearch(t *testing.T) {
 			t.Fatal("pagination duplicated results")
 		}
 	}
-	call(owner, ow.ID, "GET", "/session-search?archive=invalid", "", 400)
 	call(owner, ow.ID, "GET", "/session-search?from=bad", "", 400)
 	call(owner, ow.ID, "GET", "/session-search?offset=-1", "", 400)
 }

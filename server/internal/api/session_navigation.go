@@ -34,16 +34,9 @@ func (s *Server) updateChatSession(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) searchSessions(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	in := store.SessionSearchInput{Query: strings.TrimSpace(q.Get("q")), ProjectID: q.Get("projectId"), Archive: q.Get("archive")}
+	in := store.SessionSearchInput{Query: strings.TrimSpace(q.Get("q")), ProjectID: q.Get("projectId")}
 	if utf8.RuneCountInString(in.Query) > 200 || len(strings.Fields(in.Query)) > 8 {
 		writeJSON(w, 400, map[string]string{"error": "Search accepts up to 200 characters and 8 terms"})
-		return
-	}
-	if in.Archive == "" {
-		in.Archive = "all"
-	}
-	if in.Archive != "all" && in.Archive != "active" && in.Archive != "archived" {
-		writeJSON(w, 400, map[string]string{"error": "Invalid archive filter"})
 		return
 	}
 	if q.Get("offset") != "" {

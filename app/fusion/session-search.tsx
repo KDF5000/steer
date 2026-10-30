@@ -8,7 +8,6 @@ import {
   LoaderCircle,
   MessageSquare,
   Users,
-  Archive,
   Pin,
 } from 'lucide-react';
 import {
@@ -82,7 +81,6 @@ export function SessionSearchDialog({
   const [query, setQuery] = useState('');
   const [project, setProject] = useState('');
   const [period, setPeriod] = useState('');
-  const [archive, setArchive] = useState('all');
   const [results, setResults] = useState<SessionSearchResult[]>([]);
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(true);
@@ -90,7 +88,7 @@ export function SessionSearchDialog({
   const [opening, setOpening] = useState('');
   const [offset, setOffset] = useState(0);
   const [retry, setRetry] = useState(0);
-  const filterKey = `${query}:${project}:${period}:${archive}`;
+  const filterKey = `${query}:${project}:${period}`;
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
@@ -100,7 +98,6 @@ export function SessionSearchDialog({
       const params = new URLSearchParams({
         q: query,
         projectId: project,
-        archive,
         offset: String(offset),
       });
       if (period)
@@ -136,7 +133,7 @@ export function SessionSearchDialog({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [open, filterKey, offset, retry, query, project, period, archive]);
+  }, [open, filterKey, offset, retry, query, project, period]);
   const change = (action: () => void) => {
     setOffset(0);
     setResults([]);
@@ -202,17 +199,6 @@ export function SessionSearchDialog({
                 <option value="90">{t('Last 90 days')}</option>
               </select>
             </label>
-            <label>
-              <span className="sr-only">{t('Archive filter')}</span>
-              <select
-                value={archive}
-                onChange={(e) => change(() => setArchive(e.target.value))}
-              >
-                <option value="all">{t('Include archived')}</option>
-                <option value="active">{t('Unarchived conversations')}</option>
-                <option value="archived">{t('Archived conversations')}</option>
-              </select>
-            </label>
           </div>
           {error && (
             <div role="alert" className="ws-session-search-state">
@@ -245,9 +231,6 @@ export function SessionSearchDialog({
                         <Highlight text={result.title} query={query} />
                       </span>
                       {result.pinned && <Pin />}
-                      {result.archived && (
-                        <Archive aria-label={t('Archived')} />
-                      )}
                     </strong>
                     <small>
                       {result.projectName || t('No project')} ·{' '}
@@ -294,7 +277,7 @@ export function SessionSearchDialog({
                 </button>
               )}
             </CommandGroup>
-            {!project && !period && archive === 'all' && (
+            {!project && !period && (
               <>
                 <CommandGroup heading={t('Projects')}>
                   {projects

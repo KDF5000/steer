@@ -160,7 +160,6 @@ export type SessionSearchResult = {
   projectId: string | null;
   projectName: string;
   updatedAt: string;
-  archived: boolean;
   pinned: boolean;
   shareId?: string;
   messageId?: string;
@@ -912,10 +911,7 @@ export const steer = {
       agent?: AgentRecord;
       sharingPermission?: 'view' | 'execute';
     }>(`/sessions/${encodeURIComponent(sessionId)}`),
-  updateSession: (
-    id: string,
-    update: { title?: string; pinned?: boolean; archived?: boolean },
-  ) =>
+  updateSession: (id: string, update: { title?: string; pinned?: boolean }) =>
     request<ChatSessionRecord>(
       `/sessions/${encodeURIComponent(id)}/navigation`,
       { method: 'PATCH', body: JSON.stringify(update) },
