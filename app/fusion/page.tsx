@@ -596,6 +596,7 @@ const ProcessTranscript = memo(function ProcessTranscript({
   items: ProcessActivity[];
   live?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <div
       className={`ws-chat-process-transcript${live ? ' is-live' : ''}`}
@@ -607,7 +608,7 @@ const ProcessTranscript = memo(function ProcessTranscript({
           <details className="ws-chat-process-group" key={item.id}>
             <summary>
               <ProcessActionIcon label={item.children[0].label} />
-              <strong>{item.label}</strong>
+              <strong>{t(item.label)}</strong>
               <ChevronRight
                 className="ws-chat-process-group-chevron"
                 aria-hidden="true"
@@ -616,8 +617,8 @@ const ProcessTranscript = memo(function ProcessTranscript({
             <div className="ws-chat-process-group-content">
               {item.children.map((child) => (
                 <div className="ws-chat-process-command" key={child.id}>
-                  <ProcessActionIcon label={child.label} />
-                  <strong>{child.label}</strong>
+                  <ProcessActionIcon label={t(child.label)} />
+                  <strong>{t(child.label)}</strong>
                   {child.detail && (
                     <small title={child.detail}>{child.detail}</small>
                   )}
@@ -637,7 +638,7 @@ const ProcessTranscript = memo(function ProcessTranscript({
             ) : (
               <Wrench aria-hidden="true" />
             )}
-            <strong>{item.label}</strong>
+            <strong>{t(item.label)}</strong>
             {item.detail && <small>{item.detail}</small>}
           </div>
         ),
@@ -5080,7 +5081,7 @@ function ChatView({
                                 className="ws-chat-current-status"
                                 aria-live="polite"
                               >
-                                {message.activity || 'Thinking'}
+                                {t(message.activity || 'Thinking')}
                               </div>
                             )}
                           </div>
@@ -9325,6 +9326,8 @@ function runActivity(events?: RelayEvent[] | null) {
     if (combined.includes('mcp') || combined.includes('tool'))
       return eventType.endsWith('item.started') ? 'Using a tool' : 'Thinking';
     if (combined.includes('reasoning')) return 'Thinking';
+    if (eventType === 'workspace.preparing') return 'Preparing the workspace';
+    if (eventType === 'workspace.prepared') return 'Starting Runtime';
     if (eventType.includes('hook')) return 'Preparing the workspace';
     if (eventType.includes('turn.started')) return 'Thinking';
     if (eventType.includes('runtime') && eventType.includes('started'))
@@ -9406,6 +9409,13 @@ function runActivityLog(
     else if (eventType === 'attempt.leased')
       add(id, 'Runtime reserved', data.node_id);
     else if (eventType === 'attempt.started') add(id, 'Execution started');
+    else if (eventType === 'workspace.preparing')
+      add(
+        id,
+        data.kind === 'git'
+          ? 'Preparing Git workspace'
+          : 'Preparing the workspace',
+      );
     else if (eventType === 'workspace.prepared')
       add(
         id,

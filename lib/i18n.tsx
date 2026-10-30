@@ -18,6 +18,9 @@ const storageKey = 'steer.interface-language';
 const languageEvent = 'steer:interface-language';
 
 const zhCN: Record<string, string> = {
+  'Preparing Git workspace': '正在准备 Git 工作区',
+  'Preparing the workspace': '正在准备工作目录',
+  'Starting Runtime': '正在启动 Runtime',
   'Command failed': '命令执行失败',
   'File update failed': '文件更新失败',
   'Search failed': '搜索失败',
