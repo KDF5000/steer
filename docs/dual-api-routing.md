@@ -109,7 +109,7 @@ Relay Nodes receive the direct IPv6 URL first and the Tunnel URL second during
 one-command enrollment. A Node keeps one active route, switches on transport or
 gateway failure, and periodically probes the preferred direct route for
 recovery. Both URLs must reach this same Relay Server and database. Existing
-v0.5.7 Nodes keep their single configured URL until reinstalled or upgraded.
+Nodes older than v0.5.10 keep their single configured URL until reinstalled or upgraded.
 Do not put an interactive Cloudflare Access login in front of Relay's
 machine-to-machine API without a corresponding service auth design.
 
