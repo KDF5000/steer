@@ -1,9 +1,17 @@
 import type { MessageContext, TaskMessageOptions } from './domain';
 import type { RelayEvent, RelayNode, RelayRun } from '@/lib/domain';
+import { createAPIRouter, readStreamChunk } from './api-routing';
 
-export const steerAPIBaseURL =
-  process.env.NEXT_PUBLIC_STEER_API_URL ?? '/api/v1';
-const baseURL = steerAPIBaseURL;
+export let steerAPIBaseURL = process.env.NEXT_PUBLIC_STEER_API_URL ?? '/api/v1';
+export const steerEnrollmentAPIBaseURL =
+  process.env.NEXT_PUBLIC_STEER_API_FALLBACK_URL ?? steerAPIBaseURL;
+const apiRouter = createAPIRouter({
+  primary: steerAPIBaseURL,
+  fallback: process.env.NEXT_PUBLIC_STEER_API_FALLBACK_URL,
+  onChange: (base) => {
+    steerAPIBaseURL = base;
+  },
+});
 
 let selectedWorkspaceId = '';
 let collaborationScope = '';
@@ -90,7 +98,6 @@ export type FeishuIntegrationInput = {
 };
 
 export type RelayNodeEnrollment = {
-  nodeToken: string;
   token: string;
   nodeId: string;
   expiresAt: string;
@@ -388,6 +395,7 @@ export type Bootstrap = {
   relay: {
     connected: boolean;
     publicUrl: string;
+    fallbackUrls?: string[];
     nodes: RelayNode[];
     error?: string;
   };
@@ -401,7 +409,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set('X-Steer-Workspace', selectedWorkspaceId);
   if (init?.body && !(init.body instanceof FormData))
     headers.set('Content-Type', 'application/json');
-  const response = await fetch(`${baseURL}${path}`, {
+  const response = await apiRouter.fetch(path, {
     ...init,
     headers,
     credentials: 'include',
@@ -426,7 +434,7 @@ async function streamEvents(
   onEvent: (event: RelayEvent) => void,
 ) {
   path = chatPath(path);
-  const response = await fetch(`${baseURL}${path}?after=${after}`, {
+  const response = await apiRouter.fetch(`${path}?after=${after}`, {
     headers: {
       Accept: 'text/event-stream',
       ...(selectedWorkspaceId
@@ -444,6 +452,7 @@ async function streamEvents(
   }
 
   const reader = response.body.getReader();
+  const streamBase = apiRouter.baseURL;
   const decoder = new TextDecoder();
   let buffer = '';
   let completed = false;
@@ -471,7 +480,14 @@ async function streamEvents(
   try {
     while (!completed) {
       signal.throwIfAborted();
-      const { done, value } = await reader.read();
+      let next: ReadableStreamReadResult<Uint8Array>;
+      try {
+        next = await readStreamChunk(reader);
+      } catch (error) {
+        if (!signal.aborted) apiRouter.failed(streamBase);
+        throw error;
+      }
+      const { done, value } = next;
       signal.throwIfAborted();
       buffer += decoder.decode(value, { stream: !done });
       const blocks = buffer.split(/\r?\n\r?\n/);
@@ -486,7 +502,10 @@ async function streamEvents(
         break;
       }
     }
-    if (!completed) throw new Error('Run event stream ended unexpectedly.');
+    if (!completed) {
+      apiRouter.failed(streamBase);
+      throw new Error('Run event stream ended unexpectedly.');
+    }
   } finally {
     // Completion is a protocol event; a proxy may keep the body open after it.
     // Cancel on errors too so failed parses/callbacks do not leak connections.
@@ -902,7 +921,7 @@ export const steer = {
       content: string;
     }>(`/artifacts/${artifactId}/content`),
   artifactDownloadURL: (artifactId: string) =>
-    `${baseURL}${chatPath(`/artifacts/${encodeURIComponent(artifactId)}/download`)}?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`,
+    `${apiRouter.baseURL}${chatPath(`/artifacts/${encodeURIComponent(artifactId)}/download`)}?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`,
   session: (sessionId: string) =>
     request<{
       session: ChatSessionRecord;
@@ -1011,7 +1030,7 @@ export const steer = {
     );
   },
   messageAttachmentURL: (messageId: string, attachmentId: string) =>
-    `${baseURL}${chatPath(`/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`)}?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`,
+    `${apiRouter.baseURL}${chatPath(`/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`)}?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`,
   run: (id: string) =>
     request<{
       run: RelayRun;

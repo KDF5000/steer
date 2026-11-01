@@ -211,6 +211,18 @@ func (s *Store) CreateRelayNodeEnrollment(ctx context.Context, userID, hash, nod
 	return enrollment, err
 }
 
+func (s *Store) PendingRelayNodeEnrollment(ctx context.Context, tokenHash string) (RelayNodeEnrollment, error) {
+	var enrollment RelayNodeEnrollment
+	err := s.pool.QueryRow(ctx, `SELECT id,owner_user_id,token_hash,expires_at,node_id
+		FROM relay_node_enrollments
+		WHERE token_hash=$1 AND consumed_at IS NULL AND expires_at>now()`, tokenHash).
+		Scan(&enrollment.ID, &enrollment.OwnerUserID, &enrollment.TokenHash, &enrollment.ExpiresAt, &enrollment.NodeID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RelayNodeEnrollment{}, ErrNotFound
+	}
+	return enrollment, err
+}
+
 // EnrollRelayNode consumes an installation token and establishes immutable
 // ownership for a physical Node. Re-registration never transfers ownership.
 func (s *Store) EnrollRelayNode(ctx context.Context, tokenHash, nodeID, name string, capacity int, state string, lastSeen time.Time) (RelayNode, error) {
@@ -219,8 +231,10 @@ func (s *Store) EnrollRelayNode(ctx context.Context, tokenHash, nodeID, name str
 		return RelayNode{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	var ownerID string
-	err = tx.QueryRow(ctx, `UPDATE relay_node_enrollments SET consumed_at=now() WHERE token_hash=$1 AND node_id=$2 AND consumed_at IS NULL AND expires_at>now() RETURNING owner_user_id`, tokenHash, nodeID).Scan(&ownerID)
+	var ownerID, enrolledNodeID string
+	err = tx.QueryRow(ctx, `UPDATE relay_node_enrollments SET consumed_at=now()
+		WHERE token_hash=$1 AND ($2='' OR node_id=$2) AND consumed_at IS NULL AND expires_at>now()
+		RETURNING owner_user_id,node_id`, tokenHash, nodeID).Scan(&ownerID, &enrolledNodeID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return RelayNode{}, ErrNotFound
 	}
@@ -232,7 +246,7 @@ func (s *Store) EnrollRelayNode(ctx context.Context, tokenHash, nodeID, name str
 		ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,capacity=EXCLUDED.capacity,state=EXCLUDED.state,last_seen_at=EXCLUDED.last_seen_at,updated_at=now()
 		WHERE relay_nodes.owner_user_id=EXCLUDED.owner_user_id
 		RETURNING id,owner_user_id,name,capacity,state,last_seen_at,created_at,updated_at`,
-		nodeID, ownerID, name, capacity, state, lastSeen).Scan(&node.ID, &node.OwnerUserID, &node.Name, &node.Capacity, &node.State, &node.LastSeenAt, &node.CreatedAt, &node.UpdatedAt)
+		enrolledNodeID, ownerID, name, capacity, state, lastSeen).Scan(&node.ID, &node.OwnerUserID, &node.Name, &node.Capacity, &node.State, &node.LastSeenAt, &node.CreatedAt, &node.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return RelayNode{}, ErrConflict
 	}

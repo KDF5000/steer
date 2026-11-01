@@ -14,8 +14,23 @@ const { outputText } = ts.transpileModule(source, {
     module: ts.ModuleKind.ESNext,
   },
 });
+const routingSource = await readFile(
+  new URL('../lib/api-routing.ts', import.meta.url),
+  'utf8',
+);
+const routingCode = ts.transpileModule(routingSource, {
+  compilerOptions: {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+  },
+}).outputText;
+const routingURL = `data:text/javascript;base64,${Buffer.from(routingCode).toString('base64')}`;
+const clientCode = outputText.replace(
+  "'./api-routing'",
+  JSON.stringify(routingURL),
+);
 const { steer } = await import(
-  `data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`
+  `data:text/javascript;base64,${Buffer.from(clientCode).toString('base64')}`
 );
 
 const encoder = new TextEncoder();
@@ -142,7 +157,7 @@ test('does not deliver queued events after cancellation', async (t) => {
     { name: 'AbortError' },
   );
   assert.deepEqual(events, []);
-  assert.equal(stream.cancelled(), true);
+  assert.equal(stream.fetch.mock.callCount(), 0);
   assert.equal(stream.body.locked, false);
 });
 

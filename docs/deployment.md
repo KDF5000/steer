@@ -70,6 +70,7 @@ postgres:5432/relay ← relay-server
 
 - `RELAY_BASE_URL` defaults to `http://relay-server:8787` inside Compose.
 - `RELAY_PUBLIC_URL` is shown in Runtime onboarding and must be reachable by the machine running Relay Node. Use a LAN address or public HTTPS domain for remote machines.
+- `RELAY_FALLBACK_URL` optionally lists comma-separated fallback URLs for Relay Nodes. Every URL must reach the same Relay control plane and durable store.
 - `RELAY_HOST_TOKEN` lets Steer Server call Relay's host API. It never reaches the browser.
 - `RELAY_NODE_TOKEN` is the server-side root secret for signing Node credentials. Steer never sends this global secret to users; each generated installation command includes a credential scoped to its own Node ID. Existing manually configured Nodes can still use the legacy shared token.
 
@@ -95,6 +96,10 @@ standalone server as an unprivileged user.
 Run `npm run dev` separately only when developing the Web client with hot reload.
 
 ## Vercel frontends and persistent backends
+
+For IPv6 direct access with automatic Cloudflare Tunnel fallback, see
+[dual API routing](dual-api-routing.md), including shared cookie scope,
+safe retries, and stream reconnection.
 
 Create two Vercel projects from this repository:
 
@@ -255,25 +260,15 @@ Open **System → Runtimes → Add Runtime** in Steer:
 The generated command has this form:
 
 ```bash
-RELAY_NODE_ID='node_generated-by-steer'
-RELAY_MACHINE_NAME_JSON=$(hostname | sed 's/\\/\\\\/g; s/"/\\"/g')
 curl -fsSL https://raw.githubusercontent.com/KDF5000/relay/main/install.sh \
-  | RELAY_NODE_TOKEN='relay_node_v1.generated-for-this-node' sh -s -- \
-    --server https://relay.example.com \
-    --node-id "$RELAY_NODE_ID" \
-    --force \
-    --install-service && \
-  curl -fsS -X POST https://steer.example.com/api/v1/relay-node-enrollments/claim \
-    -H 'Content-Type: application/json' \
-    --data-binary "{\"token\":\"steer_enr_...\",\"nodeId\":\"$RELAY_NODE_ID\",\"name\":\"$RELAY_MACHINE_NAME_JSON\",\"capacity\":2}"
+  | sh -s -- --enroll 'https://steer.example.com/api/v1#steer_enr_...'
 ```
 
-Steer generates the stable Node ID before installation. The Relay installer
-uses that ID, then the second request claims the same Node in Steer and uses the
-machine hostname only as its display name. `--force` replaces an existing Relay
-Node configuration so that a re-registration cannot silently keep a different
-Node ID; the installer creates a timestamped backup first. The command's
-`RELAY_NODE_TOKEN` is an automatically issued credential for this Node only;
+Steer generates the stable Node ID before installation. The one-time enrollment
+token lets the installer claim that ID and receive its scoped Node credential,
+preferred Relay URL, and fallback URLs. Enrollment uses the machine hostname as
+the display name, backs up and replaces an existing configuration, and installs
+the background service. The returned `RELAY_NODE_TOKEN` is scoped to this Node;
 users do not need to request a token from an administrator or edit the command.
 Relay stores no per-Node secret: it verifies a signed credential using the root
 secret configured on Relay Server. The installer saves the scoped credential
@@ -284,13 +279,12 @@ to the generated Node ID, and establishes ownership exactly once. It cannot be
 used to claim a different Node. Expiration does not disconnect an installed
 Node, because its Relay credential is persistent.
 
-Deploy Relay Server v0.5.2 or later, which adds `POST /v1/node-credentials`,
-before updating Steer Server and the workbench. Relay v0.5.1 and earlier do
-not include this endpoint. Steer calls this endpoint using its server-side host token and
-returns a clear error when the Relay version or authentication configuration
-cannot issue scoped credentials. No Relay Node protocol or installer upgrade
-is needed for this credential format. Migration `000025` invalidates pending
-legacy enrollment codes; generate a fresh command after upgrading.
+Deploy a Relay release that includes one-command enrollment and multi-server
+Node configuration before enabling this flow in Steer. Steer calls
+`POST /v1/node-credentials` using its server-side host token and returns a clear
+error when Relay authentication cannot issue a scoped credential. Migration
+`000025` invalidates pending legacy enrollment codes; generate a fresh command
+after upgrading.
 
 Keep the Relay Server root secret stable across restarts and replicas.
 Rotating it invalidates all derived Node credentials (and legacy shared

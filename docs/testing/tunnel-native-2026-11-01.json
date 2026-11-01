@@ -1,0 +1,271 @@
+{
+  "date": "2026-11-01",
+  "timezone": "Asia/Shanghai",
+  "clientSharesOriginIPv6Prefix64": true,
+  "endpoint": "/api/v1/health",
+  "method": "fresh curl connection per sample; --noproxy *; direct -6 and tunnel -4",
+  "summary": [
+    {
+      "phase": "before",
+      "route": "ipv6",
+      "success": 6,
+      "attempts": 6,
+      "median_total_ms": 30.2,
+      "min_total_ms": 26.9,
+      "max_total_ms": 56.3,
+      "median_ttfb_ms": 28.6
+    },
+    {
+      "phase": "before",
+      "route": "tunnel",
+      "success": 6,
+      "attempts": 6,
+      "median_total_ms": 1533.3,
+      "min_total_ms": 1153.1,
+      "max_total_ms": 1976.3,
+      "median_ttfb_ms": 1532.7
+    },
+    {
+      "phase": "after",
+      "route": "ipv6",
+      "success": 6,
+      "attempts": 6,
+      "median_total_ms": 35.9,
+      "min_total_ms": 32.8,
+      "max_total_ms": 89.2,
+      "median_ttfb_ms": 35.6
+    },
+    {
+      "phase": "after",
+      "route": "tunnel",
+      "success": 6,
+      "attempts": 6,
+      "median_total_ms": 1637.8,
+      "min_total_ms": 1284.5,
+      "max_total_ms": 2018.8,
+      "median_ttfb_ms": 1637.4
+    }
+  ],
+  "samples": {
+    "before": [
+      {
+        "route": "ipv6",
+        "httpStatus": 200,
+        "connectMs": 11.054,
+        "tlsEstablishedMs": 27.971,
+        "ttfbMs": 49.19,
+        "totalMs": 56.26,
+        "exitCode": 0
+      },
+      {
+        "route": "tunnel",
+        "httpStatus": 200,
+        "connectMs": 241.818,
+        "tlsEstablishedMs": 468.858,
+        "ttfbMs": 1520.438,
+        "totalMs": 1521.071,
+        "exitCode": 0
+      },
+      {
+        "route": "ipv6",
+        "httpStatus": 200,
+        "connectMs": 10.815,
+        "tlsEstablishedMs": 21.21,
+        "ttfbMs": 29.211,
+        "totalMs": 29.416,
+        "exitCode": 0
+      },
+      {
+        "route": "tunnel",
+        "httpStatus": 200,
+        "connectMs": 267.216,
+        "tlsEstablishedMs": 599.745,
+        "ttfbMs": 1975.677,
+        "totalMs": 1976.311,
+        "exitCode": 0
+      },
+      {
+        "route": "ipv6",
+        "httpStatus": 200,
+        "connectMs": 10.498,
+        "tlsEstablishedMs": 19.996,
+        "ttfbMs": 30.309,
+        "totalMs": 33.281,
+        "exitCode": 0
+      },
+      {
+        "route": "tunnel",
+        "httpStatus": 200,
+        "connectMs": 230.852,
+        "tlsEstablishedMs": 500.932,
+        "ttfbMs": 1548.428,
+        "totalMs": 1548.91,
+        "exitCode": 0
+      },
+      {
+        "route": "ipv6",
+        "httpStatus": 200,
+        "connectMs": 7.44,
+        "tlsEstablishedMs": 19.07,
+        "ttfbMs": 26.741,
+        "totalMs": 26.884,
+        "exitCode": 0
+      },
+      {
+        "route": "tunnel",
+        "httpStatus": 200,
+        "connectMs": 225.074,
+        "tlsEstablishedMs": 464.976,
+        "ttfbMs": 1544.997,
+        "totalMs": 1545.616,
+        "exitCode": 0
+      },
+      {
+        "route": "ipv6",
+        "httpStatus": 200,
+        "connectMs": 8.0,
+        "tlsEstablishedMs": 17.948,
+        "ttfbMs": 26.288,
+        "totalMs": 29.433,
+        "exitCode": 0
+      },
+      {
+        "route": "tunnel",
+        "httpStatus": 200,
+        "connectMs": 232.494,
+        "tlsEstablishedMs": 479.006,
+        "ttfbMs": 1160.802,
+        "totalMs": 1161.35,
+        "exitCode": 0
+      },
+      {
+        "route": "ipv6",
+        "httpStatus": 200,
+        "connectMs": 8.98,
+        "tlsEstablishedMs": 20.154,
+        "ttfbMs": 27.972,
+        "totalMs": 30.953,
+        "exitCode": 0
+      },
+      {
+        "route": "tunnel",
+        "httpStatus": 200,
+        "connectMs": 249.301,
+        "tlsEstablishedMs": 471.044,
+        "ttfbMs": 1152.55,
+        "totalMs": 1153.126,
+        "exitCode": 0
+      }
+    ],
+    "after": [
+      {
+        "route": "ipv6",
+        "httpStatus": 200,
+        "connectMs": 12.785,
+        "tlsEstablishedMs": 25.116,
+        "ttfbMs": 36.473,
+        "totalMs": 36.739,
+        "exitCode": 0
+      },
+      {
+        "route": "tunnel",
+        "httpStatus": 200,
+        "connectMs": 261.19,
+        "tlsEstablishedMs": 986.148,
+        "ttfbMs": 2018.551,
+        "totalMs": 2018.819,
+        "exitCode": 0
+      },
+      {
+        "route": "ipv6",
+        "httpStatus": 200,
+        "connectMs": 9.676,
+        "tlsEstablishedMs": 24.62,
+        "ttfbMs": 33.721,
+        "totalMs": 33.968,
+        "exitCode": 0
+      },
+      {
+        "route": "tunnel",
+        "httpStatus": 200,
+        "connectMs": 268.171,
+        "tlsEstablishedMs": 556.459,
+        "ttfbMs": 1628.572,
+        "totalMs": 1628.838,
+        "exitCode": 0
+      },
+      {
+        "route": "ipv6",
+        "httpStatus": 200,
+        "connectMs": 10.622,
+        "tlsEstablishedMs": 20.867,
+        "ttfbMs": 34.802,
+        "totalMs": 35.085,
+        "exitCode": 0
+      },
+      {
+        "route": "tunnel",
+        "httpStatus": 200,
+        "connectMs": 278.158,
+        "tlsEstablishedMs": 595.94,
+        "ttfbMs": 1331.805,
+        "totalMs": 1332.16,
+        "exitCode": 0
+      },
+      {
+        "route": "ipv6",
+        "httpStatus": 200,
+        "connectMs": 67.617,
+        "tlsEstablishedMs": 80.406,
+        "ttfbMs": 88.965,
+        "totalMs": 89.181,
+        "exitCode": 0
+      },
+      {
+        "route": "tunnel",
+        "httpStatus": 200,
+        "connectMs": 325.316,
+        "tlsEstablishedMs": 615.937,
+        "ttfbMs": 1646.27,
+        "totalMs": 1646.704,
+        "exitCode": 0
+      },
+      {
+        "route": "ipv6",
+        "httpStatus": 200,
+        "connectMs": 8.565,
+        "tlsEstablishedMs": 21.252,
+        "ttfbMs": 29.631,
+        "totalMs": 32.801,
+        "exitCode": 0
+      },
+      {
+        "route": "tunnel",
+        "httpStatus": 200,
+        "connectMs": 265.969,
+        "tlsEstablishedMs": 531.911,
+        "ttfbMs": 1284.098,
+        "totalMs": 1284.525,
+        "exitCode": 0
+      },
+      {
+        "route": "ipv6",
+        "httpStatus": 200,
+        "connectMs": 17.79,
+        "tlsEstablishedMs": 32.313,
+        "ttfbMs": 44.488,
+        "totalMs": 44.79,
+        "exitCode": 0
+      },
+      {
+        "route": "tunnel",
+        "httpStatus": 200,
+        "connectMs": 256.906,
+        "tlsEstablishedMs": 524.098,
+        "ttfbMs": 1859.153,
+        "totalMs": 1859.62,
+        "exitCode": 0
+      }
+    ]
+  }
+}

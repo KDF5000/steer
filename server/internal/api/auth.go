@@ -7,7 +7,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -34,6 +36,12 @@ func WithAuthentication(sessionTTL time.Duration) Option {
 	return func(server *Server) {
 		server.authEnabled = true
 		server.sessionTTL = sessionTTL
+	}
+}
+
+func WithSessionCookieDomain(domain string) Option {
+	return func(server *Server) {
+		server.sessionCookieDomain = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(domain), "."))
 	}
 }
 
@@ -252,17 +260,12 @@ func (s *Server) createRelayNodeEnrollment(w http.ResponseWriter, r *http.Reques
 	}
 	rawToken := "steer_enr_" + base64.RawURLEncoding.EncodeToString(random)
 	nodeID := "node_" + uuid.NewString()
-	nodeToken, err := s.issueRelayNodeCredential(r.Context(), nodeID)
-	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
-		return
-	}
 	expiresAt := time.Now().Add(15 * time.Minute)
 	if _, err := s.store.CreateRelayNodeEnrollment(r.Context(), userFromContext(r.Context()).ID, tokenHash(rawToken), nodeID, expiresAt); err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"token": rawToken, "nodeId": nodeID, "nodeToken": nodeToken, "expiresAt": expiresAt})
+	writeJSON(w, http.StatusCreated, map[string]any{"token": rawToken, "nodeId": nodeID, "expiresAt": expiresAt})
 }
 
 func (s *Server) claimRelayNodeEnrollment(w http.ResponseWriter, r *http.Request) {
@@ -279,8 +282,8 @@ func (s *Server) claimRelayNodeEnrollment(w http.ResponseWriter, r *http.Request
 	input.Token = strings.TrimSpace(input.Token)
 	input.NodeID = strings.TrimSpace(input.NodeID)
 	input.Name = strings.TrimSpace(input.Name)
-	if !strings.HasPrefix(input.Token, "steer_enr_") || input.NodeID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "A valid enrollment token and Node ID are required."})
+	if !strings.HasPrefix(input.Token, "steer_enr_") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "A valid enrollment token is required."})
 		return
 	}
 	if input.Name == "" {
@@ -288,6 +291,20 @@ func (s *Server) claimRelayNodeEnrollment(w http.ResponseWriter, r *http.Request
 	}
 	if input.Capacity < 1 || input.Capacity > 32 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Concurrency must be between 1 and 32."})
+		return
+	}
+	enrollment, err := s.store.PendingRelayNodeEnrollment(r.Context(), tokenHash(input.Token))
+	if err != nil || (input.NodeID != "" && input.NodeID != enrollment.NodeID) {
+		if errors.Is(err, store.ErrNotFound) || err == nil {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Enrollment token is invalid, expired, or already used."})
+			return
+		}
+		writeError(w, err)
+		return
+	}
+	nodeToken, err := s.issueRelayNodeCredential(r.Context(), enrollment.NodeID)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
 	}
 	node, err := s.store.EnrollRelayNode(r.Context(), tokenHash(input.Token), input.NodeID, input.Name, input.Capacity, "offline", time.Now().UTC())
@@ -299,7 +316,19 @@ func (s *Server) claimRelayNodeEnrollment(w http.ResponseWriter, r *http.Request
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, node)
+	servers := s.relayNodeURLs()
+	if r.Header.Get("Accept") == "application/vnd.steer.relay-enrollment.v1+text" {
+		w.Header().Set("Content-Type", "application/vnd.steer.relay-enrollment.v1+text")
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = fmt.Fprintln(w, "relay-enrollment-v1")
+		_, _ = fmt.Fprintf(w, "node_id\t%s\nnode_token\t%s\n", node.ID, nodeToken)
+		for _, server := range servers {
+			_, _ = fmt.Fprintf(w, "server\t%s\n", server)
+		}
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"node": node, "nodeId": node.ID, "nodeToken": nodeToken, "servers": servers})
 }
 
 func (s *Server) listOwnedRelayNodes(w http.ResponseWriter, r *http.Request) {
@@ -497,7 +526,16 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, value 
 	if value == "" {
 		maxAge = -1
 	}
-	http.SetCookie(w, &http.Cookie{Name: authCookieName, Value: value, Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode, Expires: expires, MaxAge: maxAge})
+	domain := ""
+	u, _ := url.Parse("http://" + r.Host)
+	if u != nil {
+		host := strings.ToLower(u.Hostname())
+		if candidate := s.sessionCookieDomain; candidate != "" &&
+			(host == candidate || strings.HasSuffix(host, "."+candidate)) {
+			domain = candidate
+		}
+	}
+	http.SetCookie(w, &http.Cookie{Name: authCookieName, Value: value, Domain: domain, Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode, Expires: expires, MaxAge: maxAge})
 }
 
 func tokenHash(token string) string {
@@ -515,7 +553,7 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/health" || r.URL.Path == "/api/v1/auth/register" || r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/relay-node-enrollments/claim" || (r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/shares/")) {
+		if r.URL.Path == "/health" || r.URL.Path == "/api/v1/health" || r.URL.Path == "/api/v1/auth/register" || r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/relay-node-enrollments/claim" || (r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/shares/")) {
 			next.ServeHTTP(w, r)
 			return
 		}
