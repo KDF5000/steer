@@ -143,6 +143,27 @@ test('reads retry once after a network failure, preserving credentials and curso
   assert.equal(requests[1][1].headers['X-Steer-Workspace'], 'w');
 });
 
+test('a fallback failure never sends traffic back to an unproven direct route', async () => {
+  const calls = [];
+  const router = createAPIRouter({
+    ...config,
+    fetch: async (url) => {
+      calls.push(url);
+      if (url === `${primary}/health`) throw new TypeError('no IPv6');
+      if (url === `${fallback}/health`) return healthy();
+      if (url.startsWith(fallback)) throw new TypeError('slow tunnel failed');
+      throw new Error('direct request must not be retried');
+    },
+  });
+  await assert.rejects(router.fetch('/sessions/shared'), /slow tunnel failed/);
+  assert.equal(router.baseURL, fallback);
+  assert.deepEqual(calls, [
+    `${primary}/health`,
+    `${fallback}/health`,
+    `${fallback}/sessions/shared`,
+  ]);
+});
+
 test('writes without an idempotency key are never replayed', async () => {
   let writes = 0;
   const router = createAPIRouter({

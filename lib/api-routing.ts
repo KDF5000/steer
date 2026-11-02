@@ -44,6 +44,7 @@ export function createAPIRouter(options: RoutingOptions) {
   let generation = 0;
 
   function select(base: string) {
+    if (base === fallback && active !== fallback) lastRecovery = Date.now();
     active = base;
     selected = true;
     options.onChange?.(base);
@@ -135,10 +136,22 @@ export function createAPIRouter(options: RoutingOptions) {
   }
 
   function failed(base: string) {
-    if (!enabled || base !== active) return;
+    // A failing fallback is not evidence that the preferred route recovered.
+    // Keep the circuit on fallback until its independent health probe proves
+    // direct access is usable; otherwise concurrent requests oscillate between
+    // two bad routes and create a preflight storm in IPv4-only browsers.
+    if (!enabled || base !== active || base !== primary) return;
     generation++;
     lastRecovery = Date.now();
-    select(base === primary ? fallback! : primary);
+    select(fallback!);
+  }
+
+  function retryTarget(base: string) {
+    if (base === primary) return fallback;
+    // A preferred-route recovery probe may have succeeded while an older
+    // fallback request was still in flight. Only that proven state permits a
+    // retry from fallback to primary.
+    return active !== base ? active : undefined;
   }
 
   function retryable(init?: RequestInit) {
@@ -188,16 +201,19 @@ export function createAPIRouter(options: RoutingOptions) {
         if (!enabled || ![502, 503, 504].includes(response.status))
           return response;
         failed(base);
-        if (!canRetry) return response;
+        const target = retryTarget(base);
+        if (!canRetry || !target) return response;
         await response.body?.cancel().catch(() => {});
+        return fetchFrom(target, path, init);
       } catch (error) {
         if (!enabled || init?.signal?.aborted) throw error;
         failed(base);
         // Writes without an idempotency key may already have been committed.
         if (!canRetry) throw error;
+        const target = retryTarget(base);
+        if (!target) throw error;
+        return fetchFrom(target, path, init);
       }
-      init?.signal?.throwIfAborted();
-      return fetchFrom(base === primary ? fallback! : primary, path, init);
     },
   };
 }
