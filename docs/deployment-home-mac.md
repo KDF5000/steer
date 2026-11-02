@@ -2,8 +2,8 @@
 
 Updated 2026-10-31: production now uses [IPv6 direct access with automatic Tunnel
 fallback](dual-api-routing.md). The browser prefers
-`https://direct.api.pcursor.run:8443/api/v1`, falls back to
-`https://api.pcursor.run/api/v1`, and new Node enrollment uses
+`https://steer-direct.pcursor.run:8843/api/v1`, falls back to
+`https://steer-api.pcursor.run/api/v1`, and new Node enrollment uses
 `https://relay.pcursor.run`. Earlier direct endpoints below remain for backward
 compatibility. New API hostnames require users to sign in once.
 
@@ -23,12 +23,12 @@ Host: `kongdefei@192.168.31.128`.
 Checkout: `/Users/kongdefei/Documents/workspace/steer`.
 Compose project: `steer-production`.
 
-| Service | Host binding | Public endpoint |
-| --- | --- | --- |
-| Steer Server | `127.0.0.1:18080` | `https://steer-server.pcursor.run:8443` |
-| Relay Server v0.5.10 | `127.0.0.1:18787` | `https://relay-server.pcursor.run:8443` |
-| PostgreSQL 17 | `127.0.0.1:54329` | None |
-| Steer Web | Vercel `steer-workbench` | `https://steer-console.pcursor.run` |
+| Service              | Host binding             | Public endpoint                                                                            |
+| -------------------- | ------------------------ | ------------------------------------------------------------------------------------------ |
+| Steer Server         | `127.0.0.1:18080`        | `https://steer-direct.pcursor.run:8843` (direct), `https://steer-api.pcursor.run` (Tunnel) |
+| Relay Server v0.5.10 | `127.0.0.1:18787`        | `https://relay-server.pcursor.run:8443`                                                    |
+| PostgreSQL 17        | `127.0.0.1:54329`        | None                                                                                       |
+| Steer Web            | Vercel `steer-workbench` | `https://steer-console.pcursor.run`                                                        |
 
 The existing cn-proxy, Immich, and legacy `realy` deployment retain their
 ports and data. The new deployment has independent PostgreSQL and artifact
@@ -60,24 +60,26 @@ volume; backing up the checkout alone does not preserve application data.
 
 ## DNS and HTTPS
 
-The two backend names are DNS-only CNAMEs to
-`glot-cn.pcursor.run`. The existing `com.glot.cloudflare-ddns` daemon updates
-that target's IPv6 AAAA record every 300 seconds, so the new names follow the
-same DDNS without another token or updater.
+The direct backend name is a DNS-only CNAME to `glot-cn.pcursor.run`. The
+existing `com.glot.cloudflare-ddns` daemon updates that target's IPv6 AAAA
+record every 300 seconds, so the direct name follows the same DDNS without
+another token or updater. The fallback name is a proxied CNAME for the
+`steer-production` Cloudflare Tunnel.
 
-`/Users/kongdefei/glot-proxy/Caddyfile` contains two additional virtual hosts
-on the existing port 8443. A timestamped `Caddyfile.backup-steer-*` preserves
+`/Users/kongdefei/glot-proxy/Caddyfile` contains the Steer direct virtual host
+on port 8843. A timestamped `Caddyfile.backup-steer-*` preserves
 the previous configuration. Caddy obtains and renews certificates through the
 existing Cloudflare DNS provider credentials. The new TLS blocks wait 30 seconds
 after creating DNS challenge records, then let the ACME CA verify them directly
 (`propagation_timeout -1`), because the host's DNS path returned cached NXDOMAIN
 for newly created challenge records. This does not disable certificate checks.
 
-The origin requires working public IPv6 ingress on TCP 8443. Clients and Relay
-Nodes require IPv6 connectivity, matching the existing cn-proxy setup.
+The Steer origin requires working public IPv6 ingress on TCP 8843. Relay uses
+TCP 8443. Direct clients require IPv6 connectivity, matching the existing
+cn-proxy setup.
 Cloudflare proxying was tested but returned 521, while direct IPv6 HTTPS worked;
-the final DNS records therefore disable proxying. Retain `:8443` in the backend
-URLs; the existing household setup uses this port instead of 443.
+the final DNS records therefore disable proxying. Retain `:8843` in the direct
+Steer URL; the household setup cannot use port 443 for this origin.
 
 ## Vercel
 
@@ -88,8 +90,9 @@ Root: repository root; Next.js; Node 22; `npm ci`; `npm run build`.
 Production variables:
 
 ```dotenv
-STEER_API_ORIGIN=https://steer-server.pcursor.run:8443
-NEXT_PUBLIC_STEER_API_URL=https://steer-server.pcursor.run:8443/api/v1
+STEER_API_ORIGIN=https://steer-api.pcursor.run
+NEXT_PUBLIC_STEER_API_URL=https://steer-direct.pcursor.run:8843/api/v1
+NEXT_PUBLIC_STEER_API_FALLBACK_URL=https://steer-api.pcursor.run/api/v1
 ```
 
 These are build-time values. Deploy again after changing them. Browser API
@@ -111,15 +114,14 @@ npx --yes vercel@65.3.1 deploy --prod --skip-domain --yes --scope kdf5000s-proje
 npx --yes vercel@65.3.1 promote <deployment-url> --yes --scope kdf5000s-projects
 ```
 
-Verify `https://steer-server.pcursor.run:8443/api/v1/auth/me` returns an
+Verify `https://steer-direct.pcursor.run:8843/api/v1/auth/me` returns an
 authentication response (401 when logged out) and CORS permits
 `https://steer-console.pcursor.run`. Then sign up through the
 Web UI and enroll a Relay Node through System → Runtimes. No administrator
 account or Node enrollment is created by this deployment procedure.
 
-The initial test aliases `steer-api.pcursor.run` and `steer-relay.pcursor.run`
-remain DNS-only aliases to the same endpoints. Final URLs use the names above
-to avoid local DNS caches retaining the initial Cloudflare proxy addresses.
+The old API hostnames remain temporary compatibility aliases. New deployments
+should use the canonical direct and Tunnel names above.
 
 ## Relay Node stalls before Runtime starts after reinstall
 

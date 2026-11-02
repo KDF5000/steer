@@ -54,7 +54,7 @@ export function createAPIRouter(options: RoutingOptions) {
     const controller = new AbortController();
     const timeout = setTimeout(
       () => controller.abort(),
-      options.probeTimeout ?? (base === primary ? 2500 : 10000),
+      options.probeTimeout ?? (base === primary ? 2500 : 20000),
     );
     try {
       const response = await send(`${base}/health`, {
@@ -155,7 +155,7 @@ export function createAPIRouter(options: RoutingOptions) {
     const controller = new AbortController();
     const timer = setTimeout(
       () => controller.abort(),
-      options.headerTimeout ?? 15000,
+      options.headerTimeout ?? 30000,
     );
     try {
       return await send(`${base}${path}`, {

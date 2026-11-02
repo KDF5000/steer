@@ -15,11 +15,11 @@ records on the same hostname.
 
 ```dotenv
 # Vercel production build
-NEXT_PUBLIC_STEER_API_URL=https://direct.api.pcursor.run:8443/api/v1
-NEXT_PUBLIC_STEER_API_FALLBACK_URL=https://api.pcursor.run/api/v1
-STEER_API_ORIGIN=https://api.pcursor.run
+NEXT_PUBLIC_STEER_API_URL=https://steer-direct.pcursor.run:8843/api/v1
+NEXT_PUBLIC_STEER_API_FALLBACK_URL=https://steer-api.pcursor.run/api/v1
+STEER_API_ORIGIN=https://steer-api.pcursor.run
 # Steer Server
-STEER_SESSION_COOKIE_DOMAIN=api.pcursor.run
+STEER_SESSION_COOKIE_DOMAIN=pcursor.run
 STEER_ALLOWED_ORIGINS=https://steer-console.pcursor.run
 RELAY_PUBLIC_URL=https://relay-server.pcursor.run:8443
 RELAY_FALLBACK_URL=https://relay.pcursor.run
@@ -33,8 +33,10 @@ first-level subdomain so Cloudflare Universal SSL covers it without a paid
 certificate for a nested hostname.
 
 The browser cookie is HttpOnly, Secure on HTTPS, SameSite=Lax, and scoped to
-`api.pcursor.run`, which covers both API hostnames but not other applications
-on `pcursor.run`. Only controlled API services should use this namespace.
+`pcursor.run`, which covers both API hostnames. Because these canonical names
+are siblings, review other applications on the parent domain before sharing
+the session cookie with them on `pcursor.run`. Only controlled API services
+should use this namespace.
 Users coming from the old API hostname need to sign in once on the new API.
 Use the Web custom domain; an unrelated `*.vercel.app` origin cannot use this
 same-site cookie arrangement for direct browser requests.
@@ -48,14 +50,14 @@ behavior and requires no cookie-domain change.
   identity and healthy status, not an arbitrary successful web page.
 - Start direct access immediately and start the fallback probe after 400 ms.
   The first successful probe wins. An immediate direct failure starts fallback
-  immediately. Direct probes time out after 2.5 seconds; Tunnel probes get ten
+  immediately. Direct probes time out after 2.5 seconds; Tunnel probes get 20
   seconds to tolerate slower paths without delaying the direct preference window.
 - Share one initial selection between concurrent requests. Keep the selected
   endpoint for subsequent requests.
 - On transport errors or HTTP 502/503/504, change the endpoint. Retry a GET or
   HEAD once. Replay a task submission only with its original Idempotency-Key
   and reusable body; ordinary writes are never automatically replayed.
-- Bound the wait for response headers to 15 seconds. This deadline does not
+- Bound the wait for response headers to 30 seconds. This deadline does not
   truncate a streaming response or download body.
 - While using fallback, probe direct access at most once a minute when requests
   occur. Switch future requests back after a successful probe. Existing SSE
@@ -91,7 +93,7 @@ launchctl kickstart -k gui/$(id -u)/com.steer.cloudflared
 curl -fsS http://127.0.0.1:20246/ready
 ```
 
-Tunnel ingress maps `api.pcursor.run` to `http://127.0.0.1:18080` and
+Tunnel ingress maps `steer-api.pcursor.run` to `http://127.0.0.1:18080` and
 `relay.pcursor.run` to `http://127.0.0.1:18787`. Other hostnames receive 404.
 The connector uses QUIC: HTTP/2 edge handshakes failed in this host's current
 network configuration, while QUIC connected successfully. As of 2026-11-01,
@@ -119,8 +121,8 @@ machine-to-machine API without a corresponding service auth design.
 npm test
 npx tsc --noEmit
 cd server && go test -race ./internal/api ./cmd/steer-server
-curl -6 https://direct.api.pcursor.run:8443/api/v1/health
-curl -4 https://api.pcursor.run/api/v1/health
+curl -6 https://steer-direct.pcursor.run:8843/api/v1/health
+curl -4 https://steer-api.pcursor.run/api/v1/health
 curl -4 https://relay.pcursor.run/health
 ```
 

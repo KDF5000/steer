@@ -157,6 +157,10 @@ import {
   type WorkspaceSettingsRecord,
   type WorkspaceRecord,
 } from '@/lib/steer-client';
+import {
+  collaborationIdlePollInterval,
+  shouldPollCollaborativeSession,
+} from '@/lib/polling';
 import { useChatViewport } from './use-chat-viewport';
 import { AssetsView, WorkLogView } from './workspace-library';
 import {
@@ -1535,7 +1539,6 @@ export default function Fusion() {
     const controller = new AbortController();
     let stopped = false;
     let retryTimer = 0;
-    let recoveryTimer = 0;
     let renderTimer = 0;
     let renderFrame = 0;
     let events: RelayEvent[] = [];
@@ -1638,8 +1641,6 @@ export default function Fusion() {
 
     window.addEventListener('online', recoverRun);
     document.addEventListener('visibilitychange', recoverVisibleRun);
-    recoveryTimer = window.setInterval(recoverRun, 5_000);
-
     void pollRun(activeRunID).then((initial) => {
       if (
         stopped ||
@@ -1660,7 +1661,6 @@ export default function Fusion() {
       window.removeEventListener('online', recoverRun);
       document.removeEventListener('visibilitychange', recoverVisibleRun);
       window.clearTimeout(retryTimer);
-      window.clearInterval(recoveryTimer);
       window.clearTimeout(renderTimer);
       if (renderFrame) window.cancelAnimationFrame(renderFrame);
     };
@@ -1874,7 +1874,14 @@ export default function Fusion() {
       return;
     let cancelled = false;
     const poll = async () => {
-      if (pendingChatSubmission.current) return;
+      if (
+        !shouldPollCollaborativeSession({
+          visible: document.visibilityState === 'visible',
+          pendingSubmission: pendingChatSubmission.current,
+          activeRun: Boolean(activeRun.current),
+        })
+      )
+        return;
       try {
         const data = await steer.session(chatSession);
         if (cancelled || pendingChatSubmission.current) return;
@@ -1930,10 +1937,20 @@ export default function Fusion() {
         }
       }
     };
-    const timer = window.setInterval(() => void poll(), 4000);
+    const timer = window.setInterval(
+      () => void poll(),
+      collaborationIdlePollInterval,
+    );
+    const refreshVisible = () => {
+      if (document.visibilityState === 'visible') void poll();
+    };
+    window.addEventListener('focus', refreshVisible);
+    document.addEventListener('visibilitychange', refreshVisible);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      window.removeEventListener('focus', refreshVisible);
+      document.removeEventListener('visibilitychange', refreshVisible);
     };
   }, [collaborationShare, chatSession, view, resourceShares]);
 
@@ -2653,7 +2670,7 @@ export default function Fusion() {
     const timeout = window.setTimeout(() => {
       timedOut = true;
       controller.abort();
-    }, 12_000);
+    }, 30_000);
     setRuntimeDiscoveryLoading(true);
     setRuntimeDiscoveryError('');
     try {
