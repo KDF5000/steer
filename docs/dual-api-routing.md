@@ -48,20 +48,24 @@ behavior and requires no cookie-domain change.
 
 - Probe `/api/v1/health` without credentials or caching. Accept only the Steer
   identity and healthy status, not an arbitrary successful web page.
-- Start direct access immediately and start the fallback probe after 400 ms.
-  The first successful probe wins. An immediate direct failure starts fallback
-  immediately. Direct probes time out after 2.5 seconds; Tunnel probes get 20
-  seconds to tolerate slower paths without delaying the direct preference window.
+- Start the direct and Tunnel probes concurrently. The first healthy response
+  wins, so IPv6 is not preferred merely because it exists: a faster Tunnel can
+  be selected too. Direct probes time out after 2.5 seconds; Tunnel probes get
+  20 seconds so an IPv4-only client is not blocked by an unreachable AAAA path.
 - Share one initial selection between concurrent requests. Keep the selected
   endpoint for subsequent requests.
-- On transport errors or HTTP 502/503/504, change the endpoint. Retry a GET or
-  HEAD once. Replay a task submission only with its original Idempotency-Key
-  and reusable body; ordinary writes are never automatically replayed.
+- On a transport error or HTTP 502/503/504, retry a GET or HEAD once through a
+  recently healthy alternate route. One failure is treated as network jitter
+  and does not change the preferred route; two consecutive failures move future
+  traffic. Replay a task submission only with its original Idempotency-Key and
+  reusable body; ordinary writes are never automatically replayed.
 - Bound the wait for response headers to 30 seconds. This deadline does not
   truncate a streaming response or download body.
-- While using fallback, probe direct access at most once a minute when requests
-  occur. Switch future requests back after a successful probe. Existing SSE
-  connections stay on their original endpoint until they reconnect.
+- While requests are active, measure both routes in the background at most once
+  a minute. Latency uses an exponentially smoothed value. Switch only when the
+  alternate route is both at least 20% faster and saves at least 100 ms, or when
+  the current route is unavailable. This hysteresis prevents route flapping.
+  Existing SSE connections stay on their original endpoint until they reconnect.
 - Send SSE heartbeat comments every 15 seconds. A client stream idle for
   45 seconds fails, changes route, and lets the existing conversation reconnect
   using its last event sequence. Cancellation by the user does not trigger a

@@ -33,7 +33,7 @@ test('a silent broken SSE connection times out so it can reconnect on the other 
   reader.releaseLock();
 });
 
-test('working IPv6 gets priority without sending a tunnel probe', async () => {
+test('startup measures both routes and selects the first healthy one', async () => {
   const calls = [];
   const router = createAPIRouter({
     ...config,
@@ -43,7 +43,30 @@ test('working IPv6 gets priority without sending a tunnel probe', async () => {
     },
   });
   await router.fetch('/workspaces');
-  assert.deepEqual(calls, [`${primary}/health`, `${primary}/workspaces`]);
+  assert.deepEqual(calls, [
+    `${primary}/health`,
+    `${fallback}/health`,
+    `${primary}/workspaces`,
+  ]);
+});
+
+test('a faster tunnel can win even when IPv6 direct access is available', async () => {
+  const router = createAPIRouter({
+    ...config,
+    fetch: async (url) => {
+      if (url === `${primary}/health`)
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      if (url === `${fallback}/health`)
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      return url.endsWith('/health')
+        ? healthy()
+        : Response.json({ route: url.startsWith(fallback) ? 'tunnel' : 'direct' });
+    },
+  });
+  assert.deepEqual(await (await router.fetch('/workspaces')).json(), {
+    route: 'tunnel',
+  });
+  assert.equal(router.baseURL, fallback);
 });
 
 test('a blackholed IPv6 connection does not block IPv4 users', async () => {
@@ -71,6 +94,9 @@ test('a blackholed IPv6 connection does not block IPv4 users', async () => {
     route: 'tunnel',
   });
   assert.equal(router.baseURL, fallback);
+  // The direct probe continues in the background so the router can distinguish
+  // a merely slower route from an unavailable one without delaying the request.
+  await new Promise((resolve) => setTimeout(resolve, 45));
   assert.equal(cancelled, true);
 });
 
@@ -92,7 +118,7 @@ test('concurrent startup requests share one route selection', async () => {
     router.fetch('/b'),
     router.fetch('/c'),
   ]);
-  assert.equal(probes, 1);
+  assert.equal(probes, 2);
 });
 
 test('an HTTP 200 from an unrelated service is not a healthy API', async () => {
@@ -141,6 +167,39 @@ test('reads retry once after a network failure, preserving credentials and curso
   );
   assert.equal(requests[1][1].credentials, 'include');
   assert.equal(requests[1][1].headers['X-Steer-Workspace'], 'w');
+  assert.equal(router.baseURL, primary);
+});
+
+test('a transient direct failure does not change the preferred route', async () => {
+  let directRequests = 0;
+  const router = createAPIRouter({
+    ...config,
+    fetch: async (url) => {
+      if (url.endsWith('/health')) return healthy();
+      if (url.startsWith(primary) && directRequests++ === 0)
+        throw new TypeError('brief network jitter');
+      return Response.json({ route: url.startsWith(primary) ? 'direct' : 'tunnel' });
+    },
+  });
+  assert.deepEqual(await (await router.fetch('/a')).json(), { route: 'tunnel' });
+  assert.equal(router.baseURL, primary);
+  assert.deepEqual(await (await router.fetch('/b')).json(), { route: 'direct' });
+  assert.equal(router.baseURL, primary);
+});
+
+test('repeated direct failures move subsequent traffic to a healthy tunnel', async () => {
+  const router = createAPIRouter({
+    ...config,
+    fetch: async (url) => {
+      if (url.endsWith('/health')) return healthy();
+      if (url.startsWith(primary)) throw new TypeError('direct route is down');
+      return new Response('ok');
+    },
+  });
+  await router.fetch('/a');
+  assert.equal(router.baseURL, primary);
+  await router.fetch('/b');
+  assert.equal(router.baseURL, fallback);
 });
 
 test('a fallback failure never sends traffic back to an unproven direct route', async () => {
@@ -161,6 +220,7 @@ test('a fallback failure never sends traffic back to an unproven direct route', 
     `${primary}/health`,
     `${fallback}/health`,
     `${fallback}/sessions/shared`,
+    `${primary}/health`,
   ]);
 });
 
@@ -178,7 +238,9 @@ test('writes without an idempotency key are never replayed', async () => {
     router.fetch('/projects', { method: 'POST', body: '{}' }),
   );
   assert.equal(writes, 1);
-  assert.equal(router.baseURL, fallback);
+  // A single ambiguous write failure is not enough evidence to move all
+  // subsequent traffic to another path.
+  assert.equal(router.baseURL, primary);
 });
 
 test('task submissions reuse the same idempotency key and multipart body on failover', async () => {
@@ -248,21 +310,28 @@ test('SSE bodies remain open beyond the response-header timeout', async () => {
   assert.equal(await (await router.fetch('/events')).text(), 'data: event\n\n');
 });
 
-test('subsequent requests recover direct access without interrupting existing streams', async () => {
+test('periodic measurements switch to a clearly faster recovered route', async () => {
   let directAvailable = false;
   const router = createAPIRouter({
     ...config,
-    recoveryInterval: 0,
+    routeEvaluationInterval: 1,
+    switchMinSavings: 0,
+    switchRatio: 1,
     fetch: async (url) => {
       if (url === `${primary}/health` && !directAvailable)
         throw new TypeError('no IPv6');
+      if (url === `${primary}/health`)
+        await new Promise((resolve) => setTimeout(resolve, 1));
+      if (url === `${fallback}/health`)
+        await new Promise((resolve) => setTimeout(resolve, 10));
       return url.endsWith('/health') ? healthy() : new Response('ok');
     },
   });
   await router.fetch('/a');
   assert.equal(router.baseURL, fallback);
   directAvailable = true;
+  await new Promise((resolve) => setTimeout(resolve, 2));
   await router.fetch('/b');
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 15));
   assert.equal(router.baseURL, primary);
 });
