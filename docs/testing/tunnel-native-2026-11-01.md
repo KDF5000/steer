@@ -1,7 +1,8 @@
 # Native Tunnel egress and latency verification
 
 Date: 2026-11-01, Asia/Shanghai. Target: home Mac mini at
-`kongdefei@192.168.31.128`, China Unicom broadband.
+`kongdefei@192.168.31.248`, China Unicom broadband. The DHCP address changed
+from `.128` after the 2026-11-02 reboot.
 
 ## Result
 
@@ -63,12 +64,12 @@ connection. Curl bypassed environment HTTP proxies. Direct requests used IPv6;
 public Tunnel requests used IPv4. All 24 measured requests returned HTTP 200.
 These are complete small HTTP request times, not ping RTT or throughput.
 
-| Path | Median total | Range | Success |
-| --- | ---: | ---: | ---: |
-| IPv6 direct, before | 30.2 ms | 26.9–56.3 ms | 6/6 |
-| Tunnel via Japan proxy, before | 1533.3 ms | 1153.1–1976.3 ms | 6/6 |
-| IPv6 direct, after | 35.9 ms | 32.8–89.2 ms | 6/6 |
-| Tunnel native egress, after | 1637.8 ms | 1284.5–2018.8 ms | 6/6 |
+| Path                           | Median total |            Range | Success |
+| ------------------------------ | -----------: | ---------------: | ------: |
+| IPv6 direct, before            |      30.2 ms |     26.9–56.3 ms |     6/6 |
+| Tunnel via Japan proxy, before |    1533.3 ms | 1153.1–1976.3 ms |     6/6 |
+| IPv6 direct, after             |      35.9 ms |     32.8–89.2 ms |     6/6 |
+| Tunnel native egress, after    |    1637.8 ms | 1284.5–2018.8 ms |     6/6 |
 
 The client and Mac mini share a public IPv6 /64: the direct values are a local
 network baseline, not external domestic-carrier measurements. The client-facing

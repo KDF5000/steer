@@ -19,7 +19,7 @@ user onboarding steps and were not exercised with a real account.
 
 ## Services
 
-Host: `kongdefei@192.168.31.128`.
+Host: `kongdefei@192.168.31.248` (DHCP address after the 2026-11-02 reboot).
 Checkout: `/Users/kongdefei/Documents/workspace/steer`.
 Compose project: `steer-production`.
 

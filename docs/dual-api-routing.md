@@ -74,7 +74,7 @@ both endpoints still depend on the same Mac, database, and home connection.
 
 ## Mac mini operations
 
-Host: `kongdefei@192.168.31.128`.
+Host: `kongdefei@192.168.31.248` (DHCP address after the 2026-11-02 reboot).
 Checkout: `/Users/kongdefei/Documents/workspace/steer`.
 Compose project: `steer-production`, environment: `.env.production`.
 
@@ -112,6 +112,10 @@ one-command enrollment. A Node keeps one active route, switches on transport or
 gateway failure, and periodically probes the preferred direct route for
 recovery. Both URLs must reach this same Relay Server and database. Existing
 Nodes older than v0.5.10 keep their single configured URL until reinstalled or upgraded.
+The Node running on the Relay Server host itself uses
+`http://127.0.0.1:18787` before those two public routes. This avoids routing a
+local control-plane connection through Clash fake-IP DNS while preserving the
+same public failover behavior for Nodes installed on other machines.
 Do not put an interactive Cloudflare Access login in front of Relay's
 machine-to-machine API without a corresponding service auth design.
 
