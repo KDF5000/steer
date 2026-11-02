@@ -26,7 +26,7 @@ Compose project: `steer-production`.
 | Service              | Host binding             | Public endpoint                                                                            |
 | -------------------- | ------------------------ | ------------------------------------------------------------------------------------------ |
 | Steer Server         | `127.0.0.1:18080`        | `https://steer-direct.pcursor.run:8843` (direct), `https://steer-api.pcursor.run` (Tunnel) |
-| Relay Server v0.5.10 | `127.0.0.1:18787`        | `https://relay-server.pcursor.run:8443`                                                    |
+| Relay Server v0.5.11 | `127.0.0.1:18787`        | `https://relay-server.pcursor.run:8443`                                                    |
 | PostgreSQL 17        | `127.0.0.1:54329`        | None                                                                                       |
 | Steer Web            | Vercel `steer-workbench` | `https://steer-console.pcursor.run`                                                        |
 
