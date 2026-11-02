@@ -33,6 +33,22 @@ test('a silent broken SSE connection times out so it can reconnect on the other 
   reader.releaseLock();
 });
 
+test('a single endpoint sends requests directly without probes or failover', async () => {
+  const calls = [];
+  const router = createAPIRouter({
+    primary,
+    fetch: async (url) => {
+      calls.push(url);
+      return Response.json({ ok: true });
+    },
+  });
+  assert.deepEqual(await (await router.fetch('/workspaces')).json(), {
+    ok: true,
+  });
+  assert.equal(router.baseURL, primary);
+  assert.deepEqual(calls, [`${primary}/workspaces`]);
+});
+
 test('startup measures both routes and selects the first healthy one', async () => {
   const calls = [];
   const router = createAPIRouter({

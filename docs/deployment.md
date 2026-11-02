@@ -97,9 +97,93 @@ Run `npm run dev` separately only when developing the Web client with hot reload
 
 ## Vercel frontends and persistent backends
 
-For IPv6 direct access with automatic Cloudflare Tunnel fallback, see
-[dual API routing](dual-api-routing.md), including shared cookie scope,
-safe retries, and stream reconnection.
+Steer Web supports either one API endpoint or two equivalent entrances to the
+same API. Choose one of the following deployment shapes before configuring the
+Vercel workbench.
+
+### Shape A: one API endpoint
+
+This is the default and simplest topology. Leave
+`NEXT_PUBLIC_STEER_API_FALLBACK_URL` unset or empty. The router sends requests
+directly to the only configured endpoint; it does not issue health probes,
+measure routes, retry through another hostname, or switch routes.
+
+The easiest Vercel setup uses its same-origin rewrite:
+
+```dotenv
+# Vercel workbench
+STEER_API_ORIGIN=https://api.example.com
+NEXT_PUBLIC_STEER_API_URL=/api/v1
+NEXT_PUBLIC_STEER_API_FALLBACK_URL=
+
+# Steer Server
+STEER_ALLOWED_ORIGINS=https://app.example.com
+```
+
+In this variant the browser calls `https://app.example.com/api/v1`; Next.js
+forwards it to `STEER_API_ORIGIN`. The session cookie stays on the Web domain,
+so this is also suitable for a platform-provided `*.vercel.app` domain. It is
+easy to operate, but long SSE sessions, uploads, and downloads pass through
+Vercel and must fit its current platform limits.
+
+For a single direct browser-to-API domain instead, use:
+
+```dotenv
+# Vercel workbench
+STEER_API_ORIGIN=https://api.example.com
+NEXT_PUBLIC_STEER_API_URL=https://api.example.com/api/v1
+NEXT_PUBLIC_STEER_API_FALLBACK_URL=
+
+# Steer Server
+STEER_ALLOWED_ORIGINS=https://app.example.com
+```
+
+Both origins must use HTTPS. Configure the API's CORS and session-cookie policy
+for the actual Web origin. Sibling custom domains such as `app.example.com` and
+`api.example.com` are the least surprising arrangement; test login and logout
+before production use. `STEER_API_ORIGIN` remains required by the current
+Next.js build configuration even when browser traffic uses the direct URL.
+
+Relay is independently single-route when `RELAY_FALLBACK_URL` is empty:
+
+```dotenv
+RELAY_PUBLIC_URL=https://relay.example.com
+RELAY_FALLBACK_URL=
+```
+
+### Shape B: intelligent dual API routes
+
+Use this shape when the same Steer API has two network entrances, such as an
+IPv6/DDNS direct route and a Cloudflare Tunnel route:
+
+```dotenv
+# Vercel workbench (values are embedded at build time)
+STEER_API_ORIGIN=https://api-tunnel.example.com
+NEXT_PUBLIC_STEER_API_URL=https://api-direct.example.com:8843/api/v1
+NEXT_PUBLIC_STEER_API_FALLBACK_URL=https://api-tunnel.example.com/api/v1
+
+# Steer Server
+STEER_ALLOWED_ORIGINS=https://app.example.com
+STEER_SESSION_COOKIE_DOMAIN=example.com
+
+# Relay onboarding, if Relay also has two public entrances
+RELAY_PUBLIC_URL=https://relay-direct.example.com:8443
+RELAY_FALLBACK_URL=https://relay-tunnel.example.com
+```
+
+The two API URLs must terminate at the same Steer Server installation and share
+the same database, session secrets, and cookie scope. Likewise, both Relay URLs
+must reach the same Relay Server and durable store. This is entrance-path
+selection, not active-active backend replication.
+
+At startup the browser races health requests to both API routes. While active,
+it periodically measures both paths, preserves the current route through one
+transient failure, changes it after repeated failures, and switches for speed
+only with hysteresis. See [dual API routing](dual-api-routing.md) for cookie,
+CORS, safe-retry, streaming, DNS/TLS, verification, and rollback details.
+
+In either shape, changing a `NEXT_PUBLIC_*` value requires a new Web build and
+deployment; restarting only Steer Server does not update the browser bundle.
 
 Create two Vercel projects from this repository:
 
