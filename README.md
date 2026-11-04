@@ -111,7 +111,6 @@ These tests cover Projects, persistent conversations, Run projection, artifact d
 | `STEER_ALLOWED_ORIGINS`           | local Web origin                         | Browser CORS allowlist                                |
 | `STEER_CREDENTIAL_ENCRYPTION_KEY` | local development key                    | Encrypts Workspace integration credentials at rest    |
 | `NEXT_PUBLIC_STEER_API_URL`       | `/api/v1`                                | Web client API base URL                               |
-| `NEXT_PUBLIC_STEER_API_FALLBACK_URL` | empty                                | Optional equivalent API route for intelligent selection |
 | `STEER_SERVER_PORT`               | `8080`                                   | Published Steer Server port                           |
 | `STEER_WEB_BIND_ADDRESS`          | `0.0.0.0`                                | Host interface used by Steer Web                      |
 | `STEER_WEB_PORT`                  | `3000`                                   | Published Steer Web port                              |

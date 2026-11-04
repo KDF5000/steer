@@ -34,12 +34,7 @@ func main() {
 		os.Exit(1)
 	}
 	relayURL := env("RELAY_BASE_URL", "http://127.0.0.1:8787")
-	cookieDomain := strings.TrimSpace(os.Getenv("STEER_SESSION_COOKIE_DOMAIN"))
-	if err := (&http.Cookie{Name: "steer_session", Domain: cookieDomain}).Valid(); err != nil {
-		slog.Error("invalid session cookie domain", "error", err)
-		os.Exit(1)
-	}
-	apiServer := steerapi.New(st, relayURL, os.Getenv("RELAY_HOST_TOKEN"), env("RELAY_PUBLIC_URL", relayURL), workspaceID, strings.Split(env("STEER_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"), ","), steerapi.WithAuthentication(30*24*time.Hour), steerapi.WithSessionCookieDomain(cookieDomain), steerapi.WithCredentialEncryptionKey(os.Getenv("STEER_CREDENTIAL_ENCRYPTION_KEY")), steerapi.WithRelayFallbackURLs(strings.Split(os.Getenv("RELAY_FALLBACK_URL"), ",")))
+	apiServer := steerapi.New(st, relayURL, os.Getenv("RELAY_HOST_TOKEN"), env("RELAY_PUBLIC_URL", relayURL), workspaceID, strings.Split(env("STEER_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"), ","), steerapi.WithAuthentication(30*24*time.Hour), steerapi.WithCredentialEncryptionKey(os.Getenv("STEER_CREDENTIAL_ENCRYPTION_KEY")))
 	if err := apiServer.StartIntegrations(ctx); err != nil {
 		slog.Error("integration manager failed to start", "error", err)
 	}

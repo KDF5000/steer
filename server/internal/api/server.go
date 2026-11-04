@@ -29,18 +29,16 @@ import (
 )
 
 type Server struct {
-	store               *store.Store
-	relay               *sdk.Client
-	relayHTTP           *httpapi.Client
-	relayPublicURL      string
-	relayFallbackURLs   []string
-	defaultWorkspace    string
-	allowedOrigins      map[string]bool
-	authEnabled         bool
-	sessionTTL          time.Duration
-	sessionCookieDomain string
-	credentialCipher    cipher.AEAD
-	integrations        *integrationManager
+	store            *store.Store
+	relay            *sdk.Client
+	relayHTTP        *httpapi.Client
+	relayPublicURL   string
+	defaultWorkspace string
+	allowedOrigins   map[string]bool
+	authEnabled      bool
+	sessionTTL       time.Duration
+	credentialCipher cipher.AEAD
+	integrations     *integrationManager
 }
 
 var errSystemAgentNotConfigured = errors.New("no system Agent is configured; choose one in System settings")
@@ -59,28 +57,6 @@ func New(st *store.Store, relayURL, relayToken, relayPublicURL, defaultWorkspace
 	}
 	server.integrations = newIntegrationManager(server)
 	return server
-}
-
-func WithRelayFallbackURLs(values []string) Option {
-	return func(server *Server) {
-		seen := map[string]bool{server.relayPublicURL: true}
-		for _, raw := range values {
-			value := strings.TrimRight(strings.TrimSpace(raw), "/")
-			if value == "" || seen[value] {
-				continue
-			}
-			seen[value] = true
-			server.relayFallbackURLs = append(server.relayFallbackURLs, value)
-		}
-	}
-}
-
-func (s *Server) relayNodeURLs() []string {
-	values := make([]string, 0, 1+len(s.relayFallbackURLs))
-	if s.relayPublicURL != "" {
-		values = append(values, s.relayPublicURL)
-	}
-	return append(values, s.relayFallbackURLs...)
 }
 
 func WithCredentialEncryptionKey(key string) Option {
@@ -133,10 +109,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/resource-shares/{id}", s.updateResourceShare)
 	mux.Handle("/api/v1/collaboration-access/{shareID}/{path...}", s.collaborationAccess(mux))
 	mux.HandleFunc("GET /health", s.health)
-	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
-		writeJSON(w, http.StatusOK, map[string]string{"service": "steer", "status": "ok"})
-	})
 	mux.HandleFunc("POST /api/v1/auth/register", s.register)
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
 	mux.HandleFunc("POST /api/v1/relay-node-enrollments/claim", s.claimRelayNodeEnrollment)
@@ -348,7 +320,7 @@ func (s *Server) bootstrap(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	relayState := map[string]any{"connected": false, "publicUrl": s.relayPublicURL, "fallbackUrls": s.relayFallbackURLs, "nodes": []any{}}
+	relayState := map[string]any{"connected": false, "publicUrl": s.relayPublicURL, "nodes": []any{}}
 	if nodes, relayErr := s.workspaceNodes(ctx, wid); relayErr == nil {
 		relayState["connected"] = true
 		relayState["nodes"] = nodes
@@ -1007,21 +979,7 @@ func (s *Server) streamRunEventsForID(w http.ResponseWriter, r *http.Request, ru
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-	events := make(chan relay.Event)
-	result := make(chan error, 1)
-	go func() {
-		result <- s.relay.StreamEvents(ctx, runID, after, func(event relay.Event) error {
-			select {
-			case events <- event:
-				return nil
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		})
-	}()
-	writeEvent := func(event relay.Event) error {
+	err := s.relay.StreamEvents(r.Context(), runID, after, func(event relay.Event) error {
 		if g, ok := r.Context().Value(collaborationKey{}).(store.ResourceShare); ok {
 			latest, err := s.store.ResourceShare(r.Context(), g.ID)
 			if err != nil || latest.Status == "revoked" {
@@ -1037,30 +995,7 @@ func (s *Server) streamRunEventsForID(w http.ResponseWriter, r *http.Request, ru
 		}
 		flusher.Flush()
 		return nil
-	}
-	// Keep otherwise idle runs live through proxies, and let clients distinguish
-	// a quiet model from a broken connection. Only this goroutine writes HTTP.
-	heartbeat := time.NewTicker(15 * time.Second)
-	defer heartbeat.Stop()
-	var err error
-stream:
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case event := <-events:
-			if err = writeEvent(event); err != nil {
-				break stream
-			}
-		case err = <-result:
-			break stream
-		case <-heartbeat.C:
-			if _, err = fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
-				return
-			}
-			flusher.Flush()
-		}
-	}
+	})
 	if err != nil {
 		if r.Context().Err() == nil {
 			slog.Warn("Relay event stream interrupted", "run_id", runID, "error", err)

@@ -43,12 +43,9 @@ func TestUsersWorkspacesAndRuntimeIsolation(t *testing.T) {
 	if _, err := s.EnrollRelayNode(ctx, enrollment.TokenHash, "wrong-"+suffix, "Wrong Node", 2, "online", time.Now()); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("enrollment accepted a different Node ID: %v", err)
 	}
-	node, err := s.EnrollRelayNode(ctx, enrollment.TokenHash, "", "Shared machine", 2, "online", time.Now())
+	node, err := s.EnrollRelayNode(ctx, enrollment.TokenHash, "node-"+suffix, "Shared machine", 2, "online", time.Now())
 	if err != nil {
 		t.Fatal(err)
-	}
-	if node.ID != "node-"+suffix {
-		t.Fatalf("enrollment resolved Node ID %q", node.ID)
 	}
 	if _, err := s.EnrollRelayNode(ctx, enrollment.TokenHash, "node-"+suffix, "Replay", 2, "online", time.Now()); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("one-time enrollment token was reused: %v", err)

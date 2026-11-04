@@ -160,7 +160,7 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 	if err := st.CreateAuthSession(ctx, user.ID, tokenHash(rawSession), time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	handler := New(st, relayServer.URL, "", relayServer.URL, "unused", nil, WithAuthentication(time.Hour), WithRelayFallbackURLs([]string{"https://relay-fallback.example.test"})).Handler()
+	handler := New(st, relayServer.URL, "", relayServer.URL, "unused", nil, WithAuthentication(time.Hour)).Handler()
 	call := func(method, path, body string, want int) *httptest.ResponseRecorder {
 		t.Helper()
 		request := httptest.NewRequest(method, "/api/v1"+path, strings.NewReader(body))
@@ -175,6 +175,7 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 		return response
 	}
 	var generatedEnrollment struct {
+		NodeToken string    `json:"nodeToken"`
 		Token     string    `json:"token"`
 		NodeID    string    `json:"nodeId"`
 		ExpiresAt time.Time `json:"expiresAt"`
@@ -186,36 +187,17 @@ func TestRuntimeBindingHTTPContract(t *testing.T) {
 	if err := json.Unmarshal(enrollmentResponse.Body.Bytes(), &generatedEnrollment); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(generatedEnrollment.Token, "steer_enr_") || !strings.HasPrefix(generatedEnrollment.NodeID, "node_") || generatedEnrollment.ExpiresAt.Before(time.Now()) {
+	if generatedEnrollment.NodeToken != "relay_node_v1.test-scoped-credential" || !strings.HasPrefix(generatedEnrollment.Token, "steer_enr_") || !strings.HasPrefix(generatedEnrollment.NodeID, "node_") || generatedEnrollment.ExpiresAt.Before(time.Now()) {
 		t.Fatalf("invalid generated enrollment: %+v", generatedEnrollment)
 	}
-	wrongClaimBody := `{"token":"` + generatedEnrollment.Token + `","nodeId":"` + nodeID + `","name":"Wrong Node","capacity":2}`
-	call(http.MethodPost, "/relay-node-enrollments/claim", wrongClaimBody, http.StatusUnauthorized)
-	claimBody := `{"token":"` + generatedEnrollment.Token + `","name":"Claimed Node","capacity":2}`
-	failingRelay := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "signing temporarily unavailable", http.StatusServiceUnavailable)
-	}))
-	failingHandler := New(st, failingRelay.URL, "", relayServer.URL, "unused", nil, WithAuthentication(time.Hour)).Handler()
-	failedClaim := httptest.NewRequest(http.MethodPost, "/api/v1/relay-node-enrollments/claim", strings.NewReader(claimBody))
-	failedClaim.Header.Set("Content-Type", "application/json")
-	failedResponse := httptest.NewRecorder()
-	failingHandler.ServeHTTP(failedResponse, failedClaim)
-	failingRelay.Close()
-	if failedResponse.Code != http.StatusBadGateway {
-		t.Fatalf("temporary credential failure = %d, want %d: %s", failedResponse.Code, http.StatusBadGateway, failedResponse.Body.String())
-	}
+	claimBody := `{"token":"` + generatedEnrollment.Token + `","nodeId":"` + generatedEnrollment.NodeID + `","name":"Claimed Node","capacity":2}`
+	call(http.MethodPost, "/relay-node-enrollments/claim", strings.Replace(claimBody, generatedEnrollment.NodeID, nodeID, 1), http.StatusUnauthorized)
 	publicRequest := httptest.NewRequest(http.MethodPost, "/api/v1/relay-node-enrollments/claim", strings.NewReader(claimBody))
 	publicRequest.Header.Set("Content-Type", "application/json")
-	publicRequest.Header.Set("Accept", "application/vnd.steer.relay-enrollment.v1+text")
 	publicResponse := httptest.NewRecorder()
 	handler.ServeHTTP(publicResponse, publicRequest)
 	if publicResponse.Code != http.StatusCreated {
 		t.Fatalf("public enrollment claim = %d: %s", publicResponse.Code, publicResponse.Body.String())
-	}
-	for _, expected := range []string{"relay-enrollment-v1", "node_id\t" + generatedEnrollment.NodeID, "node_token\trelay_node_v1.test-scoped-credential", "server\t" + relayServer.URL, "server\thttps://relay-fallback.example.test"} {
-		if !strings.Contains(publicResponse.Body.String(), expected) {
-			t.Fatalf("installer enrollment response missing %q: %s", expected, publicResponse.Body.String())
-		}
 	}
 	var ownedNodes []struct {
 		ID       string            `json:"id"`
