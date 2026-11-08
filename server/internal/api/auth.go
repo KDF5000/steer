@@ -579,11 +579,17 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 
 func taskAPIScope(r *http.Request) (string, bool) {
 	path := r.URL.Path
+	if (r.Method == http.MethodGet && path == "/api/v1/watch/notifications") || (r.Method == http.MethodPost && path == "/api/v1/watch/devices") || (r.Method == http.MethodDelete && strings.HasPrefix(path, "/api/v1/watch/devices/") && !strings.Contains(strings.TrimPrefix(path, "/api/v1/watch/devices/"), "/") && strings.TrimPrefix(path, "/api/v1/watch/devices/") != "") {
+		return "tasks:read", true
+	}
 	if r.Method == http.MethodPost && strings.HasSuffix(path, "/cancel") && strings.HasPrefix(path, "/api/v1/tasks/") {
 		return "tasks:cancel", true
 	}
 	if r.Method == http.MethodPost && (path == "/api/v1/tasks" || (strings.HasPrefix(path, "/api/v1/conversations/") && strings.HasSuffix(path, "/tasks"))) {
 		return "tasks:write", true
+	}
+	if r.Method == http.MethodGet && (path == "/api/v1/watch/conversations" || (strings.HasPrefix(path, "/api/v1/watch/conversations/") && len(strings.Split(strings.TrimPrefix(path, "/api/v1/watch/conversations/"), "/")) == 1 && strings.TrimPrefix(path, "/api/v1/watch/conversations/") != "")) {
+		return "tasks:read", true
 	}
 	if r.Method == http.MethodGet && strings.HasPrefix(path, "/api/v1/tasks/") {
 		return "tasks:read", true

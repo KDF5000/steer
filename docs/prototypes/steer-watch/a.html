@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Steer Watch · A 完整交互</title>
+    <link rel="stylesheet" href="watch.css" />
+    <link rel="stylesheet" href="a.css" />
+  </head>
+  <body data-concept="a">
+    <header class="site-header">
+      <a class="brand" href="index.html"
+        ><span class="brand-mark">S</span>Steer
+        <span class="brand-tail">WATCH / A</span></a
+      ><a class="edition" href="index.html">返回三方案对比</a>
+    </header>
+    <main>
+      <section class="intro">
+        <p class="eyebrow">A · 列表工作台 / 完整交互</p>
+        <h1>看进展，读结果，<br class="mobile-break" />接着聊。</h1>
+        <p class="lead">
+          在左侧手表里实际操作；右侧可切换场景。下方展示完整流程的关键画面。
+        </p>
+      </section>
+      <section class="interactive-layout">
+        <section class="concepts" aria-label="列表工作台交互原型"></section>
+        <aside class="flow-panel">
+          <span class="eyebrow">体验完整流程</span>
+          <h2>从任务列表开始</h2>
+          <p>
+            点“飞书图片输入”查看结果，再点语音继续。听写文字可以编辑，确认发送后才进入执行。
+          </p>
+          <ol>
+            <li>选择会话，查看 Agent、状态和结果</li>
+            <li>语音继续，完成听写</li>
+            <li>检查文字及接收会话，确认发送</li>
+            <li>返回会话，查看追问与执行状态</li>
+            <li>模拟任务完成，查看新结果</li>
+          </ol>
+          <div class="scenario-grid">
+            <button data-scenario="home">任务列表</button
+            ><button data-scenario="running">运行中的任务</button
+            ><button data-scenario="result">已完成的结果</button
+            ><button data-scenario="failed">失败的任务</button
+            ><button data-scenario="draft">恢复未发送草稿</button
+            ><button data-scenario="offline">离线状态</button
+            ><button data-scenario="send-failed">发送失败与重试</button
+            ><button data-scenario="completion">任务完成提醒</button>
+          </div>
+          <div class="live-context" aria-live="polite"></div>
+          <p class="demo-disclaimer">
+            HTML
+            演示：任务、听写和手机接续均为模拟。可以滚动手表内容；使用返回按钮回到上一步。
+          </p>
+        </aside>
+      </section>
+      <section class="storyboard">
+        <p class="eyebrow">完整流程 · 关键画面</p>
+        <h2>一段对话如何从手腕继续</h2>
+        <div class="story-grid">
+          <figure>
+            <img src="previews/a-flow-01.png" alt="任务列表" />
+            <figcaption>
+              <b>01 · 任务列表</b>集中查看运行中、完成和失败的会话。
+            </figcaption>
+          </figure>
+          <figure>
+            <img src="previews/a-flow-02.png" alt="会话结果" />
+            <figcaption>
+              <b>02 · 阅读结果</b>确认项目、Agent 和结果，再决定下一步。
+            </figcaption>
+          </figure>
+          <figure>
+            <img src="previews/a-flow-03.png" alt="模拟听写" />
+            <figcaption>
+              <b>03 · 语音继续</b>明确发送对象，完成后检查识别文字。
+            </figcaption>
+          </figure>
+          <figure>
+            <img src="previews/a-flow-04.png" alt="确认发送" />
+            <figcaption>
+              <b>04 · 确认发送</b>编辑文字、确认会话，支持稍后再发。
+            </figcaption>
+          </figure>
+          <figure>
+            <img src="previews/a-flow-05.png" alt="发送成功" />
+            <figcaption>
+              <b>05 · 发送成功</b>只有发送成功，才显示已进入执行队列。
+            </figcaption>
+          </figure>
+          <figure>
+            <img src="previews/a-flow-06.png" alt="会话续聊" />
+            <figcaption>
+              <b>06 · 回到会话</b>查看刚发送的要求，继续跟踪当前任务。
+            </figcaption>
+          </figure>
+          <figure>
+            <img src="previews/a-flow-07.png" alt="新任务结果" />
+            <figcaption>
+              <b>07 · 查看新结果</b>任务完成后，再次查看结果或继续对话。
+            </figcaption>
+          </figure>
+          <figure>
+            <img src="previews/a-flow-08.png" alt="离线草稿" />
+            <figcaption>
+              <b>08 · 发送异常</b>草稿保留，恢复连接后由用户重试。
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+      <footer>
+        <span>STEER × APPLE WATCH</span>
+        <p>原型只用于确认交互与视觉，未接入实际 Steer API。</p>
+      </footer>
+    </main>
+    <script src="watch.js"></script>
+    <script src="a.js"></script>
+  </body>
+</html>

@@ -1,0 +1,719 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		07CE3CB0CB35048D61451BC4 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39D7E116270A36D11143874 /* Notifications.swift */; };
+		0AB61444AE2CE17917865D69 /* SteerWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B94B6566F501C95CD5EED240 /* SteerWatchApp.swift */; };
+		2006EF55A0AB1B5CE64643C9 /* APITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B4253AF172A764DF9CEA858 /* APITests.swift */; };
+		203340CD4F9001CCD5376E3F /* SteerWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = FBC17DDEA72820E362B2E7EB /* SteerWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		25AB7DFAB66EE6C57B43172F /* VoiceListening.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E8C44D5AB6806C37FA13997 /* VoiceListening.swift */; };
+		27334C5D7E4FD850E21ADFFE /* ggml-base-q5_1.bin in Resources */ = {isa = PBXBuildFile; fileRef = 2DEA473A63E3F583DFEAFC39 /* ggml-base-q5_1.bin */; };
+		28DB7ECE0BCB8682DE499FCF /* ggml-base-q5_1.bin in Resources */ = {isa = PBXBuildFile; fileRef = 2DEA473A63E3F583DFEAFC39 /* ggml-base-q5_1.bin */; };
+		2C12004389A293C89E10B9E1 /* SpeechEndpointTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC8752BACA2B256D1366EED5 /* SpeechEndpointTests.swift */; };
+		2CF4A884AE67ABEB243C9275 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1926719D7FD99EE56FBB2E0B /* Accelerate.framework */; };
+		2F6734251F3829BD2192A34C /* ggml-tiny-q5_1.bin in Resources */ = {isa = PBXBuildFile; fileRef = 3411E47A8B353F47EFF9E166 /* ggml-tiny-q5_1.bin */; };
+		3163D537879F418B0FDA0F8D /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5019866C58CA5ED4B128DA61 /* Models.swift */; };
+		36635E4C353EBC6B51D83D87 /* WHISPER-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 005BB98F0DEB0BEE60AB52DC /* WHISPER-LICENSE.txt */; };
+		45452777C3DBAE74D44EAF5A /* SecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3B726B9A0D3469C1AF349D7 /* SecureStore.swift */; };
+		55C03E8626AD7DF6BA3E623E /* libc++.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = AA920087071424562342A7E8 /* libc++.tbd */; };
+		598E2212C73C49D6F4A8AAEE /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5019866C58CA5ED4B128DA61 /* Models.swift */; };
+		5BDB5A57BEC75BE504864D59 /* SpeechEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FD1BA9D5D8BD5C93862D922 /* SpeechEndpoint.swift */; };
+		608F6183978A424F2F3C6BCD /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5019866C58CA5ED4B128DA61 /* Models.swift */; };
+		69C6972C1675EADA284B9AB4 /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471026D350F357265FEB9445 /* API.swift */; };
+		6E83E379A405B9747BCCB071 /* LocalSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E2C8121448A45C029ABED66 /* LocalSpeech.swift */; };
+		745CE4A595652267A084DDE4 /* SteerLocalASR.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = DD8EB7C08A6368D0B8CD6F54 /* SteerLocalASR.xcframework */; };
+		7C5B88FBD2C973395D404C48 /* libc++.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = AA920087071424562342A7E8 /* libc++.tbd */; };
+		812CD835C9ABD07F171E38AA /* VoiceUpload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BA01F7A72B7B01A83A87E5 /* VoiceUpload.swift */; };
+		915210BE8FA708BDE32AB5F6 /* WHISPER-MODEL-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 89478C1373327E2721CF279B /* WHISPER-MODEL-LICENSE.txt */; };
+		927F71361B10F340E7BB77F8 /* VoiceUpload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BA01F7A72B7B01A83A87E5 /* VoiceUpload.swift */; };
+		931C8264109C79FD5D950A64 /* Dictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0A77A1C8DCA0A70CEE841C6 /* Dictation.swift */; };
+		98CCDF3523F1B339EE4F5993 /* WatchModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9459ADA6062A08AEF896C080 /* WatchModel.swift */; };
+		9AAD818F4D35E5239D2026B7 /* SpeechEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FD1BA9D5D8BD5C93862D922 /* SpeechEndpoint.swift */; };
+		9CAD2972E635C28CA94174BD /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471026D350F357265FEB9445 /* API.swift */; };
+		9CF82C5B0CF005517022807A /* LocalSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E2C8121448A45C029ABED66 /* LocalSpeech.swift */; };
+		A1098FF08318333923CF35D1 /* SecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3B726B9A0D3469C1AF349D7 /* SecureStore.swift */; };
+		A7D807BABB4633812317AB7D /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1926719D7FD99EE56FBB2E0B /* Accelerate.framework */; };
+		A99E0571CC37C4C7ADDECD1F /* SteerLocalASR.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = DD8EB7C08A6368D0B8CD6F54 /* SteerLocalASR.xcframework */; };
+		AA3DFDA90C03B5AAD567B1B7 /* PhoneSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A9D18D488BC757F56E46BCA /* PhoneSpeech.swift */; };
+		B96A6691C5CDDA2728B7355E /* VoiceUploadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972C9D6A1149F131CB81404A /* VoiceUploadTests.swift */; };
+		BB441330A5A0D44940A82807 /* SpeechEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FD1BA9D5D8BD5C93862D922 /* SpeechEndpoint.swift */; };
+		BC1D14CCB39AA982A5692269 /* ggml-tiny-q5_1.bin in Resources */ = {isa = PBXBuildFile; fileRef = 3411E47A8B353F47EFF9E166 /* ggml-tiny-q5_1.bin */; };
+		C17C8EE87BC0E53E20A20282 /* WHISPER-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 005BB98F0DEB0BEE60AB52DC /* WHISPER-LICENSE.txt */; };
+		C65B5567010CAC477C409210 /* VoiceUpload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BA01F7A72B7B01A83A87E5 /* VoiceUpload.swift */; };
+		C8FA0C73ADEE058D4CF77799 /* WHISPER-MODEL-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 89478C1373327E2721CF279B /* WHISPER-MODEL-LICENSE.txt */; };
+		DD8D1B949CB9B063CE9AA425 /* Pairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D05BBB54F81695A14AA3BC /* Pairing.swift */; };
+		E42A4CECBCE14BB21D057050 /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471026D350F357265FEB9445 /* API.swift */; };
+		E74947C6B4FE379D4F69DE51 /* Pairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D05BBB54F81695A14AA3BC /* Pairing.swift */; };
+		FA6EE95A0DEB202AB567C6F0 /* SteerPhoneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E66889B8C0F518184A7E9148 /* SteerPhoneApp.swift */; };
+		FEE1F61A735F5327CCF3B96F /* PhoneSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A9D18D488BC757F56E46BCA /* PhoneSpeech.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		E156403A75921149125D6B57 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3D55AAA8ED4D0B45A634DE93 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 602BA60DDCFBEE3A49F759D3;
+			remoteInfo = SteerWatch;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		F854387EE0A56175AADBB388 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				203340CD4F9001CCD5376E3F /* SteerWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		005BB98F0DEB0BEE60AB52DC /* WHISPER-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "WHISPER-LICENSE.txt"; sourceTree = "<group>"; };
+		0E8C44D5AB6806C37FA13997 /* VoiceListening.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceListening.swift; sourceTree = "<group>"; };
+		0FD1BA9D5D8BD5C93862D922 /* SpeechEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechEndpoint.swift; sourceTree = "<group>"; };
+		1926719D7FD99EE56FBB2E0B /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
+		1A9D18D488BC757F56E46BCA /* PhoneSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSpeech.swift; sourceTree = "<group>"; };
+		2DEA473A63E3F583DFEAFC39 /* ggml-base-q5_1.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "ggml-base-q5_1.bin"; sourceTree = "<group>"; };
+		3411E47A8B353F47EFF9E166 /* ggml-tiny-q5_1.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "ggml-tiny-q5_1.bin"; sourceTree = "<group>"; };
+		471026D350F357265FEB9445 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
+		5019866C58CA5ED4B128DA61 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		6B4253AF172A764DF9CEA858 /* APITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APITests.swift; sourceTree = "<group>"; };
+		89478C1373327E2721CF279B /* WHISPER-MODEL-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "WHISPER-MODEL-LICENSE.txt"; sourceTree = "<group>"; };
+		8A52B880D22142B0FEFFD604 /* SteerWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SteerWatch.entitlements; sourceTree = "<group>"; };
+		93AA82C0CDFAD5AC747BF5E2 /* SteerPhone.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SteerPhone.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9459ADA6062A08AEF896C080 /* WatchModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchModel.swift; sourceTree = "<group>"; };
+		972C9D6A1149F131CB81404A /* VoiceUploadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceUploadTests.swift; sourceTree = "<group>"; };
+		9E2C8121448A45C029ABED66 /* LocalSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalSpeech.swift; sourceTree = "<group>"; };
+		A244D9F6B2136559DE9B27CE /* SteerCoreTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SteerCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA920087071424562342A7E8 /* libc++.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = "libc++.tbd"; path = "usr/lib/libc++.tbd"; sourceTree = SDKROOT; };
+		AC8752BACA2B256D1366EED5 /* SpeechEndpointTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechEndpointTests.swift; sourceTree = "<group>"; };
+		B0A77A1C8DCA0A70CEE841C6 /* Dictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dictation.swift; sourceTree = "<group>"; };
+		B8BA01F7A72B7B01A83A87E5 /* VoiceUpload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceUpload.swift; sourceTree = "<group>"; };
+		B94B6566F501C95CD5EED240 /* SteerWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteerWatchApp.swift; sourceTree = "<group>"; };
+		C15F2D93F3A745BBE681F5CA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		C39D7E116270A36D11143874 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
+		C537E12E0A1486C4703791EB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		DD8EB7C08A6368D0B8CD6F54 /* SteerLocalASR.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = SteerLocalASR.xcframework; path = .cache/asr/SteerLocalASR.xcframework; sourceTree = "<group>"; };
+		E1D05BBB54F81695A14AA3BC /* Pairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pairing.swift; sourceTree = "<group>"; };
+		E66889B8C0F518184A7E9148 /* SteerPhoneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteerPhoneApp.swift; sourceTree = "<group>"; };
+		F3B726B9A0D3469C1AF349D7 /* SecureStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureStore.swift; sourceTree = "<group>"; };
+		FBC17DDEA72820E362B2E7EB /* SteerWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SteerWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0CFA283C23C4B878F3046DB4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				745CE4A595652267A084DDE4 /* SteerLocalASR.xcframework in Frameworks */,
+				A7D807BABB4633812317AB7D /* Accelerate.framework in Frameworks */,
+				7C5B88FBD2C973395D404C48 /* libc++.tbd in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7415933DACB0CA1EADE24085 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A99E0571CC37C4C7ADDECD1F /* SteerLocalASR.xcframework in Frameworks */,
+				2CF4A884AE67ABEB243C9275 /* Accelerate.framework in Frameworks */,
+				55C03E8626AD7DF6BA3E623E /* libc++.tbd in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		10FAA74A63168ED480A26A1A /* Watch */ = {
+			isa = PBXGroup;
+			children = (
+				B0A77A1C8DCA0A70CEE841C6 /* Dictation.swift */,
+				C537E12E0A1486C4703791EB /* Info.plist */,
+				C39D7E116270A36D11143874 /* Notifications.swift */,
+				8A52B880D22142B0FEFFD604 /* SteerWatch.entitlements */,
+				B94B6566F501C95CD5EED240 /* SteerWatchApp.swift */,
+				0E8C44D5AB6806C37FA13997 /* VoiceListening.swift */,
+				9459ADA6062A08AEF896C080 /* WatchModel.swift */,
+			);
+			path = Watch;
+			sourceTree = "<group>";
+		};
+		38C9BE9B96C8A68BB5A01AE8 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A244D9F6B2136559DE9B27CE /* SteerCoreTests.xctest */,
+				93AA82C0CDFAD5AC747BF5E2 /* SteerPhone.app */,
+				FBC17DDEA72820E362B2E7EB /* SteerWatch.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		804583BE5CF29C1E4E560360 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				471026D350F357265FEB9445 /* API.swift */,
+				9E2C8121448A45C029ABED66 /* LocalSpeech.swift */,
+				5019866C58CA5ED4B128DA61 /* Models.swift */,
+				E1D05BBB54F81695A14AA3BC /* Pairing.swift */,
+				1A9D18D488BC757F56E46BCA /* PhoneSpeech.swift */,
+				F3B726B9A0D3469C1AF349D7 /* SecureStore.swift */,
+				0FD1BA9D5D8BD5C93862D922 /* SpeechEndpoint.swift */,
+				B8BA01F7A72B7B01A83A87E5 /* VoiceUpload.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		A1BB97C832D9F75867410CDE /* Native */ = {
+			isa = PBXGroup;
+			children = (
+				89478C1373327E2721CF279B /* WHISPER-MODEL-LICENSE.txt */,
+			);
+			path = Native;
+			sourceTree = "<group>";
+		};
+		B096D0C6353AC9A0155A5697 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				6B4253AF172A764DF9CEA858 /* APITests.swift */,
+				AC8752BACA2B256D1366EED5 /* SpeechEndpointTests.swift */,
+				972C9D6A1149F131CB81404A /* VoiceUploadTests.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		B957E74C89F49EDAA44E842E /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				1926719D7FD99EE56FBB2E0B /* Accelerate.framework */,
+				AA920087071424562342A7E8 /* libc++.tbd */,
+				DD8EB7C08A6368D0B8CD6F54 /* SteerLocalASR.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		BEC136070590710EEC75B898 = {
+			isa = PBXGroup;
+			children = (
+				FF5BF394B1F22542A5EA0D10 /* asr */,
+				A1BB97C832D9F75867410CDE /* Native */,
+				F076D6BA78D8E5B617295266 /* Phone */,
+				804583BE5CF29C1E4E560360 /* Shared */,
+				B096D0C6353AC9A0155A5697 /* Tests */,
+				10FAA74A63168ED480A26A1A /* Watch */,
+				B957E74C89F49EDAA44E842E /* Frameworks */,
+				38C9BE9B96C8A68BB5A01AE8 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		F076D6BA78D8E5B617295266 /* Phone */ = {
+			isa = PBXGroup;
+			children = (
+				C15F2D93F3A745BBE681F5CA /* Info.plist */,
+				E66889B8C0F518184A7E9148 /* SteerPhoneApp.swift */,
+			);
+			path = Phone;
+			sourceTree = "<group>";
+		};
+		FF5BF394B1F22542A5EA0D10 /* asr */ = {
+			isa = PBXGroup;
+			children = (
+				2DEA473A63E3F583DFEAFC39 /* ggml-base-q5_1.bin */,
+				3411E47A8B353F47EFF9E166 /* ggml-tiny-q5_1.bin */,
+				005BB98F0DEB0BEE60AB52DC /* WHISPER-LICENSE.txt */,
+			);
+			name = asr;
+			path = .cache/asr;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		12B4C71F14EFE614C65F4363 /* SteerPhone */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D8DEEB0A895A1D668AF596D5 /* Build configuration list for PBXNativeTarget "SteerPhone" */;
+			buildPhases = (
+				7C1F83AE4C25F5E22C214630 /* Sources */,
+				D43F1CAD71D02EA3ACDD3D66 /* Resources */,
+				7415933DACB0CA1EADE24085 /* Frameworks */,
+				F854387EE0A56175AADBB388 /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8A748B196F996E3A7FE2D582 /* PBXTargetDependency */,
+			);
+			name = SteerPhone;
+			packageProductDependencies = (
+			);
+			productName = SteerPhone;
+			productReference = 93AA82C0CDFAD5AC747BF5E2 /* SteerPhone.app */;
+			productType = "com.apple.product-type.application";
+		};
+		602BA60DDCFBEE3A49F759D3 /* SteerWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FCAF3ADE3F813B829241D080 /* Build configuration list for PBXNativeTarget "SteerWatch" */;
+			buildPhases = (
+				DD521D82ACE9856E2DEE16AB /* Sources */,
+				CFC931F61935A2BE2B98EFCC /* Resources */,
+				0CFA283C23C4B878F3046DB4 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SteerWatch;
+			packageProductDependencies = (
+			);
+			productName = SteerWatch;
+			productReference = FBC17DDEA72820E362B2E7EB /* SteerWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
+		FF4AE29AD94473D610070F8F /* SteerCoreTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 56068A8EB0BC9FDD9F1DB10C /* Build configuration list for PBXNativeTarget "SteerCoreTests" */;
+			buildPhases = (
+				26E97E0AEE8CE77BDA7251BE /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SteerCoreTests;
+			packageProductDependencies = (
+			);
+			productName = SteerCoreTests;
+			productReference = A244D9F6B2136559DE9B27CE /* SteerCoreTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		3D55AAA8ED4D0B45A634DE93 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					12B4C71F14EFE614C65F4363 = {
+						ProvisioningStyle = Automatic;
+					};
+					602BA60DDCFBEE3A49F759D3 = {
+						ProvisioningStyle = Automatic;
+					};
+					FF4AE29AD94473D610070F8F = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = F20658DBD8FA424F191E3F1D /* Build configuration list for PBXProject "SteerApple" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = BEC136070590710EEC75B898;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 38C9BE9B96C8A68BB5A01AE8 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				12B4C71F14EFE614C65F4363 /* SteerPhone */,
+				602BA60DDCFBEE3A49F759D3 /* SteerWatch */,
+				FF4AE29AD94473D610070F8F /* SteerCoreTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		CFC931F61935A2BE2B98EFCC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				36635E4C353EBC6B51D83D87 /* WHISPER-LICENSE.txt in Resources */,
+				915210BE8FA708BDE32AB5F6 /* WHISPER-MODEL-LICENSE.txt in Resources */,
+				27334C5D7E4FD850E21ADFFE /* ggml-base-q5_1.bin in Resources */,
+				2F6734251F3829BD2192A34C /* ggml-tiny-q5_1.bin in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D43F1CAD71D02EA3ACDD3D66 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C17C8EE87BC0E53E20A20282 /* WHISPER-LICENSE.txt in Resources */,
+				C8FA0C73ADEE058D4CF77799 /* WHISPER-MODEL-LICENSE.txt in Resources */,
+				28DB7ECE0BCB8682DE499FCF /* ggml-base-q5_1.bin in Resources */,
+				BC1D14CCB39AA982A5692269 /* ggml-tiny-q5_1.bin in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		26E97E0AEE8CE77BDA7251BE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				69C6972C1675EADA284B9AB4 /* API.swift in Sources */,
+				2006EF55A0AB1B5CE64643C9 /* APITests.swift in Sources */,
+				598E2212C73C49D6F4A8AAEE /* Models.swift in Sources */,
+				BB441330A5A0D44940A82807 /* SpeechEndpoint.swift in Sources */,
+				2C12004389A293C89E10B9E1 /* SpeechEndpointTests.swift in Sources */,
+				812CD835C9ABD07F171E38AA /* VoiceUpload.swift in Sources */,
+				B96A6691C5CDDA2728B7355E /* VoiceUploadTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7C1F83AE4C25F5E22C214630 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9CAD2972E635C28CA94174BD /* API.swift in Sources */,
+				6E83E379A405B9747BCCB071 /* LocalSpeech.swift in Sources */,
+				3163D537879F418B0FDA0F8D /* Models.swift in Sources */,
+				E74947C6B4FE379D4F69DE51 /* Pairing.swift in Sources */,
+				AA3DFDA90C03B5AAD567B1B7 /* PhoneSpeech.swift in Sources */,
+				45452777C3DBAE74D44EAF5A /* SecureStore.swift in Sources */,
+				9AAD818F4D35E5239D2026B7 /* SpeechEndpoint.swift in Sources */,
+				FA6EE95A0DEB202AB567C6F0 /* SteerPhoneApp.swift in Sources */,
+				C65B5567010CAC477C409210 /* VoiceUpload.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DD521D82ACE9856E2DEE16AB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E42A4CECBCE14BB21D057050 /* API.swift in Sources */,
+				931C8264109C79FD5D950A64 /* Dictation.swift in Sources */,
+				9CF82C5B0CF005517022807A /* LocalSpeech.swift in Sources */,
+				608F6183978A424F2F3C6BCD /* Models.swift in Sources */,
+				07CE3CB0CB35048D61451BC4 /* Notifications.swift in Sources */,
+				DD8D1B949CB9B063CE9AA425 /* Pairing.swift in Sources */,
+				FEE1F61A735F5327CCF3B96F /* PhoneSpeech.swift in Sources */,
+				A1098FF08318333923CF35D1 /* SecureStore.swift in Sources */,
+				5BDB5A57BEC75BE504864D59 /* SpeechEndpoint.swift in Sources */,
+				0AB61444AE2CE17917865D69 /* SteerWatchApp.swift in Sources */,
+				25AB7DFAB66EE6C57B43172F /* VoiceListening.swift in Sources */,
+				927F71361B10F340E7BB77F8 /* VoiceUpload.swift in Sources */,
+				98CCDF3523F1B339EE4F5993 /* WatchModel.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8A748B196F996E3A7FE2D582 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 602BA60DDCFBEE3A49F759D3 /* SteerWatch */;
+			targetProxy = E156403A75921149125D6B57 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		00969677E7FA78DF01E21054 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(STEER_BUNDLE_PREFIX).coretests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2BA46ECCC59CA591B2C18033 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(STEER_BUNDLE_PREFIX).coretests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		46CF6D07B32A1AA2EC58548D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 7;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STEER_BUNDLE_PREFIX = com.example.steer;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		4B933F383C557525266AF21F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".cache/asr\"",
+				);
+				INFOPLIST_FILE = Phone/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Steer;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "连接局域网中的 Steer Server。";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(STEER_BUNDLE_PREFIX).phone";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		57558D3A109B1AC41AD2F62C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Watch/SteerWatch.entitlements;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".cache/asr\"",
+				);
+				INFOPLIST_FILE = Watch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Steer;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "连接局域网中的 Steer Server。";
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(STEER_BUNDLE_PREFIX).phone";
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(STEER_BUNDLE_PREFIX).phone.watchkitapp";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STEER_APNS_ENVIRONMENT = development;
+				TARGETED_DEVICE_FAMILY = 4;
+			};
+			name = Debug;
+		};
+		759B1528D62EDD7F8AB1F946 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 7;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STEER_BUNDLE_PREFIX = com.example.steer;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		C2FE2F0288602F4AACE88C78 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Watch/SteerWatch.entitlements;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".cache/asr\"",
+				);
+				INFOPLIST_FILE = Watch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Steer;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "连接局域网中的 Steer Server。";
+				INFOPLIST_KEY_WKApplication = YES;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(STEER_BUNDLE_PREFIX).phone";
+				INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(STEER_BUNDLE_PREFIX).phone.watchkitapp";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STEER_APNS_ENVIRONMENT = production;
+				TARGETED_DEVICE_FAMILY = 4;
+			};
+			name = Release;
+		};
+		D2E1471EE77A189988348B73 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".cache/asr\"",
+				);
+				INFOPLIST_FILE = Phone/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Steer;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "连接局域网中的 Steer Server。";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(STEER_BUNDLE_PREFIX).phone";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		56068A8EB0BC9FDD9F1DB10C /* Build configuration list for PBXNativeTarget "SteerCoreTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00969677E7FA78DF01E21054 /* Debug */,
+				2BA46ECCC59CA591B2C18033 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D8DEEB0A895A1D668AF596D5 /* Build configuration list for PBXNativeTarget "SteerPhone" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4B933F383C557525266AF21F /* Debug */,
+				D2E1471EE77A189988348B73 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F20658DBD8FA424F191E3F1D /* Build configuration list for PBXProject "SteerApple" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				759B1528D62EDD7F8AB1F946 /* Debug */,
+				46CF6D07B32A1AA2EC58548D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FCAF3ADE3F813B829241D080 /* Build configuration list for PBXNativeTarget "SteerWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				57558D3A109B1AC41AD2F62C /* Debug */,
+				C2FE2F0288602F4AACE88C78 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 3D55AAA8ED4D0B45A634DE93 /* Project object */;
+}

@@ -72,6 +72,7 @@ type Project struct {
 }
 
 type Session struct {
+	ModelOverride        *string   `json:"modelOverride"`
 	LastMessageAt        time.Time `json:"lastMessageAt"`
 	Pinned               bool      `json:"pinned"`
 	Archived             bool      `json:"archived"`
@@ -158,6 +159,8 @@ func (s *Store) DeleteProject(ctx context.Context, wid, id string) (Project, err
 
 // MessageContext snapshots authorship and the selected quotation for a turn.
 type MessageContext struct {
+	Model                string            `json:"model,omitempty"`
+	ModelOverride        *string           `json:"modelOverride,omitempty"`
 	UserID               string            `json:"userId,omitempty"`
 	UserName             string            `json:"userName,omitempty"`
 	SeenDelegationIDs    []string          `json:"seenDelegationIds,omitempty"`
@@ -553,14 +556,14 @@ func (s *Store) SharedConversationByToken(ctx context.Context, hash string) (Sha
 	return share, err
 }
 
-const sessionColumns = `id,workspace_id,title,agent_id,project_id,execution_runtime_id,workspace_key,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,parent_conversation_id,shared_agent_grant_id,created_at,updated_at,pinned,archived,CASE WHEN shared_agent_grant_id IS NULL THEN NULL ELSE COALESCE((SELECT status FROM resource_shares WHERE id=chat_sessions.shared_agent_grant_id),'unavailable') END,COALESCE((SELECT MAX(m.created_at) FROM messages m WHERE m.workspace_id=chat_sessions.workspace_id AND m.session_id=chat_sessions.id),created_at) AS last_message_at`
+const sessionColumns = `model_override,id,workspace_id,title,agent_id,project_id,execution_runtime_id,workspace_key,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,parent_conversation_id,shared_agent_grant_id,created_at,updated_at,pinned,archived,CASE WHEN shared_agent_grant_id IS NULL THEN NULL ELSE COALESCE((SELECT status FROM resource_shares WHERE id=chat_sessions.shared_agent_grant_id),'unavailable') END,COALESCE((SELECT MAX(m.created_at) FROM messages m WHERE m.workspace_id=chat_sessions.workspace_id AND m.session_id=chat_sessions.id),created_at) AS last_message_at`
 
 type rowScanner interface {
 	Scan(...any) error
 }
 
 func scanSessionFields(row rowScanner, x *Session) error {
-	return row.Scan(&x.ID, &x.WorkspaceID, &x.Title, &x.AgentID, &x.ProjectID, &x.ExecutionRuntimeID, &x.WorkspaceKey, &x.WorkspaceKind, &x.WorkspaceSource, &x.WorkspaceRef, &x.WorkspaceSubdir, &x.ExecutionMode, &x.ParentConversationID, &x.SharedAgentGrantID, &x.CreatedAt, &x.UpdatedAt, &x.Pinned, &x.Archived, &x.SharedAgentAccess, &x.LastMessageAt)
+	return row.Scan(&x.ModelOverride, &x.ID, &x.WorkspaceID, &x.Title, &x.AgentID, &x.ProjectID, &x.ExecutionRuntimeID, &x.WorkspaceKey, &x.WorkspaceKind, &x.WorkspaceSource, &x.WorkspaceRef, &x.WorkspaceSubdir, &x.ExecutionMode, &x.ParentConversationID, &x.SharedAgentGrantID, &x.CreatedAt, &x.UpdatedAt, &x.Pinned, &x.Archived, &x.SharedAgentAccess, &x.LastMessageAt)
 }
 
 func (s *Store) EnsureSession(ctx context.Context, wid, sessionID, title, agentID string, projectID, executionRuntimeID, workspaceKey *string, project *Project) (Session, error) {
@@ -607,7 +610,7 @@ func (s *Store) UpdateSessionSharedGrant(ctx context.Context, wid, sessionID, gr
 // UpdateSessionAgent records the Agent selected for the next turn. Runtime and
 // workspace placement remain pinned independently on the Session.
 func (s *Store) UpdateSessionAgent(ctx context.Context, wid, sessionID, agentID string) error {
-	command, err := s.pool.Exec(ctx, `UPDATE chat_sessions SET agent_id=$3,updated_at=now() WHERE workspace_id=$1 AND id=$2`, wid, sessionID, agentID)
+	command, err := s.pool.Exec(ctx, `UPDATE chat_sessions SET model_override=CASE WHEN agent_id=$3 THEN model_override ELSE NULL END,agent_id=$3,updated_at=now() WHERE workspace_id=$1 AND id=$2`, wid, sessionID, agentID)
 	if err != nil {
 		return err
 	}
@@ -716,7 +719,11 @@ func (s *Store) saveChatRun(ctx context.Context, wid, sessionID, agentID, prompt
 	if assistant.Context != nil && assistant.Context.Delegated && (task == nil || task.ParentConversationID == nil) {
 		sessionAgentID = assistant.Context.OwnerAgentID
 	}
-	_, err = tx.Exec(ctx, `UPDATE chat_sessions SET agent_id=$3,updated_at=$4 WHERE workspace_id=$1 AND id=$2`, wid, sessionID, sessionAgentID, now)
+	var modelOverride *string
+	if assistant.Context != nil {
+		modelOverride = assistant.Context.ModelOverride
+	}
+	_, err = tx.Exec(ctx, `UPDATE chat_sessions SET agent_id=$3,updated_at=$4,model_override=$5 WHERE workspace_id=$1 AND id=$2`, wid, sessionID, sessionAgentID, now, modelOverride)
 	if err != nil {
 		return Message{}, Message{}, err
 	}

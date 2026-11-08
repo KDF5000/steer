@@ -19,6 +19,25 @@ const { steer } = await import(
 );
 
 const encoder = new TextEncoder();
+
+test('task model override distinguishes omission from following the default', async (t) => {
+  const bodies = [];
+  t.mock.method(globalThis, 'fetch', async (_url, init) => {
+    bodies.push(init.body);
+    return Response.json({ taskId: 'task' }, { status: 202 });
+  });
+  await steer.createTask({
+    prompt: 'Continue',
+    agentId: 'agent',
+    model: 'selected-model',
+  });
+  await steer.createTask({ prompt: 'Default', agentId: 'agent', model: '' });
+  await steer.createTask({ prompt: 'Inherit', agentId: 'agent' });
+  assert.equal(bodies[0].get('model'), 'selected-model');
+  assert.equal(bodies[1].get('model'), '');
+  assert.equal(bodies[2].has('model'), false);
+});
+
 const event = { sequence: 1, type: 'message', text: '你好，Steer' };
 const frame = `event: relay.event\r\ndata: ${JSON.stringify(event)}\r\n\r\n`;
 const done = 'event: steer.done\r\ndata: {}\r\n\r\n';

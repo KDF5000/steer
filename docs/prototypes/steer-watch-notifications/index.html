@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Steer Watch · 任务通知交互方案</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#"
+        ><span class="brand-mark">S</span> Steer
+        <span>WATCH / 交互探索</span></a
+      ><span class="edition">三套完整方案 · 小屏优先</span>
+    </header>
+    <main>
+      <section class="intro">
+        <p class="eyebrow">任务状态通知 × 语音续聊</p>
+        <h1>抬腕看状态，<br class="mobile-break" />开口接着做。</h1>
+        <p class="lead">
+          手表聚焦正在进行的任务与完成提醒。三种组织方式，每套都可体验通知、听写、确认与续聊。
+        </p>
+        <div class="display-settings">
+          <div class="segmented" aria-label="手表尺寸">
+            <button data-size="40" aria-pressed="true">40mm · 小屏</button
+            ><button data-size="44" aria-pressed="false">44mm</button>
+          </div>
+          <button class="scale-toggle" data-scale>切换到 1:1 比例</button
+          ><span class="size-note">40mm / 162 × 197 pt · 当前放大预览</span>
+        </div>
+      </section>
+      <section
+        class="concepts"
+        aria-label="三种 Apple Watch 交互方案"
+      ></section>
+      <section class="flow-section">
+        <p class="eyebrow">每套方案都包含完整交互</p>
+        <h2>收到结果，然后继续。</h2>
+        <p class="lead small">
+          下方使用同一段听写文字，比较三种方案从结果到发送的过程。点击上方场景按钮，可在真实比例的手表里逐步体验。
+        </p>
+        <div class="flow-grid"></div>
+      </section>
+      <section class="design-note">
+        <div>
+          <h3>按 40mm 小屏排版</h3>
+          <p>
+            屏幕逻辑尺寸 162 × 197 pt；44mm 为 184 × 224
+            pt。外框与放大倍率仅用于预览。
+          </p>
+        </div>
+        <div>
+          <h3>每屏一个主要动作</h3>
+          <p>
+            按钮触控区域至少 44 × 44
+            pt，固定在安全区域内。任务列表和较长结果可以滚动。
+          </p>
+        </div>
+        <div>
+          <h3>只保留手表需要的内容</h3>
+          <p>
+            不展示工具流水、完整历史聊天或手机跳转。识别文字确认后发送，断网与失败保留草稿。
+          </p>
+        </div>
+      </section>
+      <footer>
+        <span>STEER × APPLE WATCH</span>
+        <p>
+          HTML 交互原型 · 任务、听写和通知均为模拟 · 不会调用麦克风或真实任务
+          API
+        </p>
+      </footer>
+    </main>
+    <script src="prototype.js"></script>
+  </body>
+</html>

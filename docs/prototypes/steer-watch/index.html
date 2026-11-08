@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Steer Watch · 交互设计选择</title>
+    <link rel="stylesheet" href="watch.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#"
+        ><span class="brand-mark">S</span>Steer
+        <span class="brand-tail">WATCH CONCEPTS</span></a
+      ><span class="edition">01—03 / 交互设计</span>
+    </header>
+    <main>
+      <section class="intro">
+        <p class="eyebrow">让任务继续，让你离开屏幕</p>
+        <h1>抬腕看进展，<br class="mobile-break" />说一句接着做。</h1>
+        <p class="lead">
+          三种完整方案：扫描列表、逐屏切换、处理动态。每套都支持查看结果和语音续聊。
+        </p>
+        <p>
+          <a
+            href="a.html"
+            style="
+              color: var(--green);
+              text-decoration: underline;
+              font-size: 13px;
+            "
+            >单独体验 A 方案完整交互 →</a
+          >
+        </p>
+        <div class="legend">
+          <span><i class="dot running"></i>运行中</span
+          ><span><i class="dot success"></i>已完成</span
+          ><span><i class="dot failure"></i>失败</span
+          ><span class="prototype-note"
+            >可点击体验 · 示例数据 · 听写与通知为模拟</span
+          >
+        </div>
+      </section>
+      <section
+        class="concepts"
+        aria-label="三个 Apple Watch 交互方案"
+      ></section>
+      <section class="principles">
+        <div>
+          <span class="eyebrow">共同的交互约定</span>
+          <h2>可靠，比始终在线更重要。</h2>
+        </div>
+        <div class="principle-grid">
+          <article>
+            <span>01</span>
+            <h3>离线也知道发生了什么</h3>
+            <p>保留上次同步的状态并标注时间。离线内容不伪装成实时进度。</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>先确认，再交给 Agent</h3>
+            <p>听写结束展示文字、项目和 Agent，确认后发送。断网保留草稿。</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>运行与待发送分开</h3>
+            <p>不把等待发送显示为执行中。模拟恢复网络后，由用户重试发送。</p>
+          </article>
+        </div>
+      </section>
+      <footer>
+        <span>STEER × APPLE WATCH</span>
+        <p>
+          基于 watchOS
+          深色界面、圆角列表与系统听写流程设计。硬件外框仅用于展示比例，正式 App
+          使用原生控件。
+        </p>
+      </footer>
+    </main>
+    <script src="watch.js"></script>
+  </body>
+</html>

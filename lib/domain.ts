@@ -48,6 +48,8 @@ export type ChatActivity = {
 };
 
 export type MessageContext = {
+  model?: string;
+  modelOverride?: string | null;
   userId?: string;
   userName?: string;
   delegationSessionId?: string;

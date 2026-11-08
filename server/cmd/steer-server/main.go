@@ -11,6 +11,7 @@ import (
 	"time"
 
 	steerapi "github.com/KDF5000/steer/server/internal/api"
+	"github.com/KDF5000/steer/server/internal/apns"
 	"github.com/KDF5000/steer/server/internal/store"
 )
 
@@ -33,12 +34,21 @@ func main() {
 		slog.Error("workspace bootstrap failed", "error", err)
 		os.Exit(1)
 	}
+	var watchPush *apns.Client
+	if os.Getenv("STEER_APNS_KEY_FILE") != "" {
+		watchPush, err = apns.New(apns.Config{KeyFile: os.Getenv("STEER_APNS_KEY_FILE"), KeyID: os.Getenv("STEER_APNS_KEY_ID"), TeamID: os.Getenv("STEER_APNS_TEAM_ID"), Topic: os.Getenv("STEER_APNS_TOPIC")})
+		if err != nil {
+			slog.Warn("watch background notifications unavailable", "error", err)
+		}
+	}
 	relayURL := env("RELAY_BASE_URL", "http://127.0.0.1:8787")
-	apiServer := steerapi.New(st, relayURL, os.Getenv("RELAY_HOST_TOKEN"), env("RELAY_PUBLIC_URL", relayURL), workspaceID, strings.Split(env("STEER_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"), ","), steerapi.WithAuthentication(30*24*time.Hour), steerapi.WithCredentialEncryptionKey(os.Getenv("STEER_CREDENTIAL_ENCRYPTION_KEY")))
+	apiServer := steerapi.New(st, relayURL, os.Getenv("RELAY_HOST_TOKEN"), env("RELAY_PUBLIC_URL", relayURL), workspaceID, strings.Split(env("STEER_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"), ","), steerapi.WithAuthentication(30*24*time.Hour), steerapi.WithCredentialEncryptionKey(os.Getenv("STEER_CREDENTIAL_ENCRYPTION_KEY")), steerapi.WithWatchNotifications(watchPush))
 	if err := apiServer.StartIntegrations(ctx); err != nil {
 		slog.Error("integration manager failed to start", "error", err)
 	}
 	defer apiServer.StopIntegrations()
+	stopWatchNotifications := apiServer.StartWatchNotifications(ctx)
+	defer stopWatchNotifications()
 	stopUsageSync := apiServer.StartUsageSync(ctx)
 	defer stopUsageSync()
 	handler := apiServer.Handler()

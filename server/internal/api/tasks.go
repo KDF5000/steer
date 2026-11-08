@@ -319,6 +319,10 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 		return submittedTask{}, false, taskRequestError{Status: http.StatusConflict, Message: "conversation Agent changed; reload before delegating"}
 	}
 	switchedAgent := session.AgentID != agent.ID || value(session.ExecutionRuntimeID) != value(executionRuntimeID)
+	modelOverride, model := conversationModel(session, agent, in.Model, delegated)
+	if len(model) > 256 || strings.ContainsAny(model, "\r\n\x00") {
+		return submittedTask{}, false, taskRequestError{Status: http.StatusBadRequest, Message: "Invalid model name"}
+	}
 	pendingDelegations, err := s.store.PendingDelegations(ctx, wid, conversationID)
 	if err != nil {
 		return submittedTask{}, false, err
@@ -334,7 +338,7 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	if runPrompt == "" {
 		runPrompt = "Please inspect the attached image and respond to it."
 	}
-	messageContext := &store.MessageContext{UserID: userFromContext(ctx).ID, UserName: userFromContext(ctx).DisplayName, AgentID: agent.ID, AgentName: agent.Name, OwnerAgentID: owner.ID, Delegated: delegated}
+	messageContext := &store.MessageContext{Model: model, ModelOverride: modelOverride, UserID: userFromContext(ctx).ID, UserName: userFromContext(ctx).DisplayName, AgentID: agent.ID, AgentName: agent.Name, OwnerAgentID: owner.ID, Delegated: delegated}
 	reference, referenceErr := resolveMessageReference(previous, strings.TrimSpace(in.ReferencedMessageID), in.ReferenceMode, delegated)
 	if referenceErr != nil {
 		return submittedTask{}, false, referenceErr
@@ -381,7 +385,7 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	request := relay.Request{
 		TenantID: wid, ProjectID: value(session.ProjectID), SessionID: conversationID, AgentID: agent.ID,
 		IdempotencyKey: relayIdempotencyKey,
-		Runtime:        relay.RuntimeRequirement{ID: physicalRuntimeID, Provider: agent.RuntimeProvider, Model: value(agent.Model)},
+		Runtime:        relay.RuntimeRequirement{ID: physicalRuntimeID, Provider: agent.RuntimeProvider, Model: model},
 		Source:         relay.Source{Kind: relaySourceKind, ExternalID: conversationID}, Input: input,
 		Principal: relay.Principal{Type: "user", ID: firstNonEmpty(userFromContext(ctx).ID, "workspace:"+wid)},
 	}
@@ -714,4 +718,23 @@ func hasOtherAgentWork(previous []store.Message, agentID string) bool {
 		}
 	}
 	return false
+}
+
+// An omitted model keeps a conversation override for the same Agent. An empty
+// model explicitly follows the Agent default. Delegations use their own defaults.
+func conversationModel(session store.Session, agent store.Agent, requested *string, delegated bool) (*string, string) {
+	var override *string
+	if !delegated {
+		if requested != nil {
+			if model := strings.TrimSpace(*requested); model != "" {
+				override = &model
+			}
+		} else if session.AgentID == agent.ID {
+			override = session.ModelOverride
+		}
+	}
+	if override != nil {
+		return override, *override
+	}
+	return nil, value(agent.Model)
 }

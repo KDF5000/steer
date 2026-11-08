@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Steer · 个人空间共享设计</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="designbar">
+      <span>Steer 共享 · 交互原型</span>
+      <nav id="concepts">
+        <button data-concept="a">A 集中入口</button
+        ><button data-concept="b">B 融入工作台</button
+        ><button data-concept="c">C 共享收件箱</button>
+      </nav>
+      <select id="identity" aria-label="体验身份">
+        <option value="owner">Alex · 所有者</option>
+        <option value="guest">林悦 · 接收者</option>
+      </select>
+    </div>
+    <div class="shell">
+      <aside id="sidebar"></aside>
+      <main>
+        <header id="topbar"></header>
+        <div id="content"></div>
+      </main>
+      <aside id="inspector" hidden></aside>
+    </div>
+    <div class="scrim" id="scrim" hidden></div>
+    <dialog id="modal"></dialog>
+    <div id="toast" role="status"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

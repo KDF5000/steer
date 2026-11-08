@@ -1,0 +1,4 @@
+module SteerLocalASR {
+    header "SteerLocalASR.h"
+    export *
+}

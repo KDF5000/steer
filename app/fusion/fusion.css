@@ -7328,6 +7328,291 @@ button.ws-chat-response-meta:focus-visible {
   font-weight: 540;
 }
 
+/* Agent identity and conversation model share one composer control. */
+.ws-composer-agent-model {
+  max-width: min(48vw, 440px);
+}
+.ws-composer-agent-model .ws-agent-model-label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+.ws-agent-model-label > span:first-child {
+  flex-shrink: 0;
+}
+.ws-agent-model-label .ws-agent-model-dot {
+  color: var(--ws-text-tertiary);
+}
+.ws-agent-model-label .ws-agent-model-value {
+  color: var(--ws-text-secondary);
+}
+.ws-composer-agent-model > svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 150ms;
+}
+.ws-composer-agent-model[data-popup-open] > svg {
+  transform: rotate(180deg);
+}
+.ws-agent-model-popup[data-slot='popover-content'] {
+  display: flex;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  --tw-ring-shadow: 0 0 #0000;
+  font-size: var(--ws-font-control);
+}
+.ws-agent-picker-pane,
+.ws-model-picker-pane {
+  width: 302px;
+  max-width: calc(100vw - 32px);
+  max-height: min(600px, calc(100dvh - 100px));
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--ws-border);
+  border-radius: 12px;
+  background: var(--ws-surface);
+  color: var(--ws-text);
+  box-shadow:
+    0 16px 48px #18191b20,
+    0 2px 8px #18191b0d;
+}
+.ws-agent-picker-pane[hidden] {
+  display: none;
+}
+.ws-model-picker-pane {
+  width: 314px;
+  scrollbar-width: none;
+}
+.ws-model-picker-pane::-webkit-scrollbar {
+  display: none;
+}
+.ws-agent-picker-row {
+  display: flex;
+  border-radius: 8px;
+}
+.ws-agent-picker-row.is-active {
+  background: var(--ws-surface-hover);
+}
+.ws-agent-picker-choice {
+  display: flex;
+  min-width: 0;
+  min-height: 46px;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+}
+.ws-agent-picker-choice > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+}
+.ws-agent-picker-choice strong {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 500;
+}
+.ws-agent-picker-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ws-agent-picker-choice strong svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #4849ad;
+}
+.ws-agent-picker-choice .ws-agent-avatar {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.ws-agent-model-sub-trigger {
+  display: grid;
+  width: 34px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ws-text-tertiary);
+}
+.ws-agent-model-sub-trigger svg {
+  width: 16px;
+  height: 16px;
+}
+.ws-agent-model-sub-trigger[aria-expanded='true'] {
+  color: var(--ws-text-secondary);
+}
+.ws-agent-picker-row button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.ws-model-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px 8px;
+  padding: 8px;
+  border: 1px solid var(--ws-border);
+  border-radius: 8px;
+  color: var(--ws-text-tertiary);
+}
+.ws-model-picker-search svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.ws-model-picker-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ws-text);
+  font: inherit;
+}
+.ws-model-picker-search:focus-within {
+  border-color: var(--ws-accent);
+}
+.ws-model-picker-options > button {
+  display: flex;
+  width: 100%;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+}
+.ws-model-picker-options > button:hover,
+.ws-model-picker-options > button:focus-visible {
+  background: var(--ws-surface-hover);
+}
+.ws-model-picker-options > button > svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--ws-text-tertiary);
+}
+.ws-model-picker-options > button > svg:last-child:not(:first-child) {
+  color: #4849ad;
+}
+.ws-model-picker-options > button > span {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.ws-model-picker-options > button > span:has(strong) {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.ws-model-picker-options strong {
+  font-weight: 500;
+}
+.ws-model-picker-options small {
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+.ws-model-default-badge {
+  padding: 0 4px;
+  border: 1px solid var(--ws-border);
+  border-radius: 4px;
+}
+.ws-model-picker-options hr {
+  height: 1px;
+  margin: 6px 4px;
+  border: 0;
+  background: var(--ws-divider);
+}
+.ws-model-picker-empty {
+  padding: 10px;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+}
+.ws-model-picker-back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  color: var(--ws-text-secondary);
+  font: inherit;
+}
+.ws-model-picker-back svg {
+  width: 16px;
+  height: 16px;
+}
+.ws-agent-model-popup button:focus-visible {
+  outline: 2px solid var(--ws-accent);
+  outline-offset: -2px;
+}
+.ws-message-agent-model {
+  margin-bottom: 8px;
+  color: var(--ws-text-tertiary);
+  font-size: var(--ws-font-caption);
+  font-weight: 400;
+}
+@media (max-width: 767px) {
+  .ws-chatbox-context:has(.ws-composer-agent-model) {
+    max-width: none;
+    flex: 1;
+  }
+  .ws-chatbox-context:has(.ws-composer-agent-model) .ws-composer-project {
+    max-width: 85px;
+  }
+  .ws-composer-agent-model {
+    max-width: calc(100vw - 152px) !important;
+  }
+  .ws-agent-model-label > span:first-child {
+    max-width: 84px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ws-agent-model-label .ws-agent-model-value {
+    min-width: 38px;
+  }
+  .ws-agent-model-popup.is-mobile {
+    width: min(360px, calc(100vw - 32px));
+  }
+  .ws-agent-model-popup.is-mobile > div {
+    width: 100%;
+  }
+  .ws-agent-model-sub-trigger {
+    width: 42px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ws-composer-agent-model > svg {
+    transition: none;
+  }
+}
+
 .ws-search-dialog {
   max-width: 560px !important;
   overflow: hidden;

@@ -97,6 +97,14 @@ const zhCN: Record<string, string> = {
   'Anyone with this link can view the snapshot. Invite collaborators separately.':
     '拿到链接的人可以查看这份内容；参与协作需另行邀请。',
   'Runtime default': 'Runtime 默认模型',
+  'Select Agent and model': '选择智能体和模型',
+  'Select model': '选择模型',
+  Default: '默认',
+  'Back to Agents': '返回智能体',
+  'Search models…': '搜索模型…',
+  'Follow Agent default': '跟随智能体默认',
+  'No matching models': '没有匹配的模型',
+  'No model list reported by this Runtime.': '运行环境尚未提供模型列表。',
   'Conversation access': '会话访问权限',
   'Access is limited to this conversation and its authorized execution environment.':
     '仅开放此会话和授权执行环境。',

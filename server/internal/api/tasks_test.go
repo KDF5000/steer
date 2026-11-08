@@ -119,6 +119,36 @@ func TestTaskAPIHTTPAndChatCompatibility(t *testing.T) {
 		t.Fatalf("Relay conversation continuity changed: %+v", sent)
 	}
 
+	// Changing only the model preserves Relay's native session identity and the
+	// Agent configuration, while the conversation remembers its override.
+	call(http.MethodPost, "/conversations/"+conversationID+"/tasks", `{"prompt":"Switch model","agentId":"`+agent.ID+`","model":"alternate-model"}`, "model-"+uuid.NewString(), "", http.StatusAccepted)
+	modelSession, err := st.Session(context.Background(), wid, conversationID)
+	if err != nil || modelSession.ModelOverride == nil || *modelSession.ModelOverride != "alternate-model" {
+		t.Fatalf("model override was not persisted: %+v %v", modelSession, err)
+	}
+	call(http.MethodPost, "/conversations/"+conversationID+"/tasks", `{"prompt":"Keep model","agentId":"`+agent.ID+`"}`, "model-"+uuid.NewString(), "", http.StatusAccepted)
+	mu.Lock()
+	modelTurns := append([]relay.Request(nil), relayRequests[len(relayRequests)-2:]...)
+	mu.Unlock()
+	for _, turn := range modelTurns {
+		if turn.Runtime.Model != "alternate-model" || turn.SessionID != conversationID || turn.AgentID != sent[0].AgentID || turn.Runtime.ID != sent[0].Runtime.ID {
+			t.Fatalf("model switch changed native session identity: %+v", turn)
+		}
+	}
+	messages, err := st.Messages(context.Background(), wid, conversationID)
+	if err != nil || messages[len(messages)-1].Context.Model != "alternate-model" {
+		t.Fatalf("turn did not snapshot model: %+v %v", messages, err)
+	}
+	call(http.MethodPost, "/conversations/"+conversationID+"/tasks", `{"prompt":"Follow default","agentId":"`+agent.ID+`","model":""}`, "model-"+uuid.NewString(), "", http.StatusAccepted)
+	modelSession, err = st.Session(context.Background(), wid, conversationID)
+	if err != nil || modelSession.ModelOverride != nil {
+		t.Fatalf("restoring default retained override: %+v %v", modelSession, err)
+	}
+	unchangedAgent, err := st.Agent(context.Background(), wid, agent.ID)
+	if err != nil || unchangedAgent.Model != nil {
+		t.Fatalf("conversation override changed Agent default: %+v %v", unchangedAgent, err)
+	}
+
 	readToken := "steer_sk_test_" + uuid.NewString()
 	if _, err := st.CreateWorkspaceAPIKey(context.Background(), store.WorkspaceAPIKey{
 		WorkspaceID: wid, Name: "Read only", TokenHash: tokenHash(readToken), TokenPrefix: "steer_sk_test", Scopes: []string{"tasks:read"}, CreatedByUserID: "test-user",

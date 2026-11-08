@@ -23,6 +23,7 @@ import (
 	"github.com/KDF5000/relay/controlplane"
 	"github.com/KDF5000/relay/sdk"
 	"github.com/KDF5000/relay/transport/httpapi"
+	"github.com/KDF5000/steer/server/internal/apns"
 	"github.com/KDF5000/steer/server/internal/store"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -39,6 +40,7 @@ type Server struct {
 	sessionTTL       time.Duration
 	credentialCipher cipher.AEAD
 	integrations     *integrationManager
+	watchPush        *apns.Client
 }
 
 var errSystemAgentNotConfigured = errors.New("no system Agent is configured; choose one in System settings")
@@ -182,6 +184,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/messages/{messageId}/attachments/{attachmentId}", s.messageAttachment)
 	mux.HandleFunc("GET /api/v1/shares/{token}", s.sharedConversation)
 	mux.HandleFunc("POST /api/v1/chat", s.chatTask)
+	mux.HandleFunc("GET /api/v1/watch/notifications", s.watchNotificationStatus)
+	mux.HandleFunc("POST /api/v1/watch/devices", s.registerWatchDevice)
+	mux.HandleFunc("DELETE /api/v1/watch/devices/{id}", s.removeWatchDevice)
+	mux.HandleFunc("GET /api/v1/watch/conversations", s.watchConversations)
+	mux.HandleFunc("GET /api/v1/watch/conversations/{id}", s.chatSession)
 	mux.HandleFunc("POST /api/v1/tasks", s.createTask)
 	mux.HandleFunc("POST /api/v1/conversations/{id}/tasks", s.createTask)
 	mux.HandleFunc("GET /api/v1/tasks/{id}", s.getTask)
@@ -648,6 +655,7 @@ func (s *Server) artifactContent(w http.ResponseWriter, r *http.Request) {
 }
 
 type chatRequest struct {
+	Model               *string         `json:"model"`
 	TargetAgentID       string          `json:"targetAgentId"`
 	ReferencedMessageID string          `json:"referencedMessageId"`
 	ReferenceMode       string          `json:"referenceMode"`
@@ -687,6 +695,10 @@ func decodeChatRequest(w http.ResponseWriter, r *http.Request) (chatRequest, []s
 		return chatRequest{}, nil, fmt.Errorf("invalid image upload: %w", err)
 	}
 	in := chatRequest{Prompt: r.FormValue("prompt"), AgentID: r.FormValue("agentId"), TargetAgentID: r.FormValue("targetAgentId"), ReferencedMessageID: r.FormValue("referencedMessageId"), ReferenceMode: r.FormValue("referenceMode")}
+	if values, ok := r.MultipartForm.Value["model"]; ok && len(values) > 0 {
+		model := strings.TrimSpace(values[0])
+		in.Model = &model
+	}
 	if value := strings.TrimSpace(r.FormValue("sessionId")); value != "" {
 		in.SessionID = &value
 	}

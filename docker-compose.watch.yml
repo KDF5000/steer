@@ -1,0 +1,13 @@
+# Optional APNs configuration for the native Apple Watch client.
+services:
+  steer-server:
+    environment:
+      STEER_APNS_KEY_FILE: /run/secrets/steer-apns.p8
+      STEER_APNS_KEY_ID: ${STEER_APNS_KEY_ID:?Set the Apple APNs Key ID}
+      STEER_APNS_TEAM_ID: ${STEER_APNS_TEAM_ID:?Set the Apple Developer Team ID}
+      STEER_APNS_TOPIC: ${STEER_APNS_TOPIC:?Set the Watch app bundle identifier}
+    volumes:
+      - type: bind
+        source: ${STEER_APNS_KEY_PATH:?Set an absolute path to the APNs p8 file}
+        target: /run/secrets/steer-apns.p8
+        read_only: true

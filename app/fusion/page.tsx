@@ -72,6 +72,7 @@ import {
 } from './inline-composer';
 import { SessionSearchDialog } from './session-search';
 import type { TaskMessageOptions } from '@/lib/domain';
+import { AgentModelPicker } from './agent-model-picker';
 import hljs from 'highlight.js/lib/common';
 import { withRuntimeToolEvents } from '@/lib/runtime-events';
 import 'highlight.js/styles/github.css';
@@ -913,6 +914,9 @@ export default function Fusion() {
   const [relayError, setRelayError] = useState('');
   const [relayPublicURL, setRelayPublicURL] = useState('http://localhost:8787');
   const [chatAgent, setChatAgent] = useState('');
+  const [chatModelOverride, setChatModelOverride] = useState<string | null>(
+    null,
+  );
   const [chatProject, setChatProject] = useState('none');
   const [chatInput, setChatInputState] = useState('');
   const [chatInputRevision, setChatInputRevision] = useState(0);
@@ -1327,6 +1331,7 @@ export default function Fusion() {
     setRelayError(data.relay.error || '');
     setRelayPublicURL(data.relay.publicUrl || 'http://localhost:8787');
     setChatAgent(agents[0]?.id || '');
+    setChatModelOverride(null);
     setChatProject(data.projects?.[0]?.id || 'none');
     const firstRuntime = data.relay.nodes?.flatMap(
       (node) => node.runtimes || [],
@@ -1693,6 +1698,7 @@ export default function Fusion() {
         (session) => session.id === sessionID,
       );
       setChatSession(sessionID);
+      setChatModelOverride(sessionSummary?.modelOverride || null);
       setMessages([]);
       setChatSessionLoading(true);
       setView('chat');
@@ -1728,6 +1734,7 @@ export default function Fusion() {
           if (data.agent) setCollaborationAgent(agentFromRecord(data.agent));
         }
         setChatAgent(data.session.agentId);
+        setChatModelOverride(data.session.modelOverride || null);
         setChatProject(data.session.projectId || 'none');
         const group = data.session.projectId || noProjectSessionGroup;
         setExpandedSessionGroups((current) => {
@@ -2117,6 +2124,7 @@ export default function Fusion() {
     setChatSessionLoading(false);
     setMessages([]);
     setChatSession('');
+    setChatModelOverride(null);
     setChatInput('');
     chatImages.forEach((image) => URL.revokeObjectURL(image.url));
     setChatImages([]);
@@ -2203,6 +2211,7 @@ export default function Fusion() {
         prompt: text,
         ...options,
         agentId: currentAgent.id,
+        ...(!options?.targetAgentId ? { model: chatModelOverride || '' } : {}),
         ...(chatProject !== 'none' ? { projectId: chatProject } : {}),
         ...(conversationId ? { conversationId } : {}),
         images: images.map((image) => image.file),
@@ -2234,6 +2243,7 @@ export default function Fusion() {
             id: result.sessionId,
             title: (text || images[0]?.file.name || 'Image').slice(0, 72),
             agentId: currentAgent.id,
+            modelOverride: chatModelOverride,
             projectId: chatProject === 'none' ? null : chatProject,
             executionRuntimeId:
               currentAgent.runtimeId ||
@@ -2261,6 +2271,7 @@ export default function Fusion() {
                   updatedAt: now,
                   lastMessageAt: now,
                   agentId: currentAgent.id,
+                  modelOverride: chatModelOverride,
                   sharedAgentGrantId:
                     sharedAgentGrant?.id || existing.sharedAgentGrantId,
                   sharedAgentAccess: sharedAgentGrant
@@ -2976,6 +2987,7 @@ export default function Fusion() {
     window.localStorage.setItem('steer.workspace', workspace.id);
     setView('chat');
     setChatSession('');
+    setChatModelOverride(null);
     setMessages([]);
     activeRun.current = '';
     activeTask.current = '';
@@ -3566,6 +3578,8 @@ export default function Fusion() {
                   : agentList.filter((agent) => !agent.shared)
             }
             agent={currentAgent}
+            modelOverride={chatModelOverride}
+            modelRuntimes={runtimeChoices}
             showHumanAuthors={Boolean(
               collaborationShare ||
               resourceShares.some(
@@ -3667,7 +3681,10 @@ export default function Fusion() {
             onDraftInput={updateChatInput}
             images={chatImages}
             working={chatWorking}
-            onAgent={setChatAgent}
+            onAgentModel={(id, model) => {
+              setChatAgent(id);
+              setChatModelOverride(model);
+            }}
             onDelegationSession={(id) => {
               if (collaborationShare) {
                 setNotice(
@@ -4349,6 +4366,8 @@ function ChatView({
   sessionId,
   agents,
   agent,
+  modelOverride,
+  modelRuntimes,
   projectRuntimeChoices,
   projects,
   project,
@@ -4364,7 +4383,7 @@ function ChatView({
   onDraftInput,
   images,
   working,
-  onAgent,
+  onAgentModel,
   onDelegationSession,
   onProject,
   onAddProject,
@@ -4392,6 +4411,8 @@ function ChatView({
   sessionId: string;
   agents: AgentItem[];
   agent?: AgentItem;
+  modelOverride: string | null;
+  modelRuntimes: RuntimeChoice[];
   projectRuntimeChoices?: RuntimeChoice[];
   projects: ProjectRecord[];
   project: string;
@@ -4407,7 +4428,7 @@ function ChatView({
   onDraftInput: (text: string) => void;
   images: PendingImage[];
   working: boolean;
-  onAgent: (id: string) => void;
+  onAgentModel: (id: string, model: string | null) => void;
   onDelegationSession: (id: string) => void;
   onProject: (id: string) => void;
   onAddProject: () => void;
@@ -5050,6 +5071,12 @@ function ChatView({
                             ? 'You'
                             : message.context?.agentName || agent.name}
                         </strong>
+                        {message.role === 'agent' && message.context?.model && (
+                          <div className="ws-message-agent-model">
+                            {message.context.agentName} ·{' '}
+                            {message.context.model}
+                          </div>
+                        )}
                         {message.role === 'agent' && !delegatedElsewhere && (
                           <div
                             className={`ws-chat-response-process${processCollapsible ? '' : ' is-live'}`}
@@ -5614,60 +5641,19 @@ function ChatView({
                   </div>
                   <footer className="ws-chatbox-footer">
                     <div className="ws-chatbox-context">
-                      <Select
-                        value={agent.id}
-                        disabled={working || readOnly || agentSelectionLocked}
-                        onValueChange={(value) => {
+                      <AgentModelPicker
+                        agent={agent}
+                        agents={agents}
+                        modelOverride={modelOverride}
+                        runtimes={projectRuntimeChoices || modelRuntimes}
+                        runtimeRestricted={Boolean(projectRuntimeChoices)}
+                        disabled={working || readOnly || sessionLoading}
+                        agentLocked={agentSelectionLocked}
+                        onSelect={(id, model) => {
                           setDelegationTarget(undefined);
-                          onAgent(value ?? agent.id);
+                          onAgentModel(id, model);
                         }}
-                      >
-                        <SelectTrigger
-                          className="ws-composer-agent"
-                          aria-label={t('Select Agent')}
-                          title={agent.name}
-                        >
-                          <span className="ws-agent-avatar" aria-hidden="true">
-                            {agent.name[0]}
-                          </span>
-                          <span>{agent.name}</span>
-                        </SelectTrigger>
-                        <SelectContent
-                          className="ws-select-popup"
-                          alignItemWithTrigger={false}
-                        >
-                          {agents.map((item) => {
-                            const runtimeMismatch = Boolean(
-                              projectRuntimeChoices &&
-                              !projectRuntimeChoices.some(
-                                (runtime) =>
-                                  runtime.provider === item.runtimeProvider &&
-                                  (!item.runtimeId ||
-                                    item.runtimeId === runtime.runtimeId),
-                              ),
-                            );
-                            return (
-                              <SelectItem
-                                value={item.id}
-                                key={item.id}
-                                disabled={runtimeMismatch}
-                                title={
-                                  runtimeMismatch
-                                    ? t(
-                                        'This Agent is unavailable on the conversation machine',
-                                      )
-                                    : undefined
-                                }
-                              >
-                                {item.name}
-                                {runtimeMismatch
-                                  ? ` · ${t('Different machine')}`
-                                  : ''}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
+                      />
                       <Select
                         value={project}
                         disabled={
@@ -5746,7 +5732,7 @@ function ChatView({
                     readOnlyReason ||
                       'This conversation is shared with view permission.',
                   )
-                : `${agent.name} · ${runtimeLabel} · ${agent.model}`}
+                : `${agent.name} · ${runtimeLabel} · ${modelOverride || agent.model}`}
             </p>
           </div>
         </section>
