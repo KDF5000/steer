@@ -5071,12 +5071,6 @@ function ChatView({
                             ? 'You'
                             : message.context?.agentName || agent.name}
                         </strong>
-                        {message.role === 'agent' && message.context?.model && (
-                          <div className="ws-message-agent-model">
-                            {message.context.agentName} ·{' '}
-                            {message.context.model}
-                          </div>
-                        )}
                         {message.role === 'agent' && !delegatedElsewhere && (
                           <div
                             className={`ws-chat-response-process${processCollapsible ? '' : ' is-live'}`}

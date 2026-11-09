@@ -7572,12 +7572,6 @@ button.ws-chat-response-meta:focus-visible {
   outline: 2px solid var(--ws-accent);
   outline-offset: -2px;
 }
-.ws-message-agent-model {
-  margin-bottom: 8px;
-  color: var(--ws-text-tertiary);
-  font-size: var(--ws-font-caption);
-  font-weight: 400;
-}
 @media (max-width: 767px) {
   .ws-chatbox-context:has(.ws-composer-agent-model) {
     max-width: none;
