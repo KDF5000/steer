@@ -58,68 +58,144 @@ import WatchKit
     }
 }
 struct WatchHome: View {
+    @EnvironmentObject var model: WatchModel
+    @EnvironmentObject var pairing: Pairing
+    @State private var selectedPage = ""
+    @State private var order: [String] = []
+    @State private var initialized = false
+    private var active: [Conversation] { model.items.filter { $0.running && $0.taskID != nil } }
+    private var pages: [Conversation] { order.compactMap { id in active.first { $0.id == id } } }
+    var body: some View {
+        Group {
+            if model.connection == nil {
+                VStack(spacing: 12) {
+                    Image(systemName: "iphone.and.arrow.forward").font(.title2).foregroundStyle(.mint)
+                    Text("在 iPhone 连接 Steer").font(.footnote)
+                    if !pairing.status.isEmpty { Text(pairing.status).font(.caption2).foregroundStyle(.secondary) }
+                }
+            } else {
+                TabView(selection: $selectedPage) {
+                    ForEach(pages) { item in WatchRunningPage(item: item).tag(item.id) }
+                    WatchTaskList().tag("")
+                }.tabViewStyle(.page(indexDisplayMode: pages.isEmpty ? .never : .automatic))
+                .onAppear { reconcile() }
+                .onChange(of: active.map(\.id)) { _, _ in reconcile() }
+            }
+        }
+        .navigationTitle(active.isEmpty ? "Steer" : "• \(active.count) 进行中")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: model.account) { _, _ in selectedPage = ""; order = []; initialized = false; reconcile() }
+    }
+    private func reconcile() {
+        let ids = active.map(\.id)
+        order = order.filter { ids.contains($0) } + ids.filter { !order.contains($0) }
+        if !initialized, let first = order.first { selectedPage = first; initialized = true }
+        if !selectedPage.isEmpty, !order.contains(selectedPage) { selectedPage = order.first ?? "" }
+    }
+}
+struct WatchRunningPage: View {
+    let item: Conversation
+    @EnvironmentObject var model: WatchModel
+    @State private var fullMessage = false
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(item.title).font(.headline).lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("\(item.projectName) / \(item.agentName)").lineLimit(1)
+                    Spacer(minLength: 2)
+                    if item.executing {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            if let elapsed = item.elapsed(at: context.date) {
+                                Text(elapsed).monospacedDigit().accessibilityLabel("运行时长 \(elapsed)")
+                            }
+                        }
+                    } else { Text(item.label) }
+                }.font(.caption2).foregroundStyle(.secondary)
+                if let prompt = item.lastUserMessage, !prompt.isEmpty {
+                    Button { fullMessage = true } label: {
+                        Text(prompt).font(.footnote).foregroundStyle(.primary).lineLimit(5)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }.buttonStyle(.plain).accessibilityLabel("查看最近发给 Agent 的消息：\(prompt)")
+                } else if let error = model.historyErrors[item.id] {
+                    Text(error).font(.caption2).foregroundStyle(.orange)
+                    Button("重试") { Task { await model.loadHistory(item.id) } }.font(.caption2)
+                }
+                if model.error != nil {
+                    Text(model.syncedAt.map { "未同步 · \($0.formatted(date: .omitted, time: .shortened))" } ?? "未同步")
+                        .font(.caption2).foregroundStyle(.orange)
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4).padding(.bottom, 20)
+        }
+        .task(id: item.taskID) { await model.refreshTask(item.id); await model.loadHistory(item.id) }
+        .sheet(isPresented: $fullMessage) {
+            ScrollView { Text(item.lastUserMessage ?? "").font(.footnote).padding(.horizontal, 8) }
+                .navigationTitle("最近指令")
+        }
+    }
+}
+struct WatchTaskList: View {
+    @EnvironmentObject var model: WatchModel
+    @EnvironmentObject var notifications: WatchNotifications
+    private var active: [Conversation] { model.items.filter { $0.running && $0.taskID != nil } }
+    private var recent: [Conversation] { model.items.filter { !$0.running && $0.taskID != nil } }
+    var body: some View {
+        List {
+            Text("所有任务").font(.headline).listRowBackground(Color.clear)
+            if model.refreshing, model.items.isEmpty { ProgressView().listRowBackground(Color.clear) }
+            if let error = model.error {
+                Text(error).font(.caption2).foregroundStyle(.orange).listRowBackground(Color.clear)
+            }
+            if !active.isEmpty { Section("进行中 · \(active.count)") { ForEach(active) { row($0) } } }
+            if !recent.isEmpty { Section("最近结束") { ForEach(recent) { row($0) } } }
+            if !model.refreshing, model.items.isEmpty {
+                Text("暂无任务").font(.footnote).foregroundStyle(.secondary).listRowBackground(Color.clear)
+            }
+            Button { Task { await model.refresh() } } label: { Label("刷新", systemImage: "arrow.clockwise") }
+                .disabled(model.refreshing).listRowBackground(Color.clear)
+            NavigationLink { WatchSettings() } label: { Label("设置", systemImage: "gearshape") }.listRowBackground(Color.clear)
+        }.listStyle(.plain)
+    }
+    private func row(_ item: Conversation) -> some View {
+        NavigationLink { WatchDetail(id: item.id) } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title).font(.footnote).lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(item.agentName).lineLimit(1)
+                    Spacer(minLength: 2)
+                    if !["running", "succeeded"].contains(item.status) { Text(item.label) }
+                    if item.executing {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            if let elapsed = item.elapsed(at: context.date) { Text(elapsed).monospacedDigit() }
+                        }
+                    }
+                }.font(.caption2).foregroundStyle(.secondary)
+            }
+        }.listRowBackground(Color.clear)
+    }
+}
+struct WatchSettings: View {
+    @EnvironmentObject var notifications: WatchNotifications
+    @EnvironmentObject var pairing: Pairing
     #if DEBUG
     @AppStorage("steer.localSpeechTest") private var localSpeechTest = false
     @AppStorage("steer.localSpeechModel") private var localSpeechModel = "base-q5_1"
     #endif
-    @EnvironmentObject var notifications: WatchNotifications
-    @EnvironmentObject var model: WatchModel
-    @EnvironmentObject var pairing: Pairing
-    private var running: [Conversation] { model.items.filter { $0.running && $0.taskID != nil } }
-    private var recent: [Conversation] { Array(model.items.filter { $0.taskID != nil && ["succeeded", "failed", "cancelled"].contains($0.status) }.prefix(8)) }
     var body: some View {
-        Group {
-            if model.connection == nil {
-                ScrollView { VStack(spacing: 12) {
-                    Image(systemName: "applewatch").font(.title2).foregroundStyle(.mint)
-                    Text("跟踪 Steer 任务").font(.headline)
-                    Text("在配对 iPhone 上填写 Steer 连接信息并同步，即可在手表接收任务动态、语音续聊。").font(.footnote).foregroundStyle(.secondary)
-                    if !pairing.status.isEmpty { Text(pairing.status).font(.footnote) }
-                }.padding(.horizontal, 8) }
-            } else {
-                List {
-                    if let error = model.error {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("暂未同步").foregroundStyle(.orange)
-                            if let date = model.syncedAt { Text("上次同步 \(date.formatted(date: .omitted, time: .shortened))").foregroundStyle(.secondary) }
-                            Text(error).foregroundStyle(.secondary).lineLimit(2)
-                        }.font(.caption2).listRowBackground(Color.clear)
+        List {
+            if !notifications.status.isEmpty { Text(notifications.status).font(.caption2).listRowBackground(Color.clear) }
+            if !pairing.status.isEmpty { Text(pairing.status).font(.caption2).listRowBackground(Color.clear) }
+            #if DEBUG
+            Section("语音验证") {
+                Toggle("手表本地识别测试", isOn: $localSpeechTest)
+                if localSpeechTest {
+                    Picker("模型", selection: $localSpeechModel) {
+                        Text("Base").tag("base-q5_1"); Text("Tiny").tag("tiny-q5_1")
                     }
-                    Section("正在进行 · \(running.count)") {
-                        if running.isEmpty { Text(model.refreshing && model.items.isEmpty ? "正在同步…" : "当前没有执行中的任务").font(.footnote).foregroundStyle(.secondary) }
-                        ForEach(running) { item in taskRow(item) }
-                    }
-                    if !recent.isEmpty { Section("最近动态") { ForEach(recent) { item in taskRow(item) } } }
-                    if !notifications.status.isEmpty { Text(notifications.status).font(.caption2).foregroundStyle(.secondary).listRowBackground(Color.clear) }
-                    Button { Task { await model.refresh() } } label: { Label("同步状态", systemImage: "arrow.clockwise") }.font(.footnote).disabled(model.refreshing)
-                    #if DEBUG
-                    Section("语音验证") {
-                        Toggle("本地识别测试", isOn: $localSpeechTest).font(.footnote)
-                        if localSpeechTest {
-                            Picker("测试模型", selection: $localSpeechModel) {
-                                Text("Base · 57 MB").tag("base-q5_1")
-                                Text("Tiny · 31 MB").tag("tiny-q5_1")
-                            }.font(.footnote)
-                        }
-                        Text(localSpeechTest ? "手表独立识别，不传手机；中文准确率待验证。" : "使用配对 iPhone 识别。").font(.caption2).foregroundStyle(.secondary)
-                    }
-                    #endif
-                }.listStyle(.carousel)
-            }
-        }.navigationTitle("任务动态")
-    }
-    private func taskRow(_ item: Conversation) -> some View {
-        NavigationLink { WatchDetail(id: item.id) } label: {
-            HStack(spacing: 7) {
-                Image(systemName: item.running ? "clock" : item.status == "failed" ? "exclamationmark.circle" : "checkmark.circle")
-                    .foregroundStyle(item.running ? Color.cyan : item.status == "failed" ? .orange : .mint)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(item.title).font(.system(.footnote, weight: .semibold)).lineLimit(2)
-                    Text("\(item.projectName) · \(item.agentName)").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                    Text(item.label).font(.caption2).foregroundStyle(item.running ? .cyan : .secondary)
                 }
             }
-        }
+            #endif
+        }.navigationTitle("设置")
     }
 }
 struct WatchDetail: View {
@@ -127,10 +203,11 @@ struct WatchDetail: View {
     var autoDictate = false
     @State private var autoStarted = false
     @EnvironmentObject var model: WatchModel
-    @StateObject private var dictation = Dictation()
+    @StateObject private var resultSpeech = ResultSpeech()
+    @Environment(\.scenePhase) private var scenePhase
     @State private var confirmingStop = false
     @State private var cancelling = false
-    @State private var compose = false
+    @State private var voicePresented = false
     @State private var fullResult = false
     @State private var message: String?
     private var item: Conversation? { model.items.first { $0.id == id } }
@@ -139,16 +216,24 @@ struct WatchDetail: View {
             if let item {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("\(item.projectName) · \(item.agentName)").font(.caption2).foregroundStyle(.secondary)
-                        Text(item.title).font(.headline).lineLimit(3)
-                        Label(item.label, systemImage: item.running ? "clock" : item.status == "failed" ? "exclamationmark.circle" : "checkmark.circle")
-                            .font(.footnote).foregroundStyle(item.running ? .cyan : item.status == "failed" ? .orange : .mint)
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text("\(item.projectName) / \(item.agentName)").lineLimit(1)
+                            Spacer(minLength: 2)
+                            Text(item.label).fixedSize()
+                        }.font(.caption2).foregroundStyle(.secondary)
+                        Text(item.title).font(.headline).lineLimit(2)
                         if let error = model.error { Text("暂未同步：\(error)").font(.caption2).foregroundStyle(.orange) }
                         if item.running {
-                            Text("Agent 正在执行。完成后可以查看结果并语音继续。").font(.footnote).foregroundStyle(.secondary)
+                            if let prompt = item.lastUserMessage { Text(prompt).font(.footnote) }
                         } else {
-                            Text(item.summary.isEmpty ? "任务已结束，暂未返回正文。" : item.summary).font(.footnote).lineLimit(8)
-                            if item.summary.count > 180 { Button("展开结果") { fullResult = true }.font(.caption) }
+                            Text(WatchResultText.preview(item.summary.isEmpty ? "暂未返回结果" : item.summary)).font(.footnote).lineLimit(6)
+                            if item.summary.count > 100 || item.summary.contains("\n") { Button("展开结果") { fullResult = true }.font(.caption) }
+                            if !item.summary.isEmpty {
+                                Button {
+                                    if resultSpeech.speaking { resultSpeech.stop() } else { resultSpeech.play(item.summary, locale: model.connection?.recognitionLocale ?? "zh-CN") }
+                                } label: { Label(resultSpeech.speaking ? "停止朗读" : "朗读结果", systemImage: resultSpeech.speaking ? "stop.fill" : "speaker.wave.2") }.font(.caption)
+                                if let error = resultSpeech.error { Text(error).font(.caption2).foregroundStyle(.orange) }
+                            }
                         }
                         if let message {
                             Text(message).font(.caption2).foregroundStyle(.orange)
@@ -156,50 +241,145 @@ struct WatchDetail: View {
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 3)
                 }
                 .safeAreaInset(edge: .bottom) {
-                    if !item.running {
-                        Button { Task { await continueConversation(item) } } label: {
-                            Label(model.draft(id).attempted ? "确认发送" : "语音", systemImage: "mic.fill")
+                    if item.canContinue || model.draft(id).attempted {
+                        Button { message = nil; voicePresented = true } label: {
+                            Label(model.draft(id).attempted ? "确认发送" : "语音继续", systemImage: model.draft(id).attempted ? "arrow.up" : "mic.fill")
                                 .frame(maxWidth: .infinity, minHeight: 44)
-                        }.buttonStyle(.borderedProminent).disabled(dictation.active).padding(.horizontal, 3).background(.black)
+                        }.buttonStyle(.borderedProminent).disabled(voicePresented || model.sending).padding(.horizontal, 4).background(.black)
                     }
                 }
                 .toolbar {
                     if item.running { ToolbarItem(placement: .topBarTrailing) { Button(role: .destructive) { confirmingStop = true } label: { Image(systemName: "stop.circle") }.disabled(cancelling).accessibilityLabel("停止任务") } }
                 }
-                .navigationDestination(isPresented: $compose) { WatchCompose(item: item) }
-                .sheet(isPresented: $fullResult) { ScrollView { Text(item.summary).font(.footnote).padding(.horizontal, 8) }.navigationTitle("任务结果") }
+                .sheet(isPresented: $fullResult) {
+                    NavigationStack {
+                        ScrollView { WatchResultText(text: item.summary).padding(.horizontal, 8) }.navigationTitle("任务结果")
+                    }
+                }
                 .confirmationDialog("停止当前任务？已有改动不会撤销。", isPresented: $confirmingStop, titleVisibility: .visible) {
                     Button("停止任务", role: .destructive) { Task { cancelling = true; defer { cancelling = false }; do { if let task = item.taskID { try await model.cancel(task) } } catch { message = error.localizedDescription } } }
                 }
             } else { Text("任务已不在当前列表，请返回同步").font(.footnote) }
-        }.navigationTitle("任务状态")
-        .sheet(isPresented: Binding(get: { dictation.active }, set: { if !$0 { dictation.cancel() } })) { VoiceListening(dictation: dictation) }
-        .onChange(of: model.account) { _, _ in dictation.cancel() }
+        }.navigationTitle(item?.running == true ? "任务" : "任务结果")
+        .sheet(isPresented: $voicePresented) {
+            NavigationStack { WatchVoiceFlow(id: id) }
+        }
+        .onChange(of: model.account) { _, _ in voicePresented = false }
+        .onChange(of: model.connection) { _, _ in voicePresented = false; resultSpeech.stop() }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { resultSpeech.stop() } }
+        .onDisappear { resultSpeech.stop() }
         .task {
-            await model.refreshTask(id)
-            if autoDictate, !autoStarted, let item, !item.running {
-                autoStarted = true; await continueConversation(item)
+            if autoDictate, !autoStarted, let item, item.canContinue {
+                autoStarted = true; voicePresented = true
             }
+            await model.refreshTask(id)
         }
     }
-    @MainActor private func continueConversation(_ item: Conversation) async {
-        // Preserve an uncertain send's idempotency key; every new voice input
-        // otherwise starts fresh rather than reopening an old recording.
-        if model.draft(id).attempted { compose = true; return }
+}
+
+/// A single presentation owns the complete voice interaction. Never dismiss a
+/// recording sheet and push confirmation in the same SwiftUI update.
+struct WatchVoiceFlow: View {
+    let id: String
+    @EnvironmentObject var model: WatchModel
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var dictation = Dictation()
+    @State private var reviewing: Conversation?
+    @State private var failure: String?
+    @State private var checking = true
+    @State private var attempt = UUID()
+    var body: some View {
+        Group {
+            if let reviewing { WatchCompose(item: reviewing, recognitionSource: dictation.recognitionSource) }
+            else if let failure {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("语音未完成").font(.headline)
+                        Text(failure).font(.footnote).foregroundStyle(.secondary)
+                        Button("重试") { self.failure = nil; checking = true; attempt = UUID() }.buttonStyle(.borderedProminent)
+                        Button("返回任务") { dismiss() }.buttonStyle(.plain)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8)
+                }.navigationTitle("语音")
+            } else if checking {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("检查任务状态").font(.footnote).foregroundStyle(.secondary)
+                    Button("取消") { dismiss() }.buttonStyle(.plain)
+                }.navigationTitle("语音")
+            } else { VoiceListening(dictation: dictation, title: model.items.first { $0.id == id }?.title ?? "", onCancel: { dismiss() }) }
+        }
+        .interactiveDismissDisabled(reviewing == nil && failure == nil)
+        .task(id: attempt) { await capture() }
+        .onDisappear { dictation.cancel() }
+    }
+    @MainActor private func capture() async {
+        guard reviewing == nil else { return }
+        guard let item = model.items.first(where: { $0.id == id }) else { failure = "任务已不在列表，请返回刷新"; return }
+        if model.draft(id).attempted { checking = false; reviewing = item; return }
         let account = model.account
-        model.discardDraft(id, account: account)
-        message = nil
+        let connection = model.connection
+        let context = account + ":" + id
         do {
-            guard let text = try await dictation.capture(context: account + ":" + id, rerecord: true) else { return }
-            guard account == model.account else { throw APIError(message: "连接配置已变化，请返回任务列表") }
+            let current = try await model.continuationTarget(id, taskID: item.taskID)
+            try Task.checkCancellation()
+            guard connection == model.connection else { throw APIError(message: "连接配置已变化，请重新输入") }
+            model.discardDraft(id, account: account)
+            checking = false
+            guard let text = try await dictation.capture(context: context, rerecord: true, service: connection?.speech, locale: connection?.recognitionLocale ?? "zh-CN") else { dismiss(); return }
+            try Task.checkCancellation()
+            guard account == model.account, connection == model.connection else { throw APIError(message: "连接配置已变化，请重新输入") }
             try model.saveDraft(Draft(text: text), id: id)
-            dictation.discardRecording(context: account + ":" + id)
-            message = nil; compose = true
-        } catch { dictation.discardRecording(context: account + ":" + id); message = error.localizedDescription }
+            dictation.discardRecording(context: context)
+            guard let latest = model.items.first(where: { $0.id == id }), latest.taskID == current.taskID, latest.canContinue else {
+                throw APIError(message: "任务状态已变化，草稿已保留")
+            }
+            reviewing = latest
+        } catch is CancellationError { dictation.cancel() }
+        catch {
+            dictation.discardRecording(context: context)
+            failure = error.localizedDescription
+        }
     }
 }
+
+struct WatchResultText: View {
+    let text: String
+    static func preview(_ text: String) -> AttributedString {
+        let source = MessageFormatting.blocks(text).map { block -> String in
+            switch block {
+            case .paragraph(let text), .heading(_, let text), .quote(let text): return text
+            case .listItem(let marker, let text, _): return "\(marker) \(text)"
+            case .code(_, let text): return text
+            case .table(let rows): return rows.map { $0.joined(separator: " · ") }.joined(separator: "\n")
+            case .divider: return ""
+            }
+        }.joined(separator: "\n\n")
+        return (try? AttributedString(markdown: source, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(source)
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Array(MessageFormatting.blocks(text).enumerated()), id: \.offset) { _, block in
+                switch block {
+                case .heading(_, let text): Text(Self.preview(text)).font(.headline)
+                case .code(_, let text): ScrollView(.horizontal) { Text(verbatim: text).font(.system(.caption2, design: .monospaced)).fixedSize(horizontal: true, vertical: false) }
+                default: Text(Self.previewText(block)).font(.footnote)
+                }
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+    private static func previewText(_ block: MessageBlock) -> AttributedString {
+        switch block {
+        case .paragraph(let text), .quote(let text): return preview(text)
+        case .listItem(let marker, let text, _): return preview("\(marker) \(text)")
+        case .table(let rows): return preview(rows.map { $0.joined(separator: " · ") }.joined(separator: "\n"))
+        default: return AttributedString("")
+        }
+    }
+}
+
 struct WatchCompose: View {
     let item: Conversation
+    var recognitionSource = ""
     @EnvironmentObject var model: WatchModel
     @Environment(\.dismiss) private var dismiss
     @State private var draft = Draft(text: "")
@@ -208,7 +388,7 @@ struct WatchCompose: View {
     @State private var sent = false
     @State private var sourceAccount = ""
     private var canSend: Bool {
-        !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !model.sending
+        !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !model.sending && (draft.attempted || model.items.first(where: { $0.id == item.id })?.canContinue == true)
     }
     var body: some View {
         ScrollView {
@@ -218,15 +398,15 @@ struct WatchCompose: View {
                     Text(item.title).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if sent {
-                    Label("已发送", systemImage: "checkmark.circle").foregroundStyle(.mint)
-                    Text("任务已提交，可以返回跟踪状态。").font(.footnote)
+                    Label("已提交", systemImage: "checkmark.circle").foregroundStyle(.mint)
+                    Text("等待执行").font(.footnote).foregroundStyle(.secondary)
                     Button { dismiss() } label: { primaryLabel("返回任务") }
                         .buttonStyle(.plain)
                 } else {
+                    if !recognitionSource.isEmpty { Text(recognitionSource).font(.caption2).foregroundStyle(.secondary) }
                     Text(draft.text.isEmpty ? "还没有识别到文字" : draft.text).font(.footnote)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.gray.opacity(0.18), in: RoundedRectangle(cornerRadius: 12))
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     if draft.attempted { Text("发送结果待确认，重试不会重复创建任务。").font(.caption2).foregroundStyle(.secondary) }
                     if let error { Text(error).font(.caption2).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
                     Button { Task { await send() } } label: {
@@ -258,8 +438,9 @@ struct WatchCompose: View {
     }
     @MainActor private func send() async {
         guard sourceAccount == model.account else { error = "连接配置已变化，请返回列表重新选择任务"; return }
+        let resuming = draft.attempted
         draft.attempted = true
-        do { try model.saveDraft(draft, id: item.id); try await model.send(item, draft: draft); sent = true; error = nil }
+        do { try model.saveDraft(draft, id: item.id); try await model.send(item, draft: draft, resuming: resuming); sent = true; error = nil }
         catch {
             if let rejection = error as? APIError, let status = rejection.statusCode, (400...499).contains(status) {
                 draft.attempted = false; draft.idempotencyKey = UUID().uuidString

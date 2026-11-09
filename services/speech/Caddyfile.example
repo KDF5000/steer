@@ -1,0 +1,14 @@
+# Merge into the existing steer-server.pcursor.run:8443 block,
+# before its catch-all reverse proxy. Keep the existing TLS configuration.
+# handle_path strips /speech so the shared API works unchanged.
+handle_path /speech/* {
+    reverse_proxy 127.0.0.1:18765
+}
+handle {
+    reverse_proxy 127.0.0.1:18080
+}
+
+# Separate LAN entry used for device verification:
+# http://:18766 {
+#     reverse_proxy 127.0.0.1:18765
+# }

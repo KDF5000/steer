@@ -1,0 +1,29 @@
+[
+  {
+    "text": "请总结当前任务的状态，不要修改代码。",
+    "audio_seconds": 3.968,
+    "recognition_ms": 74,
+    "request_id": "9641da2d-aaf5-4a52-bcd8-5830427fd786",
+    "model": "/models/sensevoice",
+    "elapsed_ms": 184,
+    "roundtrip_ms": 188
+  },
+  {
+    "text": "请总结当前任务的状态，不要修改代码。",
+    "audio_seconds": 3.968,
+    "recognition_ms": 65,
+    "request_id": "933f60fc-a964-4c59-8970-b3fa6009a890",
+    "model": "/models/sensevoice",
+    "elapsed_ms": 102,
+    "roundtrip_ms": 105
+  },
+  {
+    "text": "请总结当前任务的状态，不要修改代码。",
+    "audio_seconds": 3.968,
+    "recognition_ms": 65,
+    "request_id": "eb587126-60e0-4211-bcda-f68d640b77c8",
+    "model": "/models/sensevoice",
+    "elapsed_ms": 102,
+    "roundtrip_ms": 105
+  }
+]

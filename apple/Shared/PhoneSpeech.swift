@@ -13,6 +13,21 @@ import UIKit
     private var activeRequest: String?
     private var cancelledRequest: String?
     private var requestingPermission = false
+    private var modernTask: Task<String, Error>?
+    @Published private(set) var preparingModel = false
+
+    func prepareLocalModel() async {
+        guard !preparingModel else { return }
+        guard #available(iOS 26.0, *) else { status = "当前系统使用标准本地识别"; return }
+        preparingModel = true
+        defer { preparingModel = false }
+        let config: Connection? = SecureStore.read("connection")
+        status = "正在准备增强本地识别模型，首次可能需要下载…"
+        do {
+            let module = try await ModernPhoneSpeech.module(locale: config?.recognitionLocale ?? "zh-CN", install: true)
+            status = module != nil ? "增强本地识别已就绪，录音在 iPhone 处理" : "此设备或语言暂不支持增强模型，继续使用标准识别"
+        } catch { status = "增强模型准备失败，可继续使用标准识别：\(error.localizedDescription)" }
+    }
 
     func authorize() async {
         guard !requestingPermission else { return }
@@ -37,9 +52,13 @@ import UIKit
                 guard SFSpeechRecognizer.authorizationStatus() == .authorized else { throw APIError(message: "请在 iPhone Steer 中开启语音识别") }
                 guard activeRequest == nil else { throw APIError(message: "上一段语音仍在转写，请稍后重试") }
                 guard let count = message["totalBytes"] as? Int, let digest = message["digest"] as? String,
-                      let locale = message["locale"] as? String else { throw APIError(message: "录音信息缺失") }
-                upload = try VoiceUpload(id: id, totalBytes: count, digest: digest, locale: locale)
-                reply(["ok": true])
+                      message["locale"] is String else { throw APIError(message: "录音信息缺失") }
+                // Older Watches send Locale.current (often en_US even for
+                // Chinese speech). The saved explicit speech language wins.
+                let config: Connection? = SecureStore.read("connection")
+                let recognitionLocale = config?.recognitionLocale ?? "zh-CN"
+                upload = try VoiceUpload(id: id, totalBytes: count, digest: digest, locale: recognitionLocale)
+                reply(["ok": true, "locale": recognitionLocale])
             case "chunk":
                 guard var current = upload, current.id == id, Date().timeIntervalSince(current.startedAt) < 120,
                       let sequence = message["sequence"] as? Int, let bytes = message["audio"] as? Data else { throw APIError(message: "录音传输已失效，请重试") }
@@ -53,11 +72,13 @@ import UIKit
                 try bytes.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
                 defer { try? FileManager.default.removeItem(at: url) }
                 status = "正在转写手表录音…"
-                let text = try await recognize(url: url, locale: current.locale, id: id)
-                status = "语音转写完成"; reply(["text": text, "requestId": id])
+                let result = try await recognize(url: url, locale: current.locale, id: id)
+                guard cancelledRequest != id else { throw APIError(message: "语音转写已取消") }
+                status = "\(result.source)识别完成"
+                reply(["text": result.text, "requestId": id, "source": result.source, "locale": current.locale])
             case "abort":
                 if upload?.id == id { upload = nil }
-                if activeRequest == id { cancelledRequest = id; activeJob?.finish(.failure(APIError(message: "语音转写已取消"))) }
+                if activeRequest == id { cancelledRequest = id; modernTask?.cancel(); activeJob?.finish(.failure(APIError(message: "语音转写已取消"))) }
                 reply(["ok": true])
             default: reply(["error": "请更新配对 iPhone 上的 Steer"])
             }
@@ -67,6 +88,59 @@ import UIKit
         }
     }
     #if DEBUG
+    func runEnhancedDiagnostic() async {
+        guard ProcessInfo.processInfo.environment["STEER_ENHANCED_SPEECH_SELF_TEST"] == "1" else { return }
+        let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let output = cache.appendingPathComponent("SteerEnhancedSpeechDiagnostic.json")
+        var report: [String: Any] = ["platform": "iOS", "runs": []]
+        func write() {
+            if let data = try? JSONSerialization.data(withJSONObject: report, options: .prettyPrinted) {
+                try? data.write(to: output, options: .atomic)
+            }
+        }
+        guard #available(iOS 26.0, *) else { report["error"] = "需要 iOS 26"; write(); return }
+        report["available"] = SpeechTranscriber.isAvailable
+        report["stage"] = "preparing"; write()
+        do {
+            guard try await ModernPhoneSpeech.module(locale: "zh-CN", install: true) != nil else { throw APIError(message: "中文增强模型不可用") }
+            report["stage"] = "testing"; write()
+            let data = try Data(contentsOf: cache.appendingPathComponent("SteerSpeechFixtures.json"))
+            let fixtures = try JSONSerialization.jsonObject(with: data) as! [[String: String]]
+            var runs: [[String: Any]] = []
+            for fixture in fixtures {
+                guard let name = fixture["file"], name == (name as NSString).lastPathComponent else { continue }
+                let url = cache.appendingPathComponent(name)
+                for engine in ["legacy", "enhanced"] {
+                    var run: [String: Any] = ["file": name, "expected": fixture["text"] ?? "", "engine": engine, "onDevice": true]
+                    let start = ContinuousClock.now
+                    do {
+                        if engine == "legacy" {
+                            guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN")), recognizer.supportsOnDeviceRecognition else { throw APIError(message: "标准本地模型不可用") }
+                            run["text"] = try await recognizeOnce(url: url, recognizer: recognizer, onDevice: true, deadline: Date().addingTimeInterval(40))
+                        } else {
+                            guard let transcriber = try await ModernPhoneSpeech.module(locale: "zh-CN", install: false) else { throw APIError(message: "增强模型未安装") }
+                            run["text"] = try await ModernPhoneSpeech.transcribe(url: url, transcriber: transcriber)
+                        }
+                    } catch { run["error"] = error.localizedDescription }
+                    let time = start.duration(to: .now).components
+                    run["milliseconds"] = time.seconds * 1000 + time.attoseconds / 1_000_000_000_000_000
+                    runs.append(run); report["runs"] = runs; write()
+                }
+            }
+            if let name = fixtures.last?["file"], let transcriber = try await ModernPhoneSpeech.module(locale: "zh-CN", install: false) {
+                let task = Task { try await ModernPhoneSpeech.transcribe(url: cache.appendingPathComponent(name), transcriber: transcriber) }
+                try await Task.sleep(for: .milliseconds(10))
+                task.cancel()
+                do { _ = try await task.value; report["cancellation"] = "completed-before-cancel" }
+                catch { report["cancellation"] = error is CancellationError ? "cancelled" : error.localizedDescription }
+                if let next = try await ModernPhoneSpeech.module(locale: "zh-CN", install: false) {
+                    report["afterCancellation"] = try await ModernPhoneSpeech.transcribe(url: cache.appendingPathComponent(name), transcriber: next)
+                }
+            }
+            report["stage"] = "complete"
+        } catch { report["error"] = error.localizedDescription; report["stage"] = "failed" }
+        write()
+    }
     func runAudioDiagnostic() async {
         guard ProcessInfo.processInfo.environment["STEER_VOICE_SELF_TEST"] == "1" else { return }
         let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -76,7 +150,8 @@ import UIKit
             let bytes = try Data(contentsOf: input)
             let id = UUID().uuidString
             var response: [String: Any] = [:]
-            await receive(["voiceAction": "begin", "requestId": id, "totalBytes": bytes.count, "digest": VoiceUpload.hash(bytes), "locale": "zh-CN"]) { response = $0 }
+            let requestedLocale = ProcessInfo.processInfo.environment["STEER_VOICE_TEST_LOCALE"] ?? "en-US"
+            await receive(["voiceAction": "begin", "requestId": id, "totalBytes": bytes.count, "digest": VoiceUpload.hash(bytes), "locale": requestedLocale]) { response = $0 }
             if let error = response["error"] as? String { throw APIError(message: error) }
             var sequence = 0
             for offset in stride(from: 0, to: bytes.count, by: VoiceUpload.chunkBytes) {
@@ -86,7 +161,7 @@ import UIKit
                 sequence += 1
             }
             await receive(["voiceAction": "finish", "requestId": id]) { response = $0 }
-            response["audioBytes"] = bytes.count; response["chunks"] = sequence
+            response["audioBytes"] = bytes.count; response["chunks"] = sequence; response["requestedLocale"] = requestedLocale
             let data = try JSONSerialization.data(withJSONObject: response)
             try data.write(to: output, options: .atomic)
         } catch {
@@ -94,23 +169,64 @@ import UIKit
             try? data?.write(to: output, options: .atomic)
         }
     }
+    func runLanguageComparison() async {
+        guard ProcessInfo.processInfo.environment["STEER_SPEECH_LANGUAGE_COMPARISON"] == "1" else { return }
+        let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let url = cache.appendingPathComponent("steer-voice-self-test.m4a")
+        var runs: [[String: Any]] = []
+        for locale in ["en-US", "zh-CN"] {
+            var run: [String: Any] = ["locale": locale, "onDevice": true]
+            do {
+                guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: locale)), recognizer.supportsOnDeviceRecognition else { throw APIError(message: "本地语言模型不可用") }
+                run["text"] = try await recognizeOnce(url: url, recognizer: recognizer, onDevice: true, deadline: Date().addingTimeInterval(40))
+            } catch { run["error"] = error.localizedDescription }
+            runs.append(run)
+        }
+        if let data = try? JSONSerialization.data(withJSONObject: runs, options: .prettyPrinted) {
+            try? data.write(to: cache.appendingPathComponent("SteerSpeechLanguageComparison.json"), options: .atomic)
+        }
+    }
     #endif
-    private func recognize(url: URL, locale: String, id: String) async throws -> String {
+    private func recognize(url: URL, locale: String, id: String) async throws -> (text: String, source: String) {
         let asset = AVURLAsset(url: url)
         let duration = try await asset.load(.duration).seconds
         guard cancelledRequest != id else { throw APIError(message: "语音转写已取消") }
         guard duration.isFinite, duration > 0, duration <= 65 else { throw APIError(message: "录音为空或超过一分钟，请重新录音") }
-        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: locale)) ?? SFSpeechRecognizer(),
-              recognizer.isAvailable || recognizer.supportsOnDeviceRecognition else { throw APIError(message: "iPhone 语音识别暂不可用，请检查网络后重试") }
         let deadline = Date().addingTimeInterval(40)
-        do { return try await recognizeOnce(url: url, recognizer: recognizer, onDevice: recognizer.supportsOnDeviceRecognition, deadline: deadline) }
+        let config: Connection? = SecureStore.read("connection")
+        if config?.prefersEnhancedSpeech != false, #available(iOS 26.0, *), let transcriber = try? await ModernPhoneSpeech.module(locale: locale, install: false) {
+            guard cancelledRequest != id else { throw APIError(message: "语音转写已取消") }
+            let job = Task { try await ModernPhoneSpeech.transcribe(url: url, transcriber: transcriber) }
+            modernTask = job
+            let background = UIApplication.shared.beginBackgroundTask(withName: "SteerEnhancedTranscription") { job.cancel() }
+            defer {
+                modernTask = nil
+                if background != .invalid { UIApplication.shared.endBackgroundTask(background) }
+            }
+            do {
+                let text = try await job.value
+                guard cancelledRequest != id else { throw APIError(message: "语音转写已取消") }
+                return (text, "iPhone 本地 · 增强")
+            }
+            catch {
+                guard cancelledRequest != id, !(error is CancellationError) else { throw APIError(message: "语音转写已取消") }
+                // Retry the same audio/language with the compatible system recognizer.
+            }
+        }
+        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: locale)),
+              recognizer.isAvailable || recognizer.supportsOnDeviceRecognition else { throw APIError(message: "iPhone 语音识别暂不可用，请检查网络后重试") }
+        do {
+            let onDevice = recognizer.supportsOnDeviceRecognition
+            let text = try await recognizeOnce(url: url, recognizer: recognizer, onDevice: onDevice, deadline: deadline)
+            return (text, onDevice ? "iPhone 本地" : "Apple 云端")
+        }
         catch {
             // Some supported languages still lack a downloaded local model.
             // The user's Speech authorization also permits Apple's recognition
             // service; use it only after a local recognition-service error.
             guard recognizer.supportsOnDeviceRecognition, recognizer.isAvailable,
                   !(error is APIError), cancelledRequest != id else { throw error }
-            return try await recognizeOnce(url: url, recognizer: recognizer, onDevice: false, deadline: deadline)
+            return (try await recognizeOnce(url: url, recognizer: recognizer, onDevice: false, deadline: deadline), "Apple 云端")
         }
     }
     private func recognizeOnce(url: URL, recognizer: SFSpeechRecognizer, onDevice: Bool, deadline: Date) async throws -> String {
@@ -118,6 +234,7 @@ import UIKit
         guard remaining > 0 else { throw APIError(message: "语音识别超时，请重新开始") }
         let request = SFSpeechURLRecognitionRequest(url: url)
         request.shouldReportPartialResults = false; request.taskHint = .dictation
+        request.contextualStrings = SpeechVocabulary.terms
         request.requiresOnDeviceRecognition = onDevice
         return try await withCheckedThrowingContinuation { continuation in
             let job = SpeechJob(continuation: continuation); activeJob = job

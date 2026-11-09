@@ -1,0 +1,4 @@
+fastapi==0.162.2
+uvicorn==0.54.0
+mlx-audio==0.6.4
+soundfile==0.14.0

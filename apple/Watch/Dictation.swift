@@ -9,11 +9,13 @@ import AVFoundation
     @Published private(set) var phase = ""
     @Published private(set) var listening = false
     @Published private(set) var level: Float = 0
+    @Published private(set) var recognitionSource = ""
     private var cancelled = false
     private var finishRequested = false
     private var localCancellation: LocalSpeechCancellation?
     private var pendingReply: VoiceReply?
     private var phoneRequest: String?
+    private var remoteTask: Task<String, Error>?
     static var usesLocalSpeech: Bool {
         #if DEBUG
         return UserDefaults.standard.bool(forKey: "steer.localSpeechTest") && LocalSpeech.available
@@ -24,6 +26,7 @@ import AVFoundation
     func finishSpeaking() { finishRequested = true }
     func cancel() {
         cancelled = true; localCancellation?.cancel()
+        remoteTask?.cancel()
         pendingReply?.finish(.failure(CancellationError()))
         if let phoneRequest {
             WCSession.default.sendMessage(["voiceAction": "abort", "requestId": phoneRequest], replyHandler: nil, errorHandler: nil)
@@ -35,17 +38,18 @@ import AVFoundation
     }
     func discardRecording(context: String) { try? FileManager.default.removeItem(at: recordingURL(context)) }
     func hasRecording(for context: String) -> Bool { FileManager.default.fileExists(atPath: recordingURL(context).path) }
-    func capture(context: String, rerecord: Bool = false) async throws -> String? {
+    func capture(context: String, rerecord: Bool = false, service: SpeechService? = nil, locale: String = "zh-CN") async throws -> String? {
         guard !active else { return nil }
-        cancelled = false; finishRequested = false
+        cancelled = false; finishRequested = false; recognitionSource = ""
         active = true; phase = "准备聆听…"
         defer {
             if cancelled { discardRecording(context: context) }
-            active = false; phase = ""; listening = false; level = 0; localCancellation = nil; phoneRequest = nil
+            active = false; phase = ""; listening = false; level = 0; localCancellation = nil; phoneRequest = nil; remoteTask = nil
         }
-        let local = Self.usesLocalSpeech
+        let local = service == nil && Self.usesLocalSpeech
         let session = WCSession.default
-        if !local {
+        if !local && service == nil {
+            phase = "连接 iPhone…"
             guard session.activationState == .activated, session.isReachable else { throw APIError(message: "无法连接配对 iPhone，请打开手机 Steer 后重试") }
             let capabilities: [String: Any]
             do { capabilities = try await exchange(["voiceAction": "capabilities"], timeout: 15) }
@@ -65,6 +69,21 @@ import AVFoundation
         }
         guard !cancelled else { return nil }
         phase = "请稍候"
+        if let service {
+            phase = "正在识别…"
+            let audio = try Data(contentsOf: url)
+            let task = Task { try await RemoteSpeech(service: service).transcribe(audio) }
+            remoteTask = task
+            do {
+                let text = try await task.value
+                guard !cancelled else { return nil }
+                recognitionSource = "自托管服务"
+                return text
+            } catch {
+                if cancelled { return nil }
+                throw error
+            }
+        }
         if local {
             let cancellation = LocalSpeechCancellation(); localCancellation = cancellation
             let name = UserDefaults.standard.string(forKey: "steer.localSpeechModel") ?? "base-q5_1"
@@ -72,15 +91,17 @@ import AVFoundation
             do { result = try await LocalSpeech.shared.recognize(url: url, cancellation: cancellation, modelName: name) }
             catch { if cancelled { return nil }; throw error }
             guard !cancelled else { return nil }
+            recognitionSource = "手表本地"
             return result.text
         }
         let audio = try Data(contentsOf: url)
         guard !audio.isEmpty, audio.count <= VoiceUpload.maximumBytes else { throw APIError(message: "录音为空或文件过大，请重新录音") }
+        phase = "发送录音…"
         let id = UUID().uuidString
         phoneRequest = id
         do {
             _ = try await exchange(["voiceAction": "begin", "requestId": id, "totalBytes": audio.count,
-                "digest": VoiceUpload.hash(audio), "locale": Locale.current.identifier.replacingOccurrences(of: "_", with: "-")], timeout: 15)
+                "digest": VoiceUpload.hash(audio), "locale": locale], timeout: 15)
             var sequence = 0
             for offset in stride(from: 0, to: audio.count, by: VoiceUpload.chunkBytes) {
                 guard !cancelled else { throw CancellationError() }
@@ -88,9 +109,11 @@ import AVFoundation
                 _ = try await exchange(["voiceAction": "chunk", "requestId": id, "sequence": sequence, "audio": chunk], timeout: 15)
                 sequence += 1
             }
+            phase = "正在识别…"
             let reply = try await exchange(["voiceAction": "finish", "requestId": id], timeout: 50)
             guard !cancelled else { return nil }
             guard reply["requestId"] as? String == id, let text = reply["text"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw APIError(message: "没有听清，请重新开始") }
+            recognitionSource = reply["source"] as? String ?? "iPhone 识别"
             return text
         } catch {
             session.sendMessage(["voiceAction": "abort", "requestId": id], replyHandler: nil, errorHandler: nil)
@@ -99,6 +122,7 @@ import AVFoundation
         }
     }
     private func record(url: URL) async throws -> Bool {
+        phase = "开启麦克风…"
         let granted = await AVAudioApplication.requestRecordPermission()
         guard granted else { throw APIError(message: "请在手表设置中允许 Steer 使用麦克风") }
         guard !cancelled else { return false }

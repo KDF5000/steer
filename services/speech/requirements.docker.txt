@@ -1,0 +1,5 @@
+fastapi==0.162.2
+uvicorn==0.54.0
+soundfile==0.14.0
+sherpa-onnx==1.13.8
+numpy==2.2.6

@@ -1,0 +1,36 @@
+services:
+  speech:
+    build:
+      context: .
+      args:
+        BASE_IMAGE: ${SPEECH_BASE_IMAGE:-python:3.12-slim-bookworm}
+        APT_MIRROR: ${SPEECH_APT_MIRROR:-deb.debian.org}
+        PIP_INDEX_URL: ${SPEECH_PIP_INDEX_URL:-https://pypi.org/simple}
+    image: steer-speech:sensevoice
+    restart: unless-stopped
+    init: true
+    user: "${SPEECH_UID:-501}:${SPEECH_GID:-20}"
+    ports:
+      - "127.0.0.1:18765:8765"
+    environment:
+      STEER_SPEECH_BACKEND: sherpa
+      STEER_SPEECH_MODEL: /models/sensevoice
+      STEER_SPEECH_TOKEN_FILE: /run/secrets/speech_token
+    volumes:
+      - ./models:/models/sensevoice:ro
+    secrets:
+      - speech_token
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    mem_limit: 2g
+    cpus: 2
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; from pathlib import Path; r=urllib.request.Request('http://127.0.0.1:8765/healthz',headers={'Authorization':'Bearer '+Path('/run/secrets/speech_token').read_text().strip()}); urllib.request.urlopen(r,timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+secrets:
+  speech_token:
+    file: ./speech.secret

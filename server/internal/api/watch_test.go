@@ -67,7 +67,7 @@ func TestWatchFeedScopesAndWorkspaceIsolation(t *testing.T) {
 	if err := json.Unmarshal(list.Body.Bytes(), &items); err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 1 || items[0].ID != ids[0] || items[0].AgentName != "Builder" || items[0].TaskID == nil || items[0].Status != "running" {
+	if len(items) != 1 || items[0].ID != ids[0] || items[0].AgentName != "Builder" || items[0].TaskID == nil || items[0].Status != "running" || items[0].LastUserMessage != "检查代码" || items[0].StartedAt == nil {
 		t.Fatalf("wrong projection: %+v", items)
 	}
 	own := call(http.MethodGet, "/api/v1/watch/conversations/"+ids[0], token)

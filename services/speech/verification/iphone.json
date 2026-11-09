@@ -1,0 +1,11 @@
+{
+  "text" : "请总结当前任务的状态，不要修改代码。",
+  "watchPaired" : true,
+  "configurationSaved" : true,
+  "watchReachable" : false,
+  "elapsedMilliseconds" : 271,
+  "platform" : "iOS",
+  "watchAppInstalled" : true,
+  "syncStatus" : "配置已交给配对连接，请在手表确认收到",
+  "endpoint" : "http:\/\/192.168.31.248:18766"
+}

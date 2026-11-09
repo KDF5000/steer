@@ -29,8 +29,8 @@ struct SteerAPI {
     func conversations() async throws -> [Conversation] { try await request("watch/conversations") }
     func task(_ id: String) async throws -> TaskSnapshot { try await request("tasks/\(id)") }
     func history(_ id: String) async throws -> ChatHistory { try await request("watch/conversations/\(id)") }
-    func send(_ item: Conversation, draft: Draft) async throws -> TaskCreated {
-        let body = try JSONSerialization.data(withJSONObject: ["agentId": item.agentID, "prompt": draft.text, "metadata": ["source": "apple-watch"]])
+    func send(_ item: Conversation, draft: Draft, source: String = "apple-watch") async throws -> TaskCreated {
+        let body = try JSONSerialization.data(withJSONObject: ["agentId": item.agentID, "prompt": draft.text, "metadata": ["source": source]])
         return try await request("conversations/\(item.id)/tasks", method: "POST", body: body, key: draft.idempotencyKey)
     }
     struct Cancelled: Decodable { let id, status: String }

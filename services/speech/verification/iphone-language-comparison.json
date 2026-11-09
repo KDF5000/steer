@@ -1,0 +1,12 @@
+[
+  {
+    "locale" : "en-US",
+    "onDevice" : true,
+    "text" : "We was your guy"
+  },
+  {
+    "onDevice" : true,
+    "locale" : "zh-CN",
+    "text" : "总结当前任务的状态不要修改代码"
+  }
+]

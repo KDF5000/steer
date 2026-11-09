@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.log
+speech.secret
+model.path
+models/
+.env

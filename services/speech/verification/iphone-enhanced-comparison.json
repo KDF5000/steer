@@ -1,0 +1,105 @@
+{
+  "runs" : [
+    {
+      "engine" : "legacy",
+      "onDevice" : true,
+      "expected" : "请总结当前任务的状态，不要修改代码。",
+      "text" : "前任务的状态不要修改代码",
+      "file" : "local-case-0.m4a",
+      "milliseconds" : 345
+    },
+    {
+      "file" : "local-case-0.m4a",
+      "onDevice" : true,
+      "engine" : "enhanced",
+      "expected" : "请总结当前任务的状态，不要修改代码。",
+      "text" : "请总结当前任务的状态 ，不要修改代码。",
+      "milliseconds" : 243
+    },
+    {
+      "expected" : "先检查测试结果，不要提交代码，也不要推送到远程仓库。",
+      "engine" : "legacy",
+      "file" : "local-case-1.m4a",
+      "onDevice" : true,
+      "text" : "先检查测试结果不要提交代码也不要推送到远程仓库",
+      "milliseconds" : 174
+    },
+    {
+      "expected" : "先检查测试结果，不要提交代码，也不要推送到远程仓库。",
+      "onDevice" : true,
+      "file" : "local-case-1.m4a",
+      "engine" : "enhanced",
+      "text" : "先检查测试结果不要提交代码 ，也不要推送到远程仓库。",
+      "milliseconds" : 143
+    },
+    {
+      "expected" : "把任务取消，然后只告诉我失败原因。",
+      "onDevice" : true,
+      "text" : "把任务取消然后只告诉我失败原因",
+      "milliseconds" : 93,
+      "engine" : "legacy",
+      "file" : "local-case-2.m4a"
+    },
+    {
+      "milliseconds" : 127,
+      "file" : "local-case-2.m4a",
+      "engine" : "enhanced",
+      "onDevice" : true,
+      "text" : "把任务取消 ，然后之告诉我失败原因。",
+      "expected" : "把任务取消，然后只告诉我失败原因。"
+    },
+    {
+      "expected" : "请在下午三点半提醒我，预算是一千二百五十元。",
+      "engine" : "legacy",
+      "onDevice" : true,
+      "file" : "local-case-3.m4a",
+      "milliseconds" : 120,
+      "text" : "亲在下午3:30提醒我我预算是¥1250"
+    },
+    {
+      "onDevice" : true,
+      "milliseconds" : 141,
+      "expected" : "请在下午三点半提醒我，预算是一千二百五十元。",
+      "text" : "请在下午 3:30提醒我预算是 1250元。",
+      "file" : "local-case-3.m4a",
+      "engine" : "enhanced"
+    },
+    {
+      "expected" : "请检查 Steer 和 Relay 的 GitHub 配置，不要修改 API Key。",
+      "milliseconds" : 242,
+      "file" : "local-case-4.m4a",
+      "text" : "请检查Steer和Relay get have配置不要修改API",
+      "engine" : "legacy",
+      "onDevice" : true
+    },
+    {
+      "text" : "请检查 ster和 Brealy的 githave配置不要修改 ATIT。",
+      "expected" : "请检查 Steer 和 Relay 的 GitHub 配置，不要修改 API Key。",
+      "onDevice" : true,
+      "milliseconds" : 155,
+      "engine" : "enhanced",
+      "file" : "local-case-4.m4a"
+    },
+    {
+      "expected" : "请先阅读当前项目的说明文档，再检查最近一次测试失败的原因。先不要修改文件，也不要提交代码，分析完成后只用中文告诉我结论和下一步建议。",
+      "engine" : "legacy",
+      "milliseconds" : 436,
+      "onDevice" : true,
+      "file" : "local-case-5.m4a",
+      "text" : "请先阅读当前项目的说明文档再检查最近一次测试失败的原因先不要修改文件也不要提交代码分析完成后用中文告诉我结论和下一步建议"
+    },
+    {
+      "engine" : "enhanced",
+      "onDevice" : true,
+      "milliseconds" : 264,
+      "file" : "local-case-5.m4a",
+      "expected" : "请先阅读当前项目的说明文档，再检查最近一次测试失败的原因。先不要修改文件，也不要提交代码，分析完成后只用中文告诉我结论和下一步建议。",
+      "text" : "请先阅读当前项目的说明文档再检查最近一次测试失败的原因先不要修改文件 ，也不要提交代码分析完成。知用中文告诉我结论和下一步建议"
+    }
+  ],
+  "available" : true,
+  "platform" : "iOS",
+  "stage" : "complete",
+  "cancellation" : "cancelled",
+  "afterCancellation" : "请先阅读当前项目的说明文档再检查最近一次测试失败的原因先不要修改文件 ，也不要提交代码分析完成。知用中文告诉我结论和下一步建议"
+}

@@ -50,9 +50,32 @@ final class Pairing: NSObject, ObservableObject, WCSessionDelegate {
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String : Any]) {
         guard let data = applicationContext["connection"] as? Data, let config = try? JSONDecoder().decode(Connection.self, from: data) else { return }
         Task { @MainActor in
-            do { try SecureStore.write(config, key: "connection"); self.connection = config; self.status = "已收到 iPhone 配置" }
+            do {
+                try SecureStore.write(config, key: "connection"); self.connection = config; self.status = "已收到 iPhone 配置"
+                #if os(watchOS)
+                session.transferUserInfo(["configurationAck": config.speech?.server ?? "phone",
+                                          "build": Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown"])
+                #endif
+            }
             catch { self.status = error.localizedDescription }
         }
+    }
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        #if os(iOS)
+        guard let endpoint = userInfo["configurationAck"] as? String else { return }
+        Task { @MainActor in
+            guard endpoint == (self.connection?.speech?.server ?? "phone") else { return }
+            self.status = "手表已确认收到配置"
+            #if DEBUG
+            if let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
+               let data = try? JSONSerialization.data(withJSONObject: ["speechEndpoint": endpoint,
+                   "watchBuild": userInfo["build"] as? String ?? "unknown",
+                   "acknowledgedAt": ISO8601DateFormatter().string(from: Date())]) {
+                try? data.write(to: cache.appendingPathComponent("SteerWatchConfigurationAck.json"), options: .atomic)
+            }
+            #endif
+        }
+        #endif
     }
     func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
         #if os(iOS)
@@ -98,6 +121,38 @@ final class Pairing: NSObject, ObservableObject, WCSessionDelegate {
     }
     #endif
     #if os(iOS)
+    @MainActor func runRemoteSpeechDiagnostic() async {
+        guard ProcessInfo.processInfo.environment["STEER_REMOTE_SPEECH_SELF_TEST"] == "1",
+              let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+        let configFile = cache.appendingPathComponent("SteerSpeechService.json")
+        let output = cache.appendingPathComponent("SteerRemoteSpeechDiagnostic.json")
+        var report: [String: Any] = ["platform": "iOS"]
+        defer {
+            try? FileManager.default.removeItem(at: configFile)
+            if let data = try? JSONSerialization.data(withJSONObject: report, options: .prettyPrinted) {
+                try? data.write(to: output, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            }
+        }
+        do {
+            let service = try JSONDecoder().decode(SpeechService.self, from: Data(contentsOf: configFile))
+            let client = RemoteSpeech(service: service)
+            try await client.check()
+            let audio = try Data(contentsOf: cache.appendingPathComponent("steer-voice-self-test.m4a"))
+            let started = ContinuousClock.now
+            report["text"] = try await client.transcribe(audio)
+            let elapsed = started.duration(to: .now).components
+            report["elapsedMilliseconds"] = elapsed.seconds * 1000 + elapsed.attoseconds / 1_000_000_000_000_000
+            report["endpoint"] = service.server
+            guard var config = connection else { throw APIError(message: "请先配置 Steer 连接") }
+            config.speech = service
+            try save(config)
+            report["configurationSaved"] = true
+            report["watchPaired"] = WCSession.default.isPaired
+            report["watchAppInstalled"] = WCSession.default.isWatchAppInstalled
+            report["watchReachable"] = WCSession.default.isReachable
+            report["syncStatus"] = status
+        } catch { report["error"] = error.localizedDescription }
+    }
     @MainActor func runWatchSpeechDiagnostic() async {
         guard ProcessInfo.processInfo.environment["STEER_LOCAL_SPEECH_SELF_TEST"] == "1",
               let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }

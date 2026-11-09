@@ -10,7 +10,7 @@ settings:
     STEER_BUNDLE_PREFIX: com.example.steer
     GENERATE_INFOPLIST_FILE: YES
     CODE_SIGN_STYLE: Automatic
-    CURRENT_PROJECT_VERSION: 7
+    CURRENT_PROJECT_VERSION: 14
     MARKETING_VERSION: '0.1.0'
 targets:
   SteerPhone:
@@ -96,7 +96,7 @@ targets:
     sources:
       - Tests
       - path: Shared
-        excludes: [Pairing.swift, SecureStore.swift, PhoneSpeech.swift, LocalSpeech.swift]
+        excludes: [Pairing.swift, SecureStore.swift, PhoneSpeech.swift, LocalSpeech.swift, ModernPhoneSpeech.swift, TaskModel.swift, ResultSpeech.swift]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(STEER_BUNDLE_PREFIX).coretests
