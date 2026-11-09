@@ -131,8 +131,7 @@ const usageSums = `sum(total_tokens)::bigint,sum(input_tokens)::bigint,sum(outpu
  count(*) FILTER(WHERE complete_attempts=attempt_count),count(*),count(*) FILTER(WHERE observed_attempts>0 AND complete_attempts<>attempt_count)`
 
 func (s *Store) FootprintUsage(ctx context.Context, wid string, from, to time.Time, projectID, timezone string) (UsageTotals, []FootprintUsage, []FootprintUsage, error) {
-	totals := UsageTotals{}
-	err := s.pool.QueryRow(ctx, usageCTE+` SELECT `+usageSums+` FROM per_run`, wid, from, to, projectID).Scan(&totals.TokenCount, &totals.InputTokens, &totals.OutputTokens, &totals.CacheReadTokens, &totals.CacheWriteTokens, &totals.TokenCoverage, &totals.TotalRuns, &totals.PartialRuns)
+	totals, err := s.FootprintUsageTotals(ctx, wid, from, to, projectID)
 	if err != nil {
 		return totals, nil, nil, err
 	}
@@ -170,4 +169,10 @@ func (s *Store) FootprintUsage(ctx context.Context, wid string, from, to time.Ti
 	}
 	days, err := query("day")
 	return totals, sessions, days, err
+}
+
+func (s *Store) FootprintUsageTotals(ctx context.Context, wid string, from, to time.Time, projectID string) (UsageTotals, error) {
+	totals := UsageTotals{}
+	err := s.pool.QueryRow(ctx, usageCTE+` SELECT `+usageSums+` FROM per_run`, wid, from, to, projectID).Scan(&totals.TokenCount, &totals.InputTokens, &totals.OutputTokens, &totals.CacheReadTokens, &totals.CacheWriteTokens, &totals.TokenCoverage, &totals.TotalRuns, &totals.PartialRuns)
+	return totals, err
 }

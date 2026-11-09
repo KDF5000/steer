@@ -1,0 +1,147 @@
+<div id="steer-companion-1108">
+<div class="viz-carousel viz-dotted-background" aria-label="Steer 手机与手表交互方案" data-previous-label="上一版" data-next-label="下一版">
+<section data-variant="任务台" aria-label="任务台方案"><div class="sc-stage" data-design="desk"></div></section>
+<section data-variant="收件箱" aria-label="收件箱方案" hidden><div class="sc-stage" data-design="inbox"></div></section>
+<section data-variant="语音搭档" aria-label="语音搭档方案" hidden><div class="sc-stage" data-design="voice"></div></section>
+</div>
+</div>
+<style>
+#steer-companion-1108{font-family:Geist,"PingFang SC","Microsoft YaHei",sans-serif}
+#steer-companion-1108 *{box-sizing:border-box}
+#steer-companion-1108 .sc-stage{--sc-bg:light-dark(#f5f5f3,#000000);--sc-panel:light-dark(#ffffff,#181818);--sc-text:light-dark(#191c1b,#f4f5f4);--sc-muted:light-dark(#66706b,#a4aca7);--sc-line:light-dark(#e3e6e2,#313131);--sc-accent:light-dark(#006b50,#98ebc6);--sc-soft:light-dark(#e2f2e9,#1f1f1f);--sc-solid:light-dark(#006b50,#98ebc6);--sc-on:light-dark(#ffffff,#000000);padding:32px 16px 24px;min-height:864px;color:var(--sc-text)}
+#steer-companion-1108 button,#steer-companion-1108 textarea{font:inherit}
+#steer-companion-1108 button{color:inherit;border:0;background:none;cursor:inherit}
+#steer-companion-1108 button:disabled{opacity:.45;cursor:not-allowed}
+#steer-companion-1108 .sc-pair{display:flex;justify-content:center;align-items:flex-start;gap:32px}
+#steer-companion-1108 .sc-phone{width:352px;flex-shrink:0;min-height:752px;background:var(--sc-bg);border:6px solid #272727;border-radius:48px;padding:12px 18px 20px;position:relative;box-shadow:0 16px 40px #00000012;overflow:hidden}
+#steer-companion-1108 .sc-status{display:flex;align-items:center;justify-content:space-between;height:32px;font-size:12px;font-weight:600;padding:0 8px}
+#steer-companion-1108 .sc-island{width:88px;height:24px;background:#000;border-radius:24px;color:#000}
+#steer-companion-1108 .sc-header{display:flex;align-items:center;justify-content:space-between;margin-top:24px;margin-bottom:24px;gap:8px}
+#steer-companion-1108 h2,#steer-companion-1108 h3,#steer-companion-1108 p{margin:0}
+#steer-companion-1108 h2{font-size:30px;line-height:36px;letter-spacing:-1px;font-weight:600}
+#steer-companion-1108 h3{font-size:18px;line-height:28px;font-weight:600}
+#steer-companion-1108 .sc-small{font-size:12px;line-height:20px;color:var(--sc-muted)}
+#steer-companion-1108 .sc-body{font-size:14px;line-height:24px}
+#steer-companion-1108 .sc-label{font-size:12px;line-height:20px;font-weight:500;letter-spacing:1px;color:var(--sc-muted)}
+#steer-companion-1108 .sc-icon{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--sc-panel);flex-shrink:0}
+#steer-companion-1108 .sc-icon svg{width:20px;height:20px}
+#steer-companion-1108 .sc-card{background:var(--sc-panel);border-radius:24px;padding:20px;margin-bottom:16px;text-align:left;width:100%}
+#steer-companion-1108 .sc-card.sc-accent{background:var(--sc-soft)}
+#steer-companion-1108 .sc-count{font-size:60px;line-height:64px;letter-spacing:-3px;font-weight:500;font-variant-numeric:tabular-nums}
+#steer-companion-1108 .sc-statline{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
+#steer-companion-1108 .sc-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--sc-accent);margin-right:8px;vertical-align:middle}
+#steer-companion-1108 .sc-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:16px 0;border-bottom:1px solid var(--sc-line);font-size:14px;line-height:24px}
+#steer-companion-1108 .sc-row:last-child{border-bottom:0}
+#steer-companion-1108 .sc-row-content{flex:1;min-width:0}
+#steer-companion-1108 .sc-section{display:flex;align-items:center;justify-content:space-between;margin:24px 0 8px}
+#steer-companion-1108 .sc-pill{font-size:12px;line-height:20px;color:var(--sc-accent);background:var(--sc-soft);border-radius:8px;padding:4px 8px;white-space:nowrap}
+#steer-companion-1108 .sc-primary{width:100%;min-height:48px;border-radius:16px;padding:12px 16px;background:var(--sc-solid);color:var(--sc-on);font-size:16px;font-weight:500;display:flex;justify-content:center;align-items:center;gap:8px}
+#steer-companion-1108 .sc-secondary{width:100%;min-height:44px;border-radius:16px;background:var(--sc-panel);padding:12px;font-size:14px;line-height:20px}
+#steer-companion-1108 .sc-footer{margin-top:24px;padding-top:12px;border-top:1px solid var(--sc-line);display:flex;justify-content:space-around;font-size:12px;color:var(--sc-muted)}
+#steer-companion-1108 .sc-footer button{padding:8px 12px;display:grid;gap:4px;justify-items:center;min-width:64px}
+#steer-companion-1108 .sc-selected{color:var(--sc-accent)!important}
+#steer-companion-1108 .sc-homebar{height:4px;width:104px;background:var(--sc-text);border-radius:8px;margin:16px auto 0;opacity:.8}
+#steer-companion-1108 .sc-wrist{width:232px;padding-top:64px;flex-shrink:0}
+#steer-companion-1108 .sc-watch{background:#000000;color:#f6f6f6;border:6px solid #313131;outline:1px solid #66706b;border-radius:56px;min-height:284px;padding:16px 16px 20px;position:relative}
+#steer-companion-1108 .sc-watch:after{content:"";position:absolute;right:-10px;top:64px;width:6px;height:32px;background:#66706b;border-radius:4px}
+#steer-companion-1108 .sc-watch .sc-small{color:#a4aca7;font-size:12px;line-height:16px}
+#steer-companion-1108 .sc-watch .sc-primary{background:#98ebc6;color:#000;font-size:14px;min-height:44px;border-radius:24px;padding:8px 12px;margin-top:12px}
+#steer-companion-1108 .sc-watch .sc-secondary{background:#272727;color:#f6f6f6;font-size:14px;padding:8px;min-height:44px;border-radius:24px;margin-top:8px}
+#steer-companion-1108 .sc-watch .sc-row{border-color:#272727;padding:8px 0;font-size:12px;line-height:16px;gap:8px}
+#steer-companion-1108 .sc-watch h3{font-size:16px;line-height:24px}
+#steer-companion-1108 .sc-watch-top{display:flex;align-items:center;justify-content:space-between;margin:0 4px 12px;font-size:12px;line-height:16px;color:#98ebc6}
+#steer-companion-1108 .sc-watch .sc-count{font-size:48px;line-height:48px;letter-spacing:-2px}
+#steer-companion-1108 .sc-watch .sc-statline{margin-bottom:8px;align-items:center}
+#steer-companion-1108 .sc-note{font-size:12px;line-height:20px;color:var(--sc-muted);margin:24px 0 16px;padding:0 8px}
+#steer-companion-1108 .sc-demo-controls{display:grid;gap:8px;padding:0 8px}
+#steer-companion-1108 .sc-demo-controls button{border:1px solid var(--sc-line);border-radius:12px;min-height:40px;padding:8px 12px;font-size:12px;line-height:20px;text-align:left;background:var(--sc-panel)}
+#steer-companion-1108 .sc-transcript{width:100%;min-height:88px;background:#181818;border:1px solid #313131;border-radius:12px;color:#f6f6f6;font-size:16px;line-height:24px;padding:8px;resize:vertical;margin:8px 0}
+#steer-companion-1108 .sc-record{height:48px;display:flex;align-items:center;justify-content:center;gap:4px;margin:16px 0}
+#steer-companion-1108 .sc-record span{width:4px;background:#98ebc6;border-radius:4px}
+#steer-companion-1108 .sc-summary{font-size:16px;line-height:28px;margin:16px 0 24px}
+#steer-companion-1108 .sc-result{border-left:2px solid var(--sc-accent);padding-left:16px;margin:24px 0}
+#steer-companion-1108 .sc-space{height:24px}
+#steer-companion-1108 .sc-voice-orb{display:grid;place-items:center;background:#272727;width:80px;height:80px;border-radius:50%;margin:12px auto;color:#98ebc6}
+#steer-companion-1108 .sc-voice-orb svg{width:32px;height:32px}
+#steer-companion-1108 .sc-watch button.sc-back{font-size:12px;color:#98ebc6;min-height:32px;padding:0;margin-bottom:4px}
+#steer-companion-1108 .sc-banner{background:var(--sc-soft);border-radius:12px;padding:12px;font-size:12px;line-height:20px;margin-bottom:16px}
+#steer-companion-1108 .sc-focus-title{font-size:24px;line-height:32px;margin:16px 0;font-weight:500;letter-spacing:-.5px}
+@media(max-width:650px){#steer-companion-1108 .sc-pair{flex-direction:column;align-items:center;gap:24px}#steer-companion-1108 .sc-wrist{padding-top:0;width:min(100%,352px);display:grid;grid-template-columns:1fr;justify-items:center}#steer-companion-1108 .sc-watch{width:232px}#steer-companion-1108 .sc-stage{min-height:1320px;padding:24px 0}#steer-companion-1108 .sc-phone{width:min(352px,100%)}#steer-companion-1108 .sc-note,#steer-companion-1108 .sc-demo-controls{width:100%}}
+@media(prefers-reduced-motion:reduce){#steer-companion-1108 *{animation:none;transition:none}}
+</style>
+<script>
+(()=>{
+const root=document.getElementById('steer-companion-1108');
+const escape=x=>String(x).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const names={desk:'任务台',inbox:'收件箱',voice:'语音搭档'};
+const titles=['优化本地语音识别','检查 Watch 完成提醒','整理任务结果摘要','检查离线连接提示','验证中英文混合输入','整理上周工作记录'];
+const saved=window.openai?.widgetState?.privateContent?.designs||{};
+const states={};
+const icon=name=>`<i data-lucide="${name}" aria-hidden="true"></i>`;
+const b=(action,text,cls='sc-secondary')=>`<button aria-label="${({settings:'设置',home:'返回首页',record:'语音继续'})[action]||text.replace(/<[^>]*>/g,'').trim()||action}" type="button" class="${cls} cursor-interaction" data-action="${action}">${text}</button>`;
+const row=(i,status='进行中')=>`<button type="button" class="sc-row cursor-interaction" data-action="task:${i}"><span class="sc-row-content"><span>${titles[i]}</span><br><span class="sc-small">${i===2?'Relay':'Steer'} · Codex</span></span><span class="sc-small">${status}</span></button>`;
+const persist=()=>{try{window.openai?.setWidgetState({modelContent:{voiceDevice:'Apple Watch',designs:Object.fromEntries(Object.entries(states).map(([k,s])=>[names[k],{screen:s.watch,submitted:s.queued,scenario:s.scenario}]))},privateContent:{designs:states}})?.catch(()=>{});}catch{}};
+function count(s){return s.scenario==='无任务'?0:s.done?2:3;}
+function phone(s,k){
+let content='';
+if(s.phone==='settings'){
+content=`<div class="sc-header">${b('home',icon('chevron-left'),'sc-icon')}<h3>设置</h3><span></span></div><div class="sc-card"><h3>设备已连接</h3><p class="sc-small">iPhone 与 Apple Watch · 刚刚同步</p></div><div class="sc-card"><p class="sc-label">语音识别</p><h3>iPhone 本地识别</h3><p class="sc-body">中文 · 增强转写已就绪</p><div class="sc-space"></div><p class="sc-small">Watch 收音，iPhone 转写。可在高级设置选择自托管服务。</p></div><div class="sc-card"><h3>任务完成提醒</h3><p class="sc-body">手表轻触提醒 · 已开启</p></div>${b('advanced','连接与高级设置 →')}`;
+}else if(s.phone==='advanced'){
+content=`<div class="sc-header">${b('settings',icon('chevron-left'),'sc-icon')}<h3>连接与高级设置</h3></div><div class="sc-card"><p class="sc-label">STEER 连接</p><h3>工作空间已连接</h3><p class="sc-small">API 密钥已保存</p></div><div class="sc-card"><h3>语音服务</h3><p class="sc-body">当前使用 iPhone 本地转写</p><p class="sc-small">演示中不修改真实设备配置。</p></div>`;
+}else if(s.phone==='detail'){
+content=`<div class="sc-header">${b('home',icon('chevron-left'),'sc-icon')}<span class="sc-small">Steer / Codex</span>${b('settings',icon('settings-2'),'sc-icon')}</div><span class="sc-pill">${s.queued?'等待执行':(s.selected===4||(s.selected===0&&s.done))?'已完成':'进行中'}</span><div class="sc-focus-title">${titles[s.selected]}</div><p class="sc-small">今天 09:41 · 同一条任务对话</p><div class="sc-result"><p class="sc-label">${(s.selected===4||(s.selected===0&&s.done))?'结果摘要':'最近动态'}</p><p class="sc-summary">${(s.selected===4||(s.selected===0&&s.done))?'中文和英文项目名均可正确转写，已通过真机验证。':'正在检查任务状态与提醒流程，完成后通知你。'}</p></div>${s.queued?'<div class="sc-banner">已收到 Watch 语音<br>${escape(s.draft)}<br><strong>已提交，等待执行</strong></div>':'<div class="sc-card"><p class="sc-body">在 Watch 上说一句，就能继续这个任务。</p><p class="sc-small">录音后确认文字，再发送执行。</p></div>'}${b('watchDetail',icon('watch')+' 在 Watch 上继续','sc-primary')}<div class="sc-space"></div>${b('home','返回任务')}`;
+}else{
+const running=count(s);const warning=s.scenario==='离线'?'<div class="sc-banner">暂未同步 · 上次更新 09:40<br>当前展示缓存，恢复连接后更新。</div>':'';
+const header=`<div class="sc-header"><div><p class="sc-label">STEER</p><h2>${k==='inbox'?'待你查看':k==='voice'?'你的搭档':'任务'}</h2></div>${b('settings',icon('settings-2'),'sc-icon')}</div>${warning}`;
+const finished=`<button type="button" data-action="task:${s.done?0:4}" class="sc-card sc-accent cursor-interaction"><p class="sc-small">${icon('check')} 已完成 · 刚刚</p><h3>${titles[s.done?0:4]}</h3><p class="sc-body">中英文混合转写已验证通过。</p><p class="sc-small" style="margin-top:12px">查看结果与对话 →</p></button>`;
+if(k==='desk')content=header+`<div class="sc-statline"><div><span class="sc-count">${running}</span><span class="sc-body"> 个任务进行中</span></div><span class="sc-pill">${s.scenario==='离线'?'缓存':'刚刚同步'}</span></div>${s.queued?'<div class="sc-banner">1 个续接请求等待执行</div>':''}<div class="sc-section"><h3>最近完成</h3><span class="sc-small">1 条</span></div>${finished}<div class="sc-section"><h3>进行中</h3><span class="sc-small">${running} 个</span></div>${running?row(1)+row(2)+(s.done?'':row(0)):'<div class="sc-card"><h3>都处理好了</h3><p class="sc-body">下次完成时会在 Watch 提醒你。</p></div>'}`;
+if(k==='inbox')content=header+`<div class="sc-statline"><span class="sc-count">1</span><p class="sc-body">个新结果<br><span class="sc-small">随时查看，不用盯着进度</span></p></div>${finished}<p class="sc-label" style="margin:24px 0 8px">今天 · 已查看</p>${row(5,'已完成')}<div class="sc-space"></div><div class="sc-card"><span class="sc-dot"></span><strong>${running} 个任务进行中</strong><p class="sc-small" style="margin-top:8px">${s.queued?'另有 1 个续接请求等待执行':'完成后会在 Watch 提醒你'}</p>${b('active','查看进行中的任务 →')}</div>`;
+if(k==='voice')content=header+`<p class="sc-body">Watch 上说，任务接着做。</p><div class="sc-space"></div><div class="sc-card"><p class="sc-label">当前对话 · STEER</p><div class="sc-focus-title">${titles[s.done?0:4]}</div><span class="sc-pill">${s.queued?'等待执行':'已完成'}</span><p class="sc-summary">中文、英文项目名都已通过真机验证。</p>${b('task:'+(s.done?0:4),'打开完整对话 →')}</div><div class="sc-card sc-accent"><p class="sc-label">APPLE WATCH</p><h3>${s.watch==='record'?'正在收音':s.queued?'已收到新的指令':'随时可以继续'}</h3><p class="sc-body">${s.queued?escape(s.draft):'抬腕打开 Steer，点麦克风说话。'}</p></div>${b('active',`${running} 个任务进行中 →`)}`;
+if(s.active)content=header+`<p class="sc-small">进行中 · ${running} 个</p>${running?row(1)+row(2)+(s.done?'':row(0)):'<div class="sc-card">当前没有进行中的任务</div>'}<div class="sc-space"></div>${b('home','返回首页')}`;
+content+=`<nav class="sc-footer" aria-label="手机导航">${b('home',icon(k==='inbox'?'inbox':k==='voice'?'audio-lines':'layers')+'<span>'+names[k]+'</span>','sc-selected')}${b('active',icon('activity')+'<span>进行中</span>','')}${b('settings',icon('settings-2')+'<span>设置</span>','')}</nav>`;
+}
+return `<div class="sc-phone" aria-label="iPhone 演示"><div class="sc-status"><span>9:41</span><span class="sc-island"></span><span>5G ▰</span></div>${content}<div class="sc-homebar"></div></div>`;
+}
+function watch(s,k){
+const n=count(s);let c='';const head=`<div class="sc-watch-top"><span>Steer</span><span>09:41</span></div>`;
+if(s.watch==='record')c=`${b('watchHome','取消','sc-back')}<h3>正在听你说</h3><p class="sc-small">继续 · ${titles[s.selected]}</p><div class="sc-record" aria-label="模拟语音波形">${[12,24,40,24,48,32,16,40,24,12].map(h=>`<span style="height:${h}px"></span>`).join('')}</div><p class="sc-small">模拟收音，不使用真实麦克风</p>${b('finish','完成录音','sc-primary')}`;
+else if(s.watch==='confirm')c=`${b('watchDetail','取消','sc-back')}<h3>确认后发送</h3><p class="sc-small">续接到「${titles[s.selected]}」</p><textarea class="sc-transcript" aria-label="识别文字">${escape(s.draft)}</textarea><p class="sc-small">${s.scenario==='离线'?'暂未连接 · 草稿已保留':'iPhone 本地识别 · 演示'}</p>${b(s.scenario==='离线'?'retry':'send',s.scenario==='离线'?'重试连接':'发送继续','sc-primary')}`;
+else if(s.watch==='sent')c=`<div class="sc-voice-orb">${icon('check')}</div><h3 style="text-align:center">已提交</h3><p class="sc-small" style="text-align:center;margin-top:8px">等待执行<br>开始后更新任务状态</p>${b('watchHome','回到任务','sc-primary')}`;
+else if(s.watch==='notice')c=`<p class="sc-small">任务已完成 · 轻触提醒</p><h3 style="margin:8px 0">优化本地语音识别</h3><p class="sc-small">中英文混合转写已通过。</p>${b('record',icon('mic')+' 语音继续','sc-primary')}${b('watchDetail','查看摘要')}`;
+else if(s.watch==='detail')c=`${b('watchHome','‹ 任务','sc-back')}<h3>${titles[s.selected]}</h3><p class="sc-small" style="margin:8px 0">${(s.selected===4||(s.selected===0&&s.done))?'已完成 · 中英文混合转写验证通过。':'正在执行，完成后提醒你。'}</p>${b('record',icon('mic')+' 语音继续','sc-primary')}${b('handoff','手机看完整结果')}`;
+else if(s.watch==='handoff')c=`<div class="sc-voice-orb">${icon('smartphone')}</div><h3 style="text-align:center">已标记此任务</h3><p class="sc-small" style="text-align:center;margin:8px 0">打开 iPhone 上的 Steer<br>即可查看完整结果</p>${b('watchHome','知道了','sc-primary')}`;
+else{
+const sync=s.scenario==='离线'?'暂未同步 · 09:40 缓存':'刚刚更新';
+if(k==='desk')c=`<div class="sc-statline"><span class="sc-count">${n}</span><div class="sc-small">进行中<br>${sync}</div></div>${s.queued?'<p class="sc-small">另有 1 个等待执行</p>':''}${n?b('watchTask:1','检查 Watch 完成提醒 →','sc-row'): '<h3>当前都完成了</h3>'}${b('watchTask:'+ (s.done?0:4),'✓ '+(s.done?'语音识别':'混合输入')+'已完成 →','sc-row')}${b('watchDetail',icon('mic')+' 语音继续','sc-primary')}`;
+if(k==='inbox')c=`<p class="sc-small">${n} 个进行中 · ${sync}</p><div class="sc-statline" style="margin:12px 0"><span class="sc-count">1</span><h3>个新结果</h3></div>${b('watchTask:'+(s.done?0:4),(s.done?'语音识别':'混合输入')+'已完成 →','sc-row')}${b('record',icon('mic')+' 语音继续','sc-primary')}`;
+if(k==='voice')c=`<div style="display:flex;justify-content:space-between"><span class="sc-small">${n} 个进行中</span><span class="sc-small">${s.scenario==='离线'?'离线缓存':'已连接'}</span></div>${b('record',icon('mic'),'sc-voice-orb')}<h3 style="text-align:center">说一句，接着做</h3>${b('watchDetail','续接：'+titles[s.selected]+' ›','sc-row')}<p class="sc-small" style="text-align:center;margin-top:8px">点麦克风开始</p>`;
+}
+return `<div class="sc-wrist"><div class="sc-watch" aria-label="Apple Watch 演示" aria-live="polite">${head}${c}</div><p class="sc-note">${names[k]} · 可点击交互演示<br>Watch 收音，确认文字后续接任务。</p><div class="sc-demo-controls" aria-label="模拟情境">${b('complete','模拟：任务完成提醒','')}${b('offline',s.scenario==='离线'?'模拟：恢复连接':'模拟：离线','')}${b('empty',s.scenario==='无任务'?'模拟：恢复任务':'模拟：无进行中任务','')}</div></div>`;
+}
+function render(k){const el=root.querySelector(`[data-design="${k}"]`),s=states[k];el.innerHTML=`<div class="sc-pair">${phone(s,k)}${watch(s,k)}</div>`;if(s.handoff&&s.phone==='home'){const p=el.querySelector('.sc-header');p.insertAdjacentHTML('afterend',b('task:'+s.selected,'来自 Watch · 打开已标记的任务 →','sc-banner'));}globalThis.lucide?.createIcons({attrs:{width:16,height:16}});}
+for(const k of Object.keys(names)){
+states[k]={phone:'home',watch:'home',selected:k==='desk'?0:4,done:false,queued:false,draft:'再检查一下离线时的提示。',scenario:'正常',active:false,handoff:false,...saved[k]};render(k);
+const el=root.querySelector(`[data-design="${k}"]`);
+el.addEventListener('input',e=>{if(e.target.matches('textarea')){states[k].draft=e.target.value;persist();}});
+el.addEventListener('click',e=>{const btn=e.target.closest('[data-action]');if(!btn)return;const a=btn.dataset.action,s=states[k];
+if(a.startsWith('task:')){s.selected=+a.split(':')[1];s.phone='detail';s.handoff=false;}
+else if(a.startsWith('watchTask:')){s.selected=+a.split(':')[1];s.watch='detail';}
+else if(a==='home'){s.phone='home';s.active=false;}
+else if(a==='active'){s.phone='home';s.active=true;}
+else if(a==='settings'||a==='advanced')s.phone=a;
+else if(a==='watchDetail')s.watch='detail';
+else if(a==='watchHome')s.watch='home';
+else if(a==='record')s.watch='record';
+else if(a==='finish')s.watch='confirm';
+else if(a==='send'){if(!s.draft.trim())return;s.queued=true;s.watch='sent';if(s.phone==='detail')s.phone='detail';}
+else if(a==='retry'){s.scenario='正常';s.watch='confirm';}
+else if(a==='complete'){s.done=true;s.selected=0;s.watch='notice';}
+else if(a==='handoff'){s.handoff=true;s.watch='handoff';}
+else if(a==='offline')s.scenario=s.scenario==='离线'?'正常':'离线';
+else if(a==='empty'){s.scenario=s.scenario==='无任务'?'正常':'无任务';s.watch='home';}
+render(k);persist();});
+if(globalThis.Tweak){const t=new Tweak({container:el,onChange:()=>render(k)});t.addSelect(states[k],'scenario',{label:'演示情境',options:['正常','离线','无任务']});}
+}
+window.addEventListener('openai:set_globals',e=>{const v=e.detail?.globals?.widgetState?.privateContent?.designs;if(v)for(const k of Object.keys(names)){if(v[k]){Object.assign(states[k],v[k]);render(k);}}});
+})();
+</script>

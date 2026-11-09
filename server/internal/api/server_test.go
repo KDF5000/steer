@@ -146,6 +146,7 @@ func TestTaskAPIScope(t *testing.T) {
 		{http.MethodPost, "/api/v1/watch/devices", "tasks:read", true},
 		{http.MethodDelete, "/api/v1/watch/devices/device-1", "tasks:read", true},
 		{http.MethodPost, "/api/v1/watch/devices/device-1/other", "", false},
+		{http.MethodGet, "/api/v1/watch/overview", "tasks:read", true},
 		{http.MethodGet, "/api/v1/watch/conversations", "tasks:read", true},
 		{http.MethodGet, "/api/v1/watch/conversations/session-1", "tasks:read", true},
 		{http.MethodGet, "/api/v1/watch/conversations/session-1/other", "", false},

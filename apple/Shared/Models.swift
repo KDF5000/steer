@@ -80,3 +80,19 @@ struct Draft: Codable {
     var attempted: Bool = false
 }
 struct CachedFeed: Codable { let account: String; let items: [Conversation]; let syncedAt: Date }
+
+struct WatchOverview: Codable, Equatable {
+    let activeTasks, totalTasks, completedTasks, failedTasks: Int
+    let userMessages, agentMessages: Int64
+    let tokenCount: Int64?
+    let tokenCoverage, totalRuns: Int
+    let updatedAt: String
+    var messageCount: Int64 { userMessages + agentMessages }
+    static func countText(_ count: Int64?) -> String {
+        guard let count else { return "—" }
+        if count >= 100_000_000 { return String(format: "%.1f亿", Double(count) / 100_000_000) }
+        if count >= 10_000 { return String(format: "%.1f万", Double(count) / 10_000) }
+        return String(count)
+    }
+}
+struct CachedOverview: Codable { let account: String; let overview: WatchOverview }

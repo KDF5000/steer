@@ -22,8 +22,6 @@
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
 	</dict>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>将配对 Apple Watch 的录音转为文字，用于确认后继续 Steer 任务。</string>

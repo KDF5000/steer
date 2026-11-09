@@ -1,5 +1,63 @@
 # Steer Apple Watch
 
+## Build 23：话筒贴近屏幕底边
+
+语音入口改用独立底部容器定位，延伸到底部安全区，避免 ScrollView 的底部让按钮悬在正文中间。保持小圆形话筒、水平居中及正文末尾避让，仅保留短底边间距。无语音入口的任务沿用原安全区。
+
+两端签名构建与结果页位置／滚动交互检查通过。iPhone 与 Watch 均已安装 Build 23，Watch 已启动；实体 Watch 的最终位置需用户验收。包在 `apple/.cache/build23/SteerPhone.app`，安装记录见 `docs/ui-validation/build23/VALIDATION.md`。
+
+## Build 22：话筒按钮底部居中
+
+结果页的小圆形话筒改为底部居中，尺寸、点击区域及正文末尾留白不变。两端签名构建通过，iPhone 与 Watch 均已安装 Build 22，Watch 已启动。包在 `apple/.cache/build22/SteerPhone.app`；安装记录见 `docs/ui-validation/build22/VALIDATION.md`。
+
+## Build 21：小话筒入口与精简失败页
+
+结果页以右下角小圆形话筒图标代替全宽语音继续按钮，移除黑色矩形底栏；正文末尾留出图标空间，不永久缩减整个阅读视口。语音失败页移除“返回任务”，只保留重试与左上关闭。语音资格、重试与关闭逻辑保持原规则。
+
+两端签名构建、两项隔离原生交互回归检查通过。手机与 Watch 均已安装 Build 21，Watch 已启动。安装与验证记录见 `docs/ui-validation/build21/VALIDATION.md`。包在 `apple/.cache/build21/SteerPhone.app`。
+
+## Build 20：精简语音确认页
+
+普通语音确认仅显示关闭、识别文字和底部固定发送；移除识别引擎标签、确认发送标题及重复的项目／Agent／会话信息。未确认发送的恢复重试才显示一行目标会话标题。关闭普通草稿清除内容，关闭待确认发送保留正文与原幂等键。录音页不再重复任务标题。
+
+两端签名构建和两项隔离 iOS 交互检查通过，覆盖长文字时发送可点、普通草稿清除及待确认请求正文／幂等键保留。手机与 Watch 均已安装 Build 20，Watch 成功启动；手机自动启动因锁屏被拒绝。详情见 `docs/ui-validation/build20/VALIDATION.md`。包位于 `apple/.cache/build20/SteerPhone.app`。
+
+## Build 19：紧凑设置与语音验证分层
+
+设置首页采用紧凑的只读状态行：“后台通知／服务端未启用”等真实通知状态，以及当前语音转写方式。去掉配对回执与系统 Section 大间距；Debug 语音验证收进独立页面，测试开关和模型选择的原配置不变。后台通知提示不是配置开关，本轮未启用服务端 APNs。
+
+两端签名构建及一项现有原生设置导航回归通过。恢复连接后 iPhone 已安装并启动；Watch 安装请求两次超时，延长等待后成功安装、启动，再次读取设备信息确认 Build 19。两端均已更新。包在 `apple/.cache/build19/SteerPhone.app`；安装及验证范围见 `docs/ui-validation/build19/VALIDATION.md`。
+
+## Build 18：设置按钮对齐原型圆形外观
+
+修复真机上右上角设置按钮被 `.bordered` 样式拉成竖向胶囊的问题。改用 plain 按钮，显式绘制 36×36 圆形深灰背景与 1pt 细描边，保留 44×44 点击区域和原设置导航。统计及任务分类导航未改动。
+
+iPhone／Watch 签名构建通过，两端安装包版本均为 18，保存于 `apple/.cache/build18/SteerPhone.app`。设备连接超时后重试成功，实体 Watch 已安装 Build 18。详细记录见 `docs/ui-validation/build18/VALIDATION.md`；实际圆形外观仍需真机确认。
+
+## Build 17：独立分类导航与紧凑 Watch 首页
+
+首页改为双栏任务入口与双栏累计统计，移除重复的 Steer 标题。设置只在首页右上角，以灰色系统圆形工具栏按钮呈现；保留 watchOS 系统时间。默认使用一屏布局，空间不足时选择紧凑版本，大字号再回退到无滚动条的滚动内容。
+
+进行中页面仅包含运行任务：左右滑动到末尾停止，零任务时只保留空状态，不提供所有任务入口。所有任务列表移除工具栏刷新入口；分类之间必须返回首页切换，列表详情使用独立系统导航返回原列表。任务运行时最新指令和运行时间仍可见，时间与 Agent 同行；完成结果页保留顶部朗读和底部语音继续，运行任务不能发起新的语音追问。
+
+验证：25 项 Swift 核心测试、3 项隔离 iOS 宿主导航／语音回归检查和 iPhone／Watch 签名构建通过。物理 Watch 已安装 Build 17 并成功启动。iPhone 当前连接不可用，安装尚未成功；包含新版 Watch 的手机安装包保存在 `apple/.cache/build17/SteerPhone.app`。交互宿主不是 watchOS，实际系统工具栏间距与最小表型布局仍需真机验收。详情见 `docs/ui-validation/build17/VALIDATION.md`。
+
+## Build 16：Watch 统计首页与结果操作
+
+Watch 默认进入统计概览，点击「进行中」进入横向任务分页，点击「所有任务」进入紧凑列表；没有进行中任务时显示对应空状态。列表使用自定义紧凑行与分组标题，移除重复的页面标题和系统 Section 大间距，并支持分页加载更多。结果页直接滚动阅读全文，朗读改为顶部工具栏图标，底部只保留语音继续；开始语音前停止朗读。
+
+新增 `GET /api/v1/watch/overview`，使用现有 `tasks:read` 权限及工作空间隔离。任务数量统计所有未归档会话的最新任务，不受列表分页影响。消息数使用 Footprints 的非空 user／agent 消息口径；累计 Token 复用已有已结束 chat 用量记录，按 attempt 去重、不包含系统报告、缺失时返回 null 并显示「—」。统计缓存按账号隔离，失败时保留缓存并标记未同步。
+
+验证：25 项 Swift 核心测试通过；权限、工作空间隔离、分页校验、Token 去重及 Footprints 一致性数据库测试通过；3 项隔离原生交互检查通过；手机及 Watch 签名构建通过。后端 Docker 已更新，健康检查返回正常。安装包在 `apple/.cache/build16/SteerPhone.app`，包含嵌入的 Watch App。2026-11-09 恢复连接后，两端 Build 16 均已成功安装，实体 Watch 已自动启动成功；iPhone 自动启动被锁屏拒绝。Watch 实际布局与收音仍需用户真机验收。
+
+## Build 15：修复 ATS 配置冲突
+
+移除手机和 Watch 中的 `NSAllowsLocalNetworking`，保留现有 `NSAllowsArbitraryLoads`。iOS 在两者同时存在时会忽略后者，导致用户配置的 HTTP 服务地址被安全连接策略拦截。HTTPS 的证书校验逻辑没有修改。
+
+24 项核心测试与两端签名构建通过，最终两个 App 的 Info.plist 均验证为仅包含 `NSAllowsArbitraryLoads: true`。安装包在 `apple/.cache/build15/SteerPhone.app`。2026-11-09 恢复连接后 Build 15 已成功安装到 iPhone 并启动。实际网络诊断显示已配置的 `http://192.168.31.24` 主机返回 NSURLErrorDomain -1001（超时），没有 -1022 ATS 拦截；Mac 访问该主机的 8080/health 也超时，而本地 127.0.0.1:8080/health 返回 200。仍需恢复该局域网地址的可达性或更新服务器地址。
+
+恢复连接后可安装并使用 `STEER_NETWORK_DIAGNOSTICS=1` 环境变量启动，读取缓存 `SteerNetworkDiagnostic.json` 确认实际 HTTP 状态。诊断仅在开发者明确启用时运行，只记录构建版本、协议/主机、HTTP 状态或错误域/编号，不记录密钥、正文、查询参数或任务标识。
+
 ## Build 14：任务详情对齐 Steer 聊天页
 
 手机任务详情参照现有 Steer ChatView：顶部显示标题和项目，用户消息靠右，Agent 回复采用正文 Markdown 排版，复制和朗读使用轻量图标。输入区显示 Agent／模型上下文，支持回到最新消息和停止执行。历史作者、模型及引用按每轮数据解码，缺失的信息不虚构。只有成功完成的任务允许新回复，不确定的提交保留原幂等键，Watch 导航保持独立。

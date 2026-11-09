@@ -10,7 +10,7 @@ settings:
     STEER_BUNDLE_PREFIX: com.example.steer
     GENERATE_INFOPLIST_FILE: YES
     CODE_SIGN_STYLE: Automatic
-    CURRENT_PROJECT_VERSION: 14
+    CURRENT_PROJECT_VERSION: 23
     MARKETING_VERSION: '0.1.0'
 targets:
   SteerPhone:
@@ -32,8 +32,9 @@ targets:
       properties:
         NSSpeechRecognitionUsageDescription: 将配对 Apple Watch 的录音转为文字，用于确认后继续 Steer 任务。
         NSAppTransportSecurity:
+          # Do not add NSAllowsLocalNetworking: its presence makes iOS ignore
+          # NSAllowsArbitraryLoads. User-configured HTTP servers need this flag.
           NSAllowsArbitraryLoads: true
-          NSAllowsLocalNetworking: true
     dependencies:
       - target: SteerWatch
       - framework: .cache/asr/SteerLocalASR.xcframework
@@ -89,7 +90,6 @@ targets:
         NSMicrophoneUsageDescription: 录制你的语音要求，转为文字后由你确认发送给 Agent。
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
-          NSAllowsLocalNetworking: true
   SteerCoreTests:
     type: bundle.unit-test
     platform: iOS

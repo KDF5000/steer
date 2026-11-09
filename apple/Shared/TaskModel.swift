@@ -9,6 +9,11 @@ import CryptoKit
     @Published var sending = false
     @Published var histories: [String: [ChatHistory.Message]] = [:]
     @Published var historyErrors: [String: String] = [:]
+    @Published var overview: WatchOverview?
+    @Published var overviewError: String?
+    @Published var hasMoreTasks = false
+    private var requestedFeedSize = 50
+    private var loadingOverview = false
     private var loadingHistory: Set<String> = []
     private let source: String
     init(source: String = "apple-watch") { self.source = source }
@@ -18,7 +23,13 @@ import CryptoKit
     func configure(_ config: Connection?) {
         guard config != connection else { return }
         connection = config; generation = UUID(); items = []; syncedAt = nil; error = nil; refreshing = false; histories = [:]; historyErrors = [:]; loadingHistory = []
-        if let cache: CachedFeed = SecureStore.read("feed"), cache.account == account { items = cache.items; syncedAt = cache.syncedAt }
+        overview = nil; overviewError = nil; requestedFeedSize = 50; hasMoreTasks = false; loadingOverview = false
+        if let cache: CachedOverview = SecureStore.read("watch-overview"), cache.account == account { overview = cache.overview }
+        if let cache: CachedFeed = SecureStore.read("feed"), cache.account == account {
+            items = cache.items; syncedAt = cache.syncedAt
+            requestedFeedSize = max(50, ((items.count + 49) / 50) * 50)
+            hasMoreTasks = items.count >= 50
+        }
     }
     func refresh() async {
         guard let connection, !refreshing else { return }
@@ -26,7 +37,18 @@ import CryptoKit
         refreshing = true
         defer { if revision == generation { refreshing = false } }
         do {
-            let feed = try await SteerAPI(connection: connection).conversations()
+            var feed: [Conversation] = []
+            var more = false
+            var seen = Set<String>()
+            for offset in stride(from: 0, to: requestedFeedSize, by: 50) {
+                try Task.checkCancellation()
+                let page = try await SteerAPI(connection: connection).conversations(limit: 50, offset: offset)
+                guard revision == generation else { return }
+                feed += page.filter { seen.insert($0.id).inserted }
+                more = page.count == 50
+                if !more { break }
+            }
+            hasMoreTasks = more
             guard revision == generation else { return }
             // Old servers omit these fields; keep detail-derived metadata for
             // the same run across polling, never carry it into a new run.
@@ -63,8 +85,27 @@ import CryptoKit
                     }
                 }
             }
+            if source == "apple-watch" { await refreshOverview() }
+            guard revision == generation else { return }
             try SecureStore.write(CachedFeed(account: account, items: items, syncedAt: syncedAt!), key: "feed")
         } catch { if revision == generation { self.error = error.localizedDescription } }
+    }
+    func loadMoreTasks() async {
+        guard !refreshing, hasMoreTasks else { return }
+        requestedFeedSize += 50
+        await refresh()
+    }
+    func refreshOverview() async {
+        guard let connection, !loadingOverview else { return }
+        let revision = generation
+        loadingOverview = true
+        defer { if revision == generation { loadingOverview = false } }
+        do {
+            let value = try await SteerAPI(connection: connection).overview()
+            guard revision == generation else { return }
+            overview = value; overviewError = nil
+            try SecureStore.write(CachedOverview(account: account, overview: value), key: "watch-overview")
+        } catch { if revision == generation { overviewError = error.localizedDescription } }
     }
     func refreshTask(_ id: String) async {
         guard let connection, let item = items.first(where: { $0.id == id }), let taskID = item.taskID else { return }

@@ -1,0 +1,162 @@
+<div id="steer-voice-refined" class="viz-dotted-background">
+<div class="sv-stage" aria-label="语音搭档精简版">
+<div class="sv-devices"><div class="sv-phone" aria-label="iPhone 演示"></div><div class="sv-wrist"><div class="sv-watch" aria-label="Apple Watch 演示" aria-live="polite"></div></div></div>
+<div class="sv-demo"><label>交互演示 <select aria-label="演示情境"><option>日常</option><option>完成提醒</option><option>离线</option><option>无任务</option></select></label></div>
+</div>
+</div>
+<style>
+#steer-voice-refined{font-family:Geist,"PingFang SC",sans-serif}
+#steer-voice-refined *{box-sizing:border-box}
+#steer-voice-refined .sv-stage{--sv-bg:light-dark(#fafbf9,#000000);--sv-ink:light-dark(#19231d,#f2f5f2);--sv-muted:light-dark(#657068,#a7afa9);--sv-rule:light-dark(#e3e8e2,#313131);--sv-accent:light-dark(#136e4b,#a9e6be);--sv-field:light-dark(#edf1eb,#181818);--sv-on:light-dark(#fff,#000);color:var(--sv-ink);padding:32px 16px 24px}
+#steer-voice-refined button,#steer-voice-refined textarea,#steer-voice-refined select{font:inherit}
+#steer-voice-refined button{border:0;background:none;color:inherit;cursor:inherit}
+#steer-voice-refined button:active{transform:scale(.98)}
+#steer-voice-refined button:disabled{opacity:.35;cursor:not-allowed}
+#steer-voice-refined h2,#steer-voice-refined p{margin:0}
+#steer-voice-refined .sv-devices{display:flex;align-items:flex-start;justify-content:center;gap:32px}
+#steer-voice-refined .sv-phone{width:352px;flex-shrink:0;min-height:752px;border:6px solid #272727;border-radius:48px;background:var(--sv-bg);padding:12px 20px 16px;display:flex;flex-direction:column;overflow:hidden}
+#steer-voice-refined .sv-status{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;height:32px;padding:0 4px}
+#steer-voice-refined .sv-island{width:88px;height:24px;border-radius:24px;background:#000}
+#steer-voice-refined .sv-phone-head{display:flex;justify-content:space-between;align-items:center;margin:24px 0 32px;gap:8px}
+#steer-voice-refined .sv-brand{font-size:24px;line-height:32px;font-weight:600;letter-spacing:-1px}
+#steer-voice-refined .sv-actions{display:flex;align-items:center;gap:4px}
+#steer-voice-refined .sv-icon{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:var(--sv-muted)}
+#steer-voice-refined svg{width:20px;height:20px;flex-shrink:0}
+#steer-voice-refined .sv-count{display:flex;align-items:center;gap:8px;min-height:44px;font-size:14px;line-height:20px;color:var(--sv-accent)}
+#steer-voice-refined .sv-dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;flex-shrink:0}
+#steer-voice-refined .sv-context{font-size:12px;line-height:20px;color:var(--sv-muted);display:flex;align-items:center;justify-content:space-between;gap:12px}
+#steer-voice-refined .sv-title{font-size:24px;line-height:32px;font-weight:500;letter-spacing:-.5px;margin:8px 0 24px;text-wrap:pretty}
+#steer-voice-refined .sv-conversation{flex:1}
+#steer-voice-refined .sv-message{margin:24px 0 32px;font-size:16px;line-height:28px;text-wrap:pretty}
+#steer-voice-refined .sv-author{font-size:12px;line-height:20px;color:var(--sv-muted);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+#steer-voice-refined .sv-user{color:var(--sv-muted)}
+#steer-voice-refined .sv-result-list{margin:16px 0;padding-left:20px}
+#steer-voice-refined .sv-result-list li{margin:8px 0}
+#steer-voice-refined .sv-tools{display:flex;align-items:center;gap:8px;color:var(--sv-muted);font-size:12px;line-height:20px;margin-top:16px}
+#steer-voice-refined .sv-tools svg{width:16px;height:16px}
+#steer-voice-refined .sv-phone-compose{border-top:1px solid var(--sv-rule);padding-top:16px;margin-top:16px}
+#steer-voice-refined .sv-input-row{display:flex;align-items:flex-end;gap:8px}
+#steer-voice-refined .sv-phone-draft{font-size:16px;line-height:24px;background:transparent;color:var(--sv-ink);width:100%;min-height:44px;max-height:96px;resize:vertical;border:0;padding:8px 0}
+#steer-voice-refined .sv-send{min-height:44px;min-width:44px;border-radius:50%;background:var(--sv-accent);color:var(--sv-on);display:flex;align-items:center;justify-content:center}
+#steer-voice-refined .sv-live{color:var(--sv-accent);font-size:12px;line-height:20px;display:flex;gap:8px;align-items:center;min-height:24px}
+#steer-voice-refined .sv-homebar{height:4px;border-radius:4px;background:var(--sv-ink);width:104px;margin:16px auto 0}
+#steer-voice-refined .sv-wrist{width:232px;flex-shrink:0;padding-top:64px}
+#steer-voice-refined .sv-watch{width:232px;min-height:292px;border:6px solid #313131;outline:1px solid #657068;background:#000;color:#f3f5f3;border-radius:56px;padding:16px;position:relative;display:flex;flex-direction:column}
+#steer-voice-refined .sv-watch:after{content:"";position:absolute;width:6px;height:32px;right:-10px;top:64px;background:#657068;border-radius:4px}
+#steer-voice-refined .sv-watch-top{display:flex;align-items:center;justify-content:space-between;font-size:12px;line-height:16px;color:#a7afa9;margin:0 4px 12px}
+#steer-voice-refined .sv-watch-top button{padding:0;min-height:32px;color:#a9e6be;display:flex;align-items:center;gap:8px}
+#steer-voice-refined .sv-watch .sv-dot{width:4px;height:4px}
+#steer-voice-refined .sv-watch-title{font-size:18px;line-height:28px;letter-spacing:-.5px;font-weight:500;text-align:center;margin:8px 0;min-height:56px;display:flex;align-items:center;justify-content:center;width:100%;padding:0;text-wrap:pretty}
+#steer-voice-refined .sv-watch .sv-meta{font-size:12px;line-height:16px;color:#a7afa9;text-align:center}
+#steer-voice-refined .sv-mic{display:flex;align-items:center;justify-content:center;width:64px;height:64px;min-height:64px;border-radius:50%;background:#a9e6be;color:#000;margin:24px auto 0}
+#steer-voice-refined .sv-mic svg{width:24px!important;height:24px!important}
+#steer-voice-refined .sv-watch .sv-link{color:#a9e6be;font-size:12px;line-height:16px;min-height:44px;padding:8px 0;display:flex;align-items:center;justify-content:center;gap:4px}
+#steer-voice-refined .sv-wave{display:flex;align-items:center;justify-content:center;gap:4px;height:64px;margin:16px 0;color:#a9e6be}
+#steer-voice-refined .sv-wave span{width:4px;border-radius:4px;background:currentColor}
+#steer-voice-refined .sv-watch-draft{background:transparent;color:#f3f5f3;font-size:16px;line-height:24px;width:100%;min-height:96px;resize:vertical;padding:8px 0;border:0;margin:12px 0}
+#steer-voice-refined .sv-watch-controls{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:16px}
+#steer-voice-refined .sv-watch-controls button{min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:center;border-radius:24px;background:#272727;padding:8px 12px;font-size:14px;line-height:20px}
+#steer-voice-refined .sv-watch-controls .sv-submit{background:#a9e6be;color:#000;gap:8px;flex:1}
+#steer-voice-refined .sv-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;border-bottom:1px solid var(--sv-rule);padding:16px 0;min-height:64px;font-size:16px;line-height:24px}
+#steer-voice-refined .sv-row small{display:block;font-size:12px;line-height:20px;color:var(--sv-muted);margin-top:4px}
+#steer-voice-refined .sv-watch .sv-row{font-size:14px;line-height:20px;border-color:#272727;min-height:48px;padding:8px 0}
+#steer-voice-refined .sv-watch .sv-row small{color:#a7afa9;line-height:16px}
+#steer-voice-refined .sv-watch{touch-action:pan-y;user-select:none;overflow:hidden;height:336px;min-height:336px}
+#steer-voice-refined .sv-task-list{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none}
+#steer-voice-refined .sv-watch-top,#steer-voice-refined .sv-watch>.sv-link{flex-shrink:0}
+#steer-voice-refined .sv-pages{display:flex;justify-content:center;align-items:center;margin-top:auto;gap:0}
+#steer-voice-refined .sv-pages button{width:44px;height:32px;display:flex;justify-content:center;align-items:center;padding:0}
+#steer-voice-refined .sv-pages span{width:4px;height:4px;border-radius:50%;background:#657068}
+#steer-voice-refined .sv-pages [aria-current="true"] span{background:#a9e6be;width:12px;border-radius:4px}
+#steer-voice-refined .sv-watch-section{font-size:12px;line-height:16px;color:#a7afa9;margin:16px 0 8px}
+#steer-voice-refined .sv-notice{font-size:12px;line-height:20px;color:var(--sv-muted);margin:0 0 16px;display:flex;align-items:center;gap:8px}
+#steer-voice-refined .sv-state-check{height:64px;display:flex;align-items:center;justify-content:center;color:#a9e6be;margin:24px 0 8px}
+#steer-voice-refined .sv-state-check svg{width:32px;height:32px}
+#steer-voice-refined .sv-demo{display:flex;justify-content:center;margin:24px 0 0;font-size:12px;line-height:20px;color:var(--sv-muted)}
+#steer-voice-refined .sv-demo label{display:flex;align-items:center;gap:12px}
+#steer-voice-refined .sv-demo select{border:0;border-radius:8px;background:var(--sv-field);color:var(--sv-ink);font-size:12px;min-height:40px;padding:8px 12px}
+@media(max-width:650px){#steer-voice-refined .sv-devices{flex-direction:column;align-items:center;gap:32px}#steer-voice-refined .sv-phone{width:min(352px,100%)}#steer-voice-refined .sv-stage{padding:24px 0}#steer-voice-refined .sv-wrist{padding-top:0}}
+@media(prefers-reduced-motion:reduce){#steer-voice-refined button:active{transform:none}}
+#steer-voice-refined .sv-running-page .sv-watch-title{font-size:16px;line-height:24px;text-align:left;justify-content:flex-start;min-height:0;margin:8px 0}
+#steer-voice-refined .sv-running-page .sv-meta{text-align:left}
+#steer-voice-refined .sv-running-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 16px;color:#a7afa9;font-size:12px;line-height:20px}
+#steer-voice-refined .sv-running-meta time{font-variant-numeric:tabular-nums;white-space:nowrap}
+#steer-voice-refined .sv-runtime{display:flex;align-items:center;gap:8px;font-size:12px;line-height:20px;color:var(--sv-accent);margin:12px 0;font-variant-numeric:tabular-nums}
+#steer-voice-refined .sv-runtime svg{width:16px;height:16px}
+#steer-voice-refined .sv-watch .sv-runtime{color:#a9e6be}
+#steer-voice-refined .sv-latest{font-size:14px;line-height:24px;width:100%;padding:8px 0;margin:0;text-align:left;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden;color:#f3f5f3}
+#steer-voice-refined .sv-message-full{font-size:16px;line-height:24px;color:#f3f5f3;margin:16px 0}
+</style>
+<script>
+(()=>{
+const root=document.getElementById('steer-voice-refined');
+const titles=['优化本地语音识别','检查 Watch 完成提醒','整理任务结果摘要','验证中英文混合输入'];
+const prompts=['优化一下本地识别，再检查中文里带 Steer、Relay 的混合输入。','检查 Watch 的完成提醒，重点验证锁屏和后台时能否收到。','把今天已完成的任务整理成一份摘要，列出改动和待处理的问题。','试一下中文里带 Steer 和 Relay 的转写。'];
+const startedAt=Date.now();
+const elapsedBase=[284,112,647,0];
+const elapsed=id=>{const seconds=elapsedBase[id]+Math.floor((Date.now()-startedAt)/1000);const m=Math.floor(seconds/60),sec=String(seconds%60).padStart(2,'0');return m>=60?Math.floor(m/60)+':'+String(m%60).padStart(2,'0')+':'+sec:m+':'+sec;};
+const runtime=id=>`<span class="sv-runtime" aria-live="off">${icon('clock-3')}<span>已运行 <time data-elapsed="${id}">${elapsed(id)}</time></span></span>`;
+const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const icon=x=>`<i data-lucide="${x}" aria-hidden="true"></i>`;
+const btn=(a,content,c='',label='')=>`<button type="button" ${a==='wtasks'&&['record','confirm'].includes(s.watch)?'disabled':''} data-action="${a}" class="${c} cursor-interaction" aria-label="${esc(label||content.replace(/<[^>]*>/g,'').trim()||a)}">${content}</button>`;
+const defaults={selected:0,phone:'conversation',watch:'home',scenario:'日常',draft:'再检查一下离线时的提示。',phoneDraft:'',sent:'',sentTask:null,done:false,playing:false};
+const stored=window.openai?.widgetState?.privateContent?.taskFlowVoice;
+const s={...defaults,...stored};
+const n=()=>s.scenario==='无任务'?0:s.done?2:3;
+const hasResult=()=>s.scenario==='无任务'||s.selected===3||(s.selected===0&&s.done);
+const complete=()=>hasResult()&&!queued();
+const queued=()=>s.sentTask===s.selected&&!!s.sent;
+const activeTasks=()=>s.scenario==='无任务'?[]:s.done?[1,2]:[0,1,2];
+const pageIDs=()=>[...activeTasks(),-1];
+const locked=()=>['record','confirm'].includes(s.watch);
+const save=()=>{try{window.openai?.setWidgetState({modelContent:{design:'语音搭档滑动版',selectedTask:titles[s.selected],watchScreen:s.watch,scenario:s.scenario,submitted:!!s.sent},privateContent:{taskFlowVoice:s}})?.catch(()=>{});}catch{}};
+function taskRows(watch=false){const ids=s.scenario==='无任务'?[3]:[0,1,2,3];return ids.map(i=>btn((watch?'wselect:':'select:')+i,`<span>${titles[i]}<small>${i===2?'Relay':'Steer'} · ${s.sentTask===i?'等待执行':(i===3||(i===0&&s.done))?'已完成':'进行中'}</small></span>${i===s.selected?icon('check'):icon('chevron-right')}`,'sv-row')).join('');}
+function phone(){
+let c='';const header=`<header class="sv-phone-head">${btn('conversation','Steer','sv-brand')}<div class="sv-actions">${btn('tasks',`<span class="sv-dot"></span>${n()}`,'sv-count','进行中的任务 '+n()+' 个')}${btn('settings',icon('settings-2'),'sv-icon','设置')}</div></header>`;
+if(s.phone==='settings')c=`<div class="sv-conversation"><h2 class="sv-title">设置</h2>${btn('connection','<span>Steer<small>已连接</small></span>'+icon('chevron-right'),'sv-row')}${btn('speech','<span>语音识别<small>iPhone 本地 · 中文</small></span>'+icon('chevron-right'),'sv-row')}${btn('notifications','<span>完成提醒<small>Apple Watch · 已开启</small></span>'+icon('chevron-right'),'sv-row')}</div>`;
+else if(['connection','speech','notifications'].includes(s.phone)){const setting={connection:['连接','Steer','已连接'],speech:['语音识别','iPhone 本地','中文 · 增强转写'],notifications:['完成提醒','Apple Watch','已开启']}[s.phone];c=`<div class="sv-conversation">${btn('settings',icon('chevron-left'),'sv-icon','返回设置')}<h2 class="sv-title">${setting[0]}</h2><div class="sv-row"><span>${setting[1]}<small>${setting[2]}</small></span>${icon('check')}</div></div>`;}
+else if(s.phone==='tasks')c=`<div class="sv-conversation"><h2 class="sv-title">任务</h2>${taskRows()}</div>`;
+else{
+c=`<main class="sv-conversation">${s.scenario==='离线'?'<p class="sv-notice">'+icon('wifi-off')+'09:40 · 未同步</p>':''}<div class="sv-context"><span>${s.selected===2?'Relay':'Steer'} / Codex</span>${btn('tasks',icon('chevrons-up-down'),'sv-icon','切换任务')}</div><h2 class="sv-title">${titles[s.selected]}</h2>${activeTasks().includes(s.selected)?runtime(s.selected):''}<article class="sv-message sv-user"><div class="sv-author">你 <span>09:36</span></div><p>${esc(prompts[s.selected])}</p></article><article class="sv-message"><div class="sv-author">Codex <span>09:41</span></div>${hasResult()?'<p>中文和英文项目名都能正确转写。</p><ul class="sv-result-list"><li>日常中文识别正常</li><li>Steer、Relay 混合输入通过</li></ul>':'<p>正在检查任务状态与提醒流程。</p>'}<div class="sv-tools">${icon(hasResult()?'check':'activity')}<span>${hasResult()?'已完成':'进行中'}</span>${hasResult()?btn('play',icon(s.playing?'pause':'volume-2'),'sv-icon',s.playing?'停止朗读':'朗读结果'):''}</div></article>${queued()?`<article class="sv-message sv-user"><div class="sv-author">你 ${icon('watch')}</div><p>${esc(s.sent)}</p><div class="sv-tools">${icon('clock-3')}等待执行</div></article>`:''}</main><div class="sv-phone-compose"><div class="sv-live">${s.watch==='record'?icon('watch')+'Watch '+wave():s.watch==='confirm'?icon('watch')+'转写待确认':s.playing?icon('volume-2')+'正在朗读':''}</div><div class="sv-input-row"><textarea class="sv-phone-draft" aria-label="回复任务" placeholder="回复…" rows="1">${esc(s.phoneDraft)}</textarea><button type="button" class="sv-send cursor-interaction" data-action="phoneSend" aria-label="发送回复" ${!s.phoneDraft.trim()||s.scenario==='离线'?'disabled':''}>${icon('arrow-up')}</button></div></div>`;
+}
+return `<div class="sv-status"><span>9:41</span><span class="sv-island"></span><span>5G ▰</span></div>${header}${c}<div class="sv-homebar"></div>`;
+}
+function wave(){return `<span style="display:inline-flex;align-items:center;gap:4px" aria-label="正在录音">${[8,16,12,20,8].map(h=>`<span style="display:inline-block;width:2px;height:${h}px;background:currentColor;border-radius:2px"></span>`).join('')}</span>`;}
+function watch(){
+const top=`<header class="sv-watch-top">${btn('wtasks',`<span class="sv-dot"></span>${n()} 进行中`,'','进行中的任务 '+n()+' 个')}<span>09:41</span></header>`;
+const context=`<p class="sv-meta">${s.selected===2?'Relay':'Steer'}</p><h2 class="sv-watch-title">${titles[s.selected]}</h2>`;
+const pages=()=>pageIDs().length>1?`<nav class="sv-pages" aria-label="进行中任务分页">${pageIDs().map((id,i)=>`<button type="button" class="cursor-interaction" data-action="page:${id}" aria-label="${id===-1?'所有任务':'第 '+(i+1)+' 个任务：'+titles[id]}" aria-current="${id===-1?s.watch==='tasks':s.watch==='home'&&id===s.selected}"><span></span></button>`).join('')}</nav>`:'';
+let c='';
+if(s.watch==='tasks'){
+const task=(id,status)=>btn('wselect:'+id,`<span>${titles[id]}<small>${status}</small></span>${icon('chevron-right')}`,'sv-row');
+const recent=(s.scenario==='无任务'?[0,1,2,3]:s.done?[0,3]:[3]).filter(id=>id!==s.sentTask);
+c=`<div class="sv-task-list"><h2 class="sv-watch-section">所有任务</h2><p class="sv-watch-section">进行中 · ${activeTasks().length}</p>${activeTasks().map(id=>task(id,'进行中')).join('')||'<p class="sv-meta">无进行中的任务</p>'}${s.sentTask!==null?'<p class="sv-watch-section">等待执行</p>'+task(s.sentTask,'等待执行'):''}<p class="sv-watch-section">最近完成</p>${recent.map(id=>task(id,'已完成')).join('')}</div>${pages()}`;
+}
+else if(s.watch==='record')c=`<p class="sv-meta">${titles[s.selected]}</p><div class="sv-wave" aria-label="正在录音">${[12,24,40,24,48,32,16,40,24,12].map(h=>`<span style="height:${h}px"></span>`).join('')}</div><p class="sv-meta">00:06</p><div class="sv-watch-controls">${btn('whome',icon('x'),'','取消录音')}${btn('finish',icon('square'),'sv-submit','结束录音')}</div>`;
+else if(s.watch==='confirm')c=`<p class="sv-meta">${titles[s.selected]}</p><textarea class="sv-watch-draft" aria-label="识别文字">${esc(s.draft)}</textarea>${s.scenario==='离线'?'<p class="sv-meta">未连接 · 草稿已保存</p>':''}<div class="sv-watch-controls">${btn('record',icon('rotate-ccw'),'','重新录音')}<button type="button" data-action="${s.scenario==='离线'?'retry':'send'}" class="sv-submit cursor-interaction" ${!s.draft.trim()?'disabled':''}>${icon(s.scenario==='离线'?'refresh-cw':'arrow-up')}${s.scenario==='离线'?'重试':'发送'}</button>${btn('whome',icon('x'),'','取消发送')}</div>`;
+else if(s.watch==='sent')c=`<div class="sv-state-check">${icon('check')}</div><p class="sv-watch-title">已提交</p><p class="sv-meta">等待执行</p>${btn('whome','完成','sv-link')}`;
+else if(s.watch==='notice')c=`<p class="sv-meta">已完成</p><h2 class="sv-watch-title">${titles[s.selected]}</h2><p class="sv-meta">中英文混合转写通过</p>${btn('record',icon('mic'),'sv-mic','语音继续')}${btn('whome','进行中','sv-link')}`;
+
+else if(s.watch==='home')c=`<div class="sv-task-page sv-running-page"><h2 class="sv-watch-title">${titles[s.selected]}</h2><div class="sv-running-meta"><span>${s.selected===2?'Relay':'Steer'} / Codex</span><time aria-label="运行时长" aria-live="off" data-elapsed="${s.selected}">${elapsed(s.selected)}</time></div>${btn('message',esc(prompts[s.selected]),'sv-latest','查看最近发给 Agent 的消息')}${s.scenario==='离线'?'<p class="sv-meta">未同步 · 09:40</p>':''}</div>${pages()}`;
+else if(s.watch==='message')c=`<div class="sv-task-list"><h2 class="sv-watch-title">${titles[s.selected]}</h2><p class="sv-meta">你 → Codex</p><p class="sv-message-full">${esc(prompts[s.selected])}</p></div>${btn('whome',icon('chevron-left'),'sv-link','返回任务')}`;
+else c=`<div class="sv-task-page">${context}<p class="sv-meta">${s.scenario==='离线'?'未同步 · 09:40':queued()?'等待执行':complete()||s.scenario==='无任务'?'已完成':'进行中'}</p>${s.watch==='detail'&&complete()?'<p class="sv-meta" style="margin-top:12px">中英文混合转写通过</p>':''}${s.watch==='detail'&&complete()?btn('record',icon('mic'),'sv-mic','语音继续'):''}</div>${s.watch==='home'?pages():btn('wtasks','所有任务','sv-link')}`;
+return top+c;
+}
+function render(direction=0){root.querySelector('.sv-phone').innerHTML=phone();root.querySelector('.sv-watch').innerHTML=watch();root.querySelector('select').value=s.scenario;globalThis.lucide?.createIcons({attrs:{width:20,height:20}});const page=root.querySelector('.sv-task-page');if(direction&&page&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches)page.animate([{transform:`translateX(${direction*24}px)`,opacity:.5},{transform:'translateX(0)',opacity:1}],{duration:300,easing:'cubic-bezier(0.22,1,0.36,1)'});}
+function move(direction){if(!['home','tasks'].includes(s.watch))return;const ids=pageIDs();const i=s.watch==='tasks'?ids.length-1:ids.indexOf(s.selected);const next=Math.max(0,Math.min(ids.length-1,i+direction));if(next===i)return;if(ids[next]===-1)s.watch='tasks';else{s.selected=ids[next];s.watch='home';s.phone='conversation';}render(direction);save();}
+let gesture=null;
+const watchSurface=root.querySelector('.sv-watch');
+watchSurface.addEventListener('pointerdown',e=>{if(e.target.closest('button,textarea,select')||locked())return;gesture={x:e.clientX,y:e.clientY,id:e.pointerId};watchSurface.setPointerCapture(e.pointerId);});
+watchSurface.addEventListener('pointerup',e=>{if(!gesture||gesture.id!==e.pointerId)return;const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;gesture=null;if(Math.abs(dx)>=40&&Math.abs(dx)>Math.abs(dy)*1.5)move(dx<0?1:-1);});
+watchSurface.addEventListener('pointercancel',()=>{gesture=null;});
+watchSurface.addEventListener('keydown',e=>{if(e.target.closest('textarea'))return;if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();move(e.key==='ArrowRight'?1:-1);}});
+root.addEventListener('input',e=>{if(e.target.matches('.sv-watch-draft')){s.draft=e.target.value;const send=root.querySelector('[data-action="send"],[data-action="retry"]');if(send)send.disabled=!s.draft.trim();save();}if(e.target.matches('.sv-phone-draft')){s.phoneDraft=e.target.value;root.querySelector('[data-action="phoneSend"]').disabled=!s.phoneDraft.trim()||s.scenario==='离线';save();}});
+root.addEventListener('change',e=>{if(e.target.matches('select')){s.scenario=e.target.value;if(s.scenario==='完成提醒')s.watch='notice';else if(s.scenario==='无任务')s.watch='tasks';else if(s.watch==='notice')s.watch='home';if(s.scenario==='完成提醒'){s.done=true;s.selected=0;}render();save();}});
+root.addEventListener('click',e=>{const target=e.target.closest('[data-action]');if(!target)return;const a=target.dataset.action;if(a.startsWith('page:')){if(locked())return;const id=+a.split(':')[1],dir=pageIDs().indexOf(id)>pageIDs().indexOf(s.selected)?1:-1;if(id===-1)s.watch='tasks';else{s.selected=id;s.watch='home';s.phone='conversation';}render(dir);save();return;}if(a.startsWith('select:')||a.startsWith('wselect:')){if(locked())return;s.selected=+a.split(':')[1];s.watch=activeTasks().includes(s.selected)?'home':'detail';s.phone='conversation';}
+else if(a==='conversation')s.phone='conversation';else if(['tasks','settings','connection','speech','notifications'].includes(a))s.phone=a;else if(a==='wtasks')s.watch='tasks';else if(a==='whome'){if(['record','confirm'].includes(s.watch))s.watch='detail';else if(activeTasks().length){s.watch='home';if(!activeTasks().includes(s.selected))s.selected=activeTasks()[0];}else s.watch='tasks';}else if(a==='message')s.watch='message';else if(a==='record'){if(!complete())return;s.watch='record';}else if(a==='finish')s.watch='confirm';else if(a==='send'){if(!complete()||!s.draft.trim()||s.scenario==='离线')return;s.sent=s.draft;s.sentTask=s.selected;s.watch='sent';}else if(a==='retry'){s.scenario='日常';s.watch='confirm';}else if(a==='phoneSend'){if(!s.phoneDraft.trim()||s.scenario==='离线')return;s.sent=s.phoneDraft;s.sentTask=s.selected;s.phoneDraft='';}else if(a==='play')s.playing=!s.playing;render();save();});
+window.addEventListener('openai:set_globals',e=>{const state=e.detail?.globals?.widgetState?.privateContent?.taskFlowVoice;if(state){Object.assign(s,defaults,state);render();}});
+if(s.watch==='home'&&!activeTasks().includes(s.selected)){if(activeTasks().length)s.selected=activeTasks()[0];else s.watch='tasks';}
+render();
+setInterval(()=>{root.querySelectorAll('[data-elapsed]').forEach(el=>{el.textContent=elapsed(+el.dataset.elapsed);});},1000);
+})();
+</script>

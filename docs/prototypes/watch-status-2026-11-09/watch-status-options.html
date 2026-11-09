@@ -1,0 +1,135 @@
+<div id="steer-watch-status-options">
+  <div class="viz-carousel viz-dotted-background" aria-label="Watch 状态页方案" data-previous-label="上一方案" data-next-label="下一方案">
+    <section data-variant="双栏总览" aria-label="双栏总览">
+      <div class="sw-stage"><div class="sw-watch" data-design="overview" aria-label="双栏总览交互演示"><div class="sw-screen" aria-live="polite"></div></div></div>
+    </section>
+    <section data-variant="焦点状态" aria-label="焦点状态" hidden>
+      <div class="sw-stage"><div class="sw-watch" data-design="focus" aria-label="焦点状态交互演示"><div class="sw-screen" aria-live="polite"></div></div></div>
+    </section>
+    <section data-variant="紧凑清单" aria-label="紧凑清单" hidden>
+      <div class="sw-stage"><div class="sw-watch" data-design="rows" aria-label="紧凑清单交互演示"><div class="sw-screen" aria-live="polite"></div></div></div>
+    </section>
+  </div>
+</div>
+<style>
+#steer-watch-status-options .sw-stage {display:flex;align-items:center;justify-content:center;min-height:352px;padding:24px 0;box-sizing:border-box}
+#steer-watch-status-options .sw-watch {--sw-bg:#000000;--sw-fg:#f5f5f5;--sw-secondary:#a3aaa7;--sw-accent:#a2e7c0;--sw-line:#272727;--sw-pressed:#181818;--sw-device:#313131;position:relative;width:224px;height:272px;padding:16px;box-sizing:border-box;background:var(--sw-bg);color:var(--sw-fg);border-radius:48px;box-shadow:0 0 0 4px var(--sw-device);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;font-size:16px;line-height:20px;overflow:hidden}
+#steer-watch-status-options .sw-watch::after {content:"";position:absolute;right:-8px;top:76px;width:6px;height:32px;background:var(--sw-device);border-radius:4px}
+#steer-watch-status-options .sw-watch.sw-large {width:252px;height:306px;padding:24px 16px}
+#steer-watch-status-options .sw-screen {height:100%;display:flex;flex-direction:column;gap:4px;min-height:0}
+#steer-watch-status-options .sw-screen button {font:inherit;color:inherit;border:0;background:transparent;padding:0;flex-shrink:0;text-align:left;min-height:44px;border-radius:8px;touch-action:manipulation}
+#steer-watch-status-options .sw-screen button:active {background:var(--sw-pressed)}
+#steer-watch-status-options .sw-screen button:focus-visible {outline:2px solid var(--sw-accent);outline-offset:2px}
+#steer-watch-status-options .sw-screen svg {width:16px;height:16px;flex-shrink:0}
+#steer-watch-status-options .sw-value {font-variant-numeric:tabular-nums;font-weight:500;letter-spacing:-1px;font-size:48px;line-height:48px}
+#steer-watch-status-options .sw-secondary {color:var(--sw-secondary);font-size:14px;line-height:20px}
+#steer-watch-status-options .sw-accent {color:var(--sw-accent)}
+#steer-watch-status-options .sw-task-grid {display:grid;grid-template-columns:1fr 1fr;gap:16px;padding-top:12px}
+#steer-watch-status-options .sw-task-grid button {display:flex;flex-direction:column;gap:8px;padding-bottom:12px}
+#steer-watch-status-options .sw-label {display:flex;align-items:center;gap:4px;white-space:nowrap}
+#steer-watch-status-options .sw-divider {border:0;border-top:1px solid var(--sw-line);margin:0}
+#steer-watch-status-options .sw-stats-grid {display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:8px}
+#steer-watch-status-options .sw-stat {display:flex;flex-direction:column;gap:4px}
+#steer-watch-status-options .sw-stat strong {font-size:24px;line-height:28px;letter-spacing:-.5px;font-weight:500;font-variant-numeric:tabular-nums}
+#steer-watch-status-options .sw-footer {margin-top:auto;display:flex;justify-content:center;align-items:center;gap:8px}
+#steer-watch-status-options .sw-footer button {display:flex;align-items:center;justify-content:center;min-width:44px;color:var(--sw-secondary)}
+#steer-watch-status-options .sw-focus {display:flex;flex-direction:column;gap:4px;align-items:center;padding-top:4px}
+#steer-watch-status-options .sw-focus .sw-value {font-size:60px;line-height:60px}
+#steer-watch-status-options .sw-linkrow {display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%}
+#steer-watch-status-options .sw-linkrow strong {font-weight:500;font-variant-numeric:tabular-nums}
+#steer-watch-status-options .sw-focus-stats {display:flex;justify-content:space-between;gap:8px}
+#steer-watch-status-options .sw-focus-stats .sw-stat {gap:0}
+#steer-watch-status-options .sw-focus-stats .sw-stat strong {font-size:20px;line-height:28px}
+#steer-watch-status-options .sw-dot {width:4px;height:4px;border-radius:50%;background:var(--sw-secondary)}
+#steer-watch-status-options .sw-dot.sw-current {background:var(--sw-fg);width:12px;border-radius:4px}
+#steer-watch-status-options .sw-rows {display:flex;flex-direction:column;gap:0}
+#steer-watch-status-options .sw-row {box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;min-height:48px;border-bottom:1px solid var(--sw-line);gap:8px}
+#steer-watch-status-options button.sw-row {border-bottom:1px solid var(--sw-line);border-radius:0;min-height:48px;width:100%}
+#steer-watch-status-options .sw-row strong {font-size:24px;line-height:28px;font-weight:500;font-variant-numeric:tabular-nums}
+#steer-watch-status-options .sw-heading {display:flex;align-items:center;gap:8px;min-height:40px;flex-shrink:0}
+#steer-watch-status-options .sw-heading button {width:32px;min-width:32px}
+#steer-watch-status-options .sw-heading strong {font-weight:500;font-size:18px;line-height:28px}
+#steer-watch-status-options .sw-scroll {overflow-y:auto;scrollbar-width:none;min-height:0;flex:1}
+#steer-watch-status-options .sw-scroll::-webkit-scrollbar {display:none}
+#steer-watch-status-options .sw-task {display:flex;flex-direction:column;gap:4px;padding:12px 0!important;border-bottom:1px solid var(--sw-line)!important;width:100%}
+#steer-watch-status-options .sw-task span:first-child {display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#steer-watch-status-options .sw-empty {flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+#steer-watch-status-options .sw-empty .sw-value {color:var(--sw-secondary)}
+#steer-watch-status-options .sw-screen .sw-primary {background:var(--sw-accent);color:var(--sw-bg);text-align:center;display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border-radius:24px;width:100%}
+#steer-watch-status-options .sw-screen .sw-primary:active {opacity:.8}
+#steer-watch-status-options .sw-result {font-size:16px;line-height:24px;margin:0 0 12px}
+#steer-watch-status-options .sw-detail-head {display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+#steer-watch-status-options .sw-detail-head button {min-width:44px;display:flex;align-items:center;justify-content:center}
+#steer-watch-status-options .sw-voice {display:flex;flex:1;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+#steer-watch-status-options .sw-bars {height:48px;display:flex;gap:4px;align-items:center;color:var(--sw-accent)}
+#steer-watch-status-options .sw-bars span {width:4px;background:currentColor;border-radius:4px;height:24px}
+#steer-watch-status-options .sw-bars span:nth-child(2n) {height:40px}
+#steer-watch-status-options .sw-bars span:nth-child(3n) {height:16px}
+@media (prefers-reduced-motion:no-preference) {#steer-watch-status-options .sw-screen button {transition:background-color .3s cubic-bezier(.22,1,.36,1)}}
+</style>
+<script>
+(() => {
+const root = document.getElementById('steer-watch-status-options');
+const saved = window.openai?.widgetState;
+const state = {running:saved?.privateContent?.running ?? false,large:saved?.privateContent?.large ?? false,extra:saved?.privateContent?.extra ?? false};
+const screens = new Map();
+const icon = (name) => `<i data-lucide="${name}" aria-hidden="true"></i>`;
+const tasks = [{title:'检查 Watch 完成提醒',agent:'Codex',message:'检查 Watch 的完成提醒，重点验证锁屏和后台时能否收到。'},{title:'优化手机任务页',agent:'Traex-Local',message:'按照 Steer 聊天页重新调整手机任务页面。'},{title:'这个文字太多了，简短总结下',agent:'Traex-Local',message:'这个文字太多了，简短总结下。'}];
+function remember() {window.openai?.setWidgetState?.({modelContent:{watchStatusScenario:state.running?'有进行中任务':'无进行中任务'},privateContent:state})?.catch(()=>{});}
+function render(watch) {
+const ui=screens.get(watch);const count=state.running?2:0;const el=watch.querySelector('.sw-screen');
+watch.classList.toggle('sw-large',state.large);
+const nav=(title)=>`<div class="sw-heading"><button class="cursor-interaction" data-action="home" aria-label="返回状态页">${icon('chevron-left')}</button><strong>${title}</strong></div>`;
+const stats=`<div class="sw-stat"><strong>1,082</strong><span class="sw-secondary">累计消息</span></div><div class="sw-stat"><strong>3.2亿</strong><span class="sw-secondary">已记录 Token</span></div>`;
+if(ui.page==='home') {
+if(ui.design==='overview') el.innerHTML=`<div class="sw-task-grid"><button class="cursor-interaction" data-action="active" aria-label="查看 ${count} 个进行中任务"><span class="sw-value sw-accent">${count}</span><span class="sw-label">进行中 ${icon('chevron-right')}</span></button><button class="cursor-interaction" data-action="all" aria-label="查看所有 33 个任务"><span class="sw-value">33</span><span class="sw-label">所有任务 ${icon('chevron-right')}</span></button></div><hr class="sw-divider"><div class="sw-stats-grid">${stats}</div><div class="sw-footer"><button class="cursor-interaction" data-action="settings" aria-label="更多与设置">${icon('ellipsis')}</button></div>`;
+if(ui.design==='focus') el.innerHTML=`<button class="sw-focus cursor-interaction" data-action="active" aria-label="查看进行中任务"><span class="sw-value sw-accent">${count}</span><span class="sw-label">进行中 ${icon('chevron-right')}</span></button><button class="sw-linkrow cursor-interaction" data-action="all"><span>所有任务</span><span class="sw-label"><strong>33</strong>${icon('chevron-right')}</span></button><hr class="sw-divider"><div class="sw-focus-stats">${stats}</div><div class="sw-footer"><span class="sw-dot sw-current"></span><span class="sw-dot"></span><button class="cursor-interaction" data-action="secondary" aria-label="下一页：更多与设置">${icon('chevron-right')}</button></div>`;
+if(ui.design==='rows') el.innerHTML=`<div class="sw-rows"><button class="sw-row cursor-interaction" data-action="active"><span class="sw-label">进行中 ${icon('chevron-right')}</span><strong class="sw-accent">${count}</strong></button><button class="sw-row cursor-interaction" data-action="all"><span class="sw-label">所有任务 ${icon('chevron-right')}</span><strong>33</strong></button><div class="sw-row"><span class="sw-secondary">累计消息</span><strong>1,082</strong></div><div class="sw-row"><span class="sw-secondary">已记录 Token</span><strong>3.2亿</strong></div></div><div class="sw-footer"><button class="cursor-interaction" data-action="secondary">更多 ${icon('chevron-down')}</button></div>`;
+} else if(ui.page==='active'&&!count) {
+el.innerHTML=`${nav('进行中')}<div class="sw-empty"><span class="sw-value">0</span><span class="sw-secondary">暂无进行中的任务</span></div><button class="sw-linkrow cursor-interaction" data-action="all">所有任务 ${icon('chevron-right')}</button>`;
+} else if(ui.page==='active') {
+const task=tasks[ui.index];el.innerHTML=`${nav('进行中 · 2')}<div class="sw-scroll"><p class="sw-result">${task.title}</p><div class="sw-secondary">${task.agent} · ${ui.index? '1:16':'4:28'}</div><p class="sw-result" style="margin-top:16px">${task.message}</p></div><div class="sw-footer"><button class="cursor-interaction" data-action="previous" aria-label="上一任务">${icon('chevron-left')}</button><span class="sw-secondary">${ui.index+1} / 2</span><button class="cursor-interaction" data-action="next" aria-label="下一任务或所有任务">${icon('chevron-right')}</button></div>`;
+} else if(ui.page==='all') {
+el.innerHTML=`${nav('所有任务')}<div class="sw-scroll">${count?'<div class="sw-secondary">进行中</div>':''}${count?tasks.slice(0,2).map((t,i)=>`<button class="sw-task cursor-interaction" data-action="task-${i}"><span>${t.title}</span><span class="sw-secondary">${t.agent} · ${i?'1:16':'4:28'}</span></button>`).join(''):''}<div class="sw-secondary" style="margin-top:${count?'12':'0'}px">最近结束</div>${tasks.slice(count?2:0).map(t=>`<button class="sw-task cursor-interaction" data-action="detail"><span>${t.title}</span><span class="sw-secondary">${t.agent}</span></button>`).join('')}</div>`;
+} else if(ui.page==='detail') {
+el.innerHTML=`<div class="sw-detail-head"><button class="cursor-interaction" data-action="all" aria-label="返回所有任务">${icon('chevron-left')}</button><span class="sw-secondary">Traex-Local</span><button class="cursor-interaction" data-action="speak" aria-label="${ui.speaking?'停止朗读':'朗读结果'}">${icon(ui.speaking?'square':'volume-2')}</button></div><div class="sw-scroll"><p class="sw-result">已按 Steer 聊天页调整任务页面。</p><p class="sw-result">你的消息与回复分开排列，运行时间放在 Agent 名称旁，语音继续固定在底部。</p><p class="sw-result">Watch 上的页面切换独立于手机。</p></div><button class="sw-primary cursor-interaction" data-action="voice">${icon('mic')}语音继续</button>`;
+} else if(ui.page==='voice') {
+el.innerHTML=`${nav('语音')}<div class="sw-voice"><div class="sw-bars" aria-label="录音演示">${'<span></span>'.repeat(9)}</div><span>正在聆听</span></div><button class="sw-primary cursor-interaction" data-action="confirm">完成</button>`;
+} else if(ui.page==='confirm') {
+el.innerHTML=`${nav('确认')}<div class="sw-scroll"><p class="sw-result">继续优化任务页面的布局。</p></div><button class="sw-primary cursor-interaction" data-action="send">发送</button>`;
+} else if(ui.page==='sent') {
+el.innerHTML=`${nav('任务')}<div class="sw-empty"><span>已发送</span><span class="sw-secondary">等待执行</span></div>`;
+} else if(ui.page==='secondary') {
+el.innerHTML=`${nav('更多')}<div class="sw-scroll">${state.extra?'<div class="sw-row"><span class="sw-secondary">用户消息</span><strong>—</strong></div><div class="sw-row"><span class="sw-secondary">Agent 消息</span><strong>—</strong></div><div class="sw-row"><span class="sw-secondary">用量覆盖</span><strong>—</strong></div>':''}<button class="sw-linkrow cursor-interaction" data-action="settings">设置 ${icon('chevron-right')}</button></div>${ui.design==='focus'?'<div class="sw-footer"><button class="cursor-interaction" data-action="home" aria-label="返回统计页">'+icon('chevron-left')+'</button><span class="sw-dot"></span><span class="sw-dot sw-current"></span></div>':''}`;
+} else {
+el.innerHTML=`${nav('设置')}<div class="sw-scroll"><button class="sw-linkrow cursor-interaction" data-action="notifications">完成提醒<span class="sw-secondary">${ui.notifications?'开':'关'}</span></button><button class="sw-linkrow cursor-interaction" data-action="speech">语音服务<span class="sw-secondary">${ui.local?'本地':'自托管'}</span></button></div>`;
+}
+if(globalThis.lucide) globalThis.lucide.createIcons({attrs:{width:16,height:16}});
+}
+function drawAll(){for(const watch of screens.keys()) render(watch);}
+for(const watch of root.querySelectorAll('.sw-watch')) {
+const ui={design:watch.dataset.design,page:'home',index:0,speaking:false,notifications:true,local:true};screens.set(watch,ui);
+watch.addEventListener('click',event=>{const button=event.target.closest('button[data-action]');if(!button)return;const action=button.dataset.action;
+if(['home','active','all','detail','voice','confirm','settings','secondary'].includes(action)){ui.page=action;ui.speaking=false;}
+else if(action==='next'){if(ui.index===1)ui.page='all';else ui.index++;}
+else if(action==='previous')ui.index=Math.max(0,ui.index-1);
+else if(action.startsWith('task-')){ui.index=Number(action.slice(5));ui.page='active';}
+else if(action==='speak')ui.speaking=!ui.speaking;
+else if(action==='send')ui.page='sent';
+else if(action==='notifications')ui.notifications=!ui.notifications;
+else if(action==='speech')ui.local=!ui.local;
+render(watch);});
+let start=null;
+watch.addEventListener('pointerdown',e=>{start={x:e.clientX,y:e.clientY};});
+watch.addEventListener('pointerup',e=>{if(!start)return;const dx=e.clientX-start.x,dy=e.clientY-start.y;start=null;
+if(Math.abs(dx)>40&&Math.abs(dx)>Math.abs(dy)){
+if(ui.page==='active'&&state.running){if(dx<0){if(ui.index===1)ui.page='all';else ui.index++;}else ui.index=Math.max(0,ui.index-1);render(watch);}
+else if(ui.design==='focus'&&['home','secondary'].includes(ui.page)){ui.page=dx<0?'secondary':'home';render(watch);}
+}else if(ui.design==='rows'&&Math.abs(dy)>40&&Math.abs(dy)>Math.abs(dx)&&['home','secondary'].includes(ui.page)){ui.page=dy<0?'secondary':'home';render(watch);}
+});
+}
+drawAll();
+if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:()=>{drawAll();remember();}});tweak.addToggle(state,'running',{label:'有进行中任务'});tweak.addToggle(state,'large',{label:'较大屏幕'});tweak.addToggle(state,'extra',{label:'更多统计字段'});}
+window.addEventListener('openai:set_globals',event=>{const data=event.detail?.globals?.widgetState?.privateContent;if(data){for(const key of ['running','large','extra'])if(typeof data[key]==='boolean')state[key]=data[key];drawAll();}});
+})();
+</script>

@@ -46,6 +46,13 @@ func TestWatchFeedScopesAndWorkspaceIsolation(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	foreignSession, err := st.Session(ctx, other, ids[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := st.SaveChatRun(ctx, other, ids[1], foreignSession.AgentID, "another private message", uuid.NewString(), "succeeded"); err != nil {
+		t.Fatal(err)
+	}
 	token := "steer_sk_" + uuid.NewString()
 	if _, err := st.CreateWorkspaceAPIKey(ctx, store.WorkspaceAPIKey{WorkspaceID: wid, Name: "Watch read", TokenHash: tokenHash(token), TokenPrefix: "steer_sk_test", Scopes: []string{"tasks:read"}, CreatedByUserID: "test-user"}); err != nil {
 		t.Fatal(err)
@@ -69,6 +76,25 @@ func TestWatchFeedScopesAndWorkspaceIsolation(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].ID != ids[0] || items[0].AgentName != "Builder" || items[0].TaskID == nil || items[0].Status != "running" || items[0].LastUserMessage != "检查代码" || items[0].StartedAt == nil {
 		t.Fatalf("wrong projection: %+v", items)
+	}
+	overviewResponse := call(http.MethodGet, "/api/v1/watch/overview", token)
+	if overviewResponse.Code != 200 || overviewResponse.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("overview: %d %s", overviewResponse.Code, overviewResponse.Body.String())
+	}
+	var overview store.WatchOverview
+	if err := json.Unmarshal(overviewResponse.Body.Bytes(), &overview); err != nil {
+		t.Fatal(err)
+	}
+	if overview.TotalTasks != 1 || overview.ActiveTasks != 1 || overview.UserMessages != 1 || overview.AgentMessages != 0 || overview.TokenCount != nil {
+		t.Fatalf("wrong overview or workspace leak: %+v", overview)
+	}
+	for _, query := range []string{"?limit=0", "?limit=101", "?offset=-1", "?limit=invalid"} {
+		if response := call(http.MethodGet, "/api/v1/watch/conversations"+query, token); response.Code != 400 {
+			t.Fatalf("accepted invalid pagination %s: %d", query, response.Code)
+		}
+	}
+	if response := call(http.MethodGet, "/api/v1/watch/conversations?limit=1&offset=1", token); response.Code != 200 || response.Body.String() != "[]\n" {
+		t.Fatalf("pagination not scoped: %d %s", response.Code, response.Body.String())
 	}
 	own := call(http.MethodGet, "/api/v1/watch/conversations/"+ids[0], token)
 	if own.Code != 200 {

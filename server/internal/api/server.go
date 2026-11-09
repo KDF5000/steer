@@ -187,6 +187,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/watch/notifications", s.watchNotificationStatus)
 	mux.HandleFunc("POST /api/v1/watch/devices", s.registerWatchDevice)
 	mux.HandleFunc("DELETE /api/v1/watch/devices/{id}", s.removeWatchDevice)
+	mux.HandleFunc("GET /api/v1/watch/overview", s.watchOverview)
 	mux.HandleFunc("GET /api/v1/watch/conversations", s.watchConversations)
 	mux.HandleFunc("GET /api/v1/watch/conversations/{id}", s.chatSession)
 	mux.HandleFunc("POST /api/v1/tasks", s.createTask)

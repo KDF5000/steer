@@ -26,6 +26,7 @@
 		422B59009236AB34C3347BB1 /* SpeechVocabulary.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD76BB7E694B203BA94F73E5 /* SpeechVocabulary.swift */; };
 		45452777C3DBAE74D44EAF5A /* SecureStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3B726B9A0D3469C1AF349D7 /* SecureStore.swift */; };
 		4817C08A02B8B1978619A45A /* RemoteSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4AAE2E2374C6FCD36A679B2 /* RemoteSpeech.swift */; };
+		4D85BD5E613491000100D87B /* ChatMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EE8FBFB127BFBF35892A3E8 /* ChatMessageTests.swift */; };
 		4EC62CA424EE374A9C49CBA3 /* RemoteSpeechTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F536EA803FEE16C5BEAF19E6 /* RemoteSpeechTests.swift */; };
 		55C03E8626AD7DF6BA3E623E /* libc++.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = AA920087071424562342A7E8 /* libc++.tbd */; };
 		598E2212C73C49D6F4A8AAEE /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5019866C58CA5ED4B128DA61 /* Models.swift */; };
@@ -66,6 +67,7 @@
 		E74947C6B4FE379D4F69DE51 /* Pairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D05BBB54F81695A14AA3BC /* Pairing.swift */; };
 		EB03C8A7BF36C05BB78106F5 /* MessageFormattingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC3080C9863ACE7ED7B409D2 /* MessageFormattingTests.swift */; };
 		EFD368BB00161FC038A9EDBF /* PhoneHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99E6A4F4DDF344578844FC6E /* PhoneHome.swift */; };
+		F655E265AA8C6E1F5886E665 /* WatchOverviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202084AEB6D0AD43FE2BE58E /* WatchOverviewTests.swift */; };
 		F825A0A67ADE808D59FB60C7 /* TaskModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09AE370860C10D623AADE131 /* TaskModel.swift */; };
 		FA6EE95A0DEB202AB567C6F0 /* SteerPhoneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E66889B8C0F518184A7E9148 /* SteerPhoneApp.swift */; };
 		FEE1F61A735F5327CCF3B96F /* PhoneSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A9D18D488BC757F56E46BCA /* PhoneSpeech.swift */; };
@@ -102,6 +104,7 @@
 		0FD1BA9D5D8BD5C93862D922 /* SpeechEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechEndpoint.swift; sourceTree = "<group>"; };
 		1926719D7FD99EE56FBB2E0B /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 		1A9D18D488BC757F56E46BCA /* PhoneSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSpeech.swift; sourceTree = "<group>"; };
+		202084AEB6D0AD43FE2BE58E /* WatchOverviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchOverviewTests.swift; sourceTree = "<group>"; };
 		2DEA473A63E3F583DFEAFC39 /* ggml-base-q5_1.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "ggml-base-q5_1.bin"; sourceTree = "<group>"; };
 		3411E47A8B353F47EFF9E166 /* ggml-tiny-q5_1.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "ggml-tiny-q5_1.bin"; sourceTree = "<group>"; };
 		471026D350F357265FEB9445 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
@@ -113,6 +116,7 @@
 		972C9D6A1149F131CB81404A /* VoiceUploadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceUploadTests.swift; sourceTree = "<group>"; };
 		99E6A4F4DDF344578844FC6E /* PhoneHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneHome.swift; sourceTree = "<group>"; };
 		9E2C8121448A45C029ABED66 /* LocalSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalSpeech.swift; sourceTree = "<group>"; };
+		9EE8FBFB127BFBF35892A3E8 /* ChatMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessageTests.swift; sourceTree = "<group>"; };
 		A244D9F6B2136559DE9B27CE /* SteerCoreTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SteerCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A4AAE2E2374C6FCD36A679B2 /* RemoteSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteSpeech.swift; sourceTree = "<group>"; };
 		AA920087071424562342A7E8 /* libc++.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = "libc++.tbd"; path = "usr/lib/libc++.tbd"; sourceTree = SDKROOT; };
@@ -217,11 +221,13 @@
 			isa = PBXGroup;
 			children = (
 				6B4253AF172A764DF9CEA858 /* APITests.swift */,
+				9EE8FBFB127BFBF35892A3E8 /* ChatMessageTests.swift */,
 				CC3080C9863ACE7ED7B409D2 /* MessageFormattingTests.swift */,
 				F536EA803FEE16C5BEAF19E6 /* RemoteSpeechTests.swift */,
 				AC8752BACA2B256D1366EED5 /* SpeechEndpointTests.swift */,
 				E750FFAB1B45ECA5472F5A85 /* TaskPresentationTests.swift */,
 				972C9D6A1149F131CB81404A /* VoiceUploadTests.swift */,
+				202084AEB6D0AD43FE2BE58E /* WatchOverviewTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -404,6 +410,7 @@
 			files = (
 				69C6972C1675EADA284B9AB4 /* API.swift in Sources */,
 				2006EF55A0AB1B5CE64643C9 /* APITests.swift in Sources */,
+				4D85BD5E613491000100D87B /* ChatMessageTests.swift in Sources */,
 				914328AEA03570DA395BB787 /* MessageFormatting.swift in Sources */,
 				EB03C8A7BF36C05BB78106F5 /* MessageFormattingTests.swift in Sources */,
 				598E2212C73C49D6F4A8AAEE /* Models.swift in Sources */,
@@ -415,6 +422,7 @@
 				3A6EED7A6A0C2A188C84590D /* TaskPresentationTests.swift in Sources */,
 				812CD835C9ABD07F171E38AA /* VoiceUpload.swift in Sources */,
 				B96A6691C5CDDA2728B7355E /* VoiceUploadTests.swift in Sources */,
+				F655E265AA8C6E1F5886E665 /* WatchOverviewTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -542,7 +550,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 23;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -649,7 +657,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 23;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;

@@ -77,6 +77,13 @@ func TestRunUsageDeduplicationScopeAndCompletionDate(t *testing.T) {
 	if err := s.SaveRunUsage(ctx, wid, system, []relay.Event{snap(systemID, "a", 1, 9000, "complete")}); err != nil {
 		t.Fatal(err)
 	}
+	watch, err := s.WatchOverview(ctx, wid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if watch.TokenCount == nil || *watch.TokenCount != 340 || watch.TokenCoverage != 1 || watch.TotalRuns != 3 || watch.UserMessages != 3 || watch.AgentMessages != 1 {
+		t.Fatalf("watch usage disagrees or double-counts mirrors: %+v", watch)
+	}
 	totals, sessions, days, err := s.FootprintUsage(ctx, wid, from, to, project.ID, "Asia/Shanghai")
 	if err != nil {
 		t.Fatal(err)

@@ -60,6 +60,83 @@ import WatchKit
 struct WatchHome: View {
     @EnvironmentObject var model: WatchModel
     @EnvironmentObject var pairing: Pairing
+    private var activeCount: Int { model.overview?.activeTasks ?? model.items.filter { $0.running && $0.taskID != nil }.count }
+    private var totalCount: Int { model.overview?.totalTasks ?? model.items.filter { $0.taskID != nil }.count }
+    var body: some View {
+        Group {
+            if model.connection == nil {
+                VStack(spacing: 12) {
+                    Image(systemName: "iphone.and.arrow.forward").font(.title2).foregroundStyle(.mint)
+                    Text("在 iPhone 连接 Steer").font(.footnote)
+                }
+            } else {
+                ViewThatFits(in: .vertical) {
+                    dashboard(compact: false)
+                    dashboard(compact: true)
+                    ScrollView { dashboard(compact: true) }
+                        .scrollIndicators(.hidden)
+                }
+            }
+        }.navigationTitle("").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink { WatchSettings() } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 16, weight: .regular))
+                            .foregroundStyle(Color(white: 0.65))
+                            .frame(width: 36, height: 36)
+                            .background(Color(white: 24.0 / 255.0), in: Circle())
+                            .overlay { Circle().strokeBorder(Color(white: 49.0 / 255.0), lineWidth: 1) }
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }.buttonStyle(.plain).accessibilityLabel("设置")
+                }
+            }
+    }
+    private func dashboard(compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: compact ? 8 : 12) {
+            HStack(alignment: .top, spacing: 12) {
+                NavigationLink { WatchActiveTasks() } label: {
+                    countLabel(activeCount, title: "进行中", accent: true, compact: compact)
+                }.accessibilityLabel("进行中 \(activeCount) 个任务")
+                NavigationLink { WatchTaskList() } label: {
+                    countLabel(totalCount, title: "所有任务", accent: false, compact: compact)
+                }.accessibilityLabel("所有任务 \(totalCount) 个")
+            }.buttonStyle(.plain)
+            Divider()
+            HStack(alignment: .top, spacing: 8) {
+                metric("累计消息", value: WatchOverview.countText(model.overview?.messageCount), compact: compact)
+                metric("已记录 Token", value: WatchOverview.countText(model.overview?.tokenCount), compact: compact)
+            }
+            if model.error != nil || model.overviewError != nil {
+                Text("未同步").font(.caption2).foregroundStyle(.orange)
+            }
+        }.frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(.horizontal, 4).padding(.vertical, 4)
+    }
+    private func countLabel(_ count: Int, title: String, accent: Bool, compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(String(count)).font(.system(compact ? .title : .largeTitle, design: .rounded, weight: .semibold))
+                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                .foregroundStyle(accent ? Color.mint : Color.primary)
+            HStack(spacing: 4) {
+                Text(title)
+                Image(systemName: "chevron.right").font(.caption2)
+            }.font(.caption2).foregroundStyle(.primary)
+        }.frame(maxWidth: .infinity, minHeight: 64, alignment: .leading).contentShape(Rectangle())
+    }
+    private func metric(_ title: String, value: String, compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value).font(compact ? .headline : .title3).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Text(title).font(.caption2).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+    }
+}
+struct WatchActiveTasks: View {
+    @EnvironmentObject var model: WatchModel
+    @EnvironmentObject var pairing: Pairing
     @State private var selectedPage = ""
     @State private var order: [String] = []
     @State private var initialized = false
@@ -73,16 +150,20 @@ struct WatchHome: View {
                     Text("在 iPhone 连接 Steer").font(.footnote)
                     if !pairing.status.isEmpty { Text(pairing.status).font(.caption2).foregroundStyle(.secondary) }
                 }
+            } else if active.isEmpty {
+                VStack(spacing: 12) {
+                    Text("0").font(.largeTitle).monospacedDigit().foregroundStyle(.secondary)
+                    Text("暂无进行中的任务").font(.footnote).foregroundStyle(.secondary)
+                }
             } else {
                 TabView(selection: $selectedPage) {
                     ForEach(pages) { item in WatchRunningPage(item: item).tag(item.id) }
-                    WatchTaskList().tag("")
-                }.tabViewStyle(.page(indexDisplayMode: pages.isEmpty ? .never : .automatic))
+                }.tabViewStyle(.page(indexDisplayMode: pages.count > 1 ? .automatic : .never))
                 .onAppear { reconcile() }
                 .onChange(of: active.map(\.id)) { _, _ in reconcile() }
             }
-        }
-        .navigationTitle(active.isEmpty ? "Steer" : "• \(active.count) 进行中")
+        }.onAppear { reconcile() }
+        .navigationTitle("进行中 · \(active.count)")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: model.account) { _, _ in selectedPage = ""; order = []; initialized = false; reconcile() }
     }
@@ -126,52 +207,66 @@ struct WatchRunningPage: View {
                         .font(.caption2).foregroundStyle(.orange)
                 }
             }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4).padding(.bottom, 20)
-        }
+        }.scrollIndicators(.hidden)
         .task(id: item.taskID) { await model.refreshTask(item.id); await model.loadHistory(item.id) }
         .sheet(isPresented: $fullMessage) {
             ScrollView { Text(item.lastUserMessage ?? "").font(.footnote).padding(.horizontal, 8) }
+                .scrollIndicators(.hidden)
                 .navigationTitle("最近指令")
         }
     }
 }
 struct WatchTaskList: View {
     @EnvironmentObject var model: WatchModel
-    @EnvironmentObject var notifications: WatchNotifications
     private var active: [Conversation] { model.items.filter { $0.running && $0.taskID != nil } }
     private var recent: [Conversation] { model.items.filter { !$0.running && $0.taskID != nil } }
     var body: some View {
-        List {
-            Text("所有任务").font(.headline).listRowBackground(Color.clear)
-            if model.refreshing, model.items.isEmpty { ProgressView().listRowBackground(Color.clear) }
-            if let error = model.error {
-                Text(error).font(.caption2).foregroundStyle(.orange).listRowBackground(Color.clear)
-            }
-            if !active.isEmpty { Section("进行中 · \(active.count)") { ForEach(active) { row($0) } } }
-            if !recent.isEmpty { Section("最近结束") { ForEach(recent) { row($0) } } }
-            if !model.refreshing, model.items.isEmpty {
-                Text("暂无任务").font(.footnote).foregroundStyle(.secondary).listRowBackground(Color.clear)
-            }
-            Button { Task { await model.refresh() } } label: { Label("刷新", systemImage: "arrow.clockwise") }
-                .disabled(model.refreshing).listRowBackground(Color.clear)
-            NavigationLink { WatchSettings() } label: { Label("设置", systemImage: "gearshape") }.listRowBackground(Color.clear)
-        }.listStyle(.plain)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if model.refreshing, model.items.isEmpty { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 12) }
+                if let error = model.error { Text(error).font(.caption2).foregroundStyle(.orange).padding(.vertical, 8) }
+                if !active.isEmpty {
+                    heading("进行中")
+                    ForEach(active) { row($0) }
+                }
+                if !recent.isEmpty {
+                    heading("最近结束")
+                    ForEach(recent) { row($0) }
+                }
+                if !model.refreshing, active.isEmpty, recent.isEmpty {
+                    Text("暂无任务").font(.footnote).foregroundStyle(.secondary).padding(.vertical, 12)
+                }
+                if model.hasMoreTasks {
+                    Button { Task { await model.loadMoreTasks() } } label: {
+                        Text(model.refreshing ? "加载中…" : "加载更多").font(.footnote).frame(maxWidth: .infinity, minHeight: 44)
+                    }.buttonStyle(.plain).disabled(model.refreshing)
+                }
+            }.padding(.horizontal, 4)
+        }.scrollIndicators(.hidden)
+            .navigationTitle("所有任务").navigationBarTitleDisplayMode(.inline)
+    }
+    private func heading(_ title: String) -> some View {
+        Text(title).font(.caption2).foregroundStyle(.secondary).padding(.vertical, 8)
     }
     private func row(_ item: Conversation) -> some View {
-        NavigationLink { WatchDetail(id: item.id) } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.title).font(.footnote).lineLimit(2)
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(item.agentName).lineLimit(1)
-                    Spacer(minLength: 2)
-                    if !["running", "succeeded"].contains(item.status) { Text(item.label) }
-                    if item.executing {
-                        TimelineView(.periodic(from: .now, by: 1)) { context in
-                            if let elapsed = item.elapsed(at: context.date) { Text(elapsed).monospacedDigit() }
+        VStack(spacing: 0) {
+            NavigationLink { WatchDetail(id: item.id) } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.title).font(.footnote).lineLimit(2).foregroundStyle(.primary)
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(item.agentName).lineLimit(1)
+                        Spacer(minLength: 2)
+                        if !["running", "succeeded"].contains(item.status) { Text(item.label) }
+                        if item.executing {
+                            TimelineView(.periodic(from: .now, by: 1)) { context in
+                                if let elapsed = item.elapsed(at: context.date) { Text(elapsed).monospacedDigit() }
+                            }
                         }
-                    }
-                }.font(.caption2).foregroundStyle(.secondary)
-            }
-        }.listRowBackground(Color.clear)
+                    }.font(.caption2).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).padding(.vertical, 8).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+            Divider()
+        }
     }
 }
 struct WatchSettings: View {
@@ -179,25 +274,69 @@ struct WatchSettings: View {
     @EnvironmentObject var pairing: Pairing
     #if DEBUG
     @AppStorage("steer.localSpeechTest") private var localSpeechTest = false
-    @AppStorage("steer.localSpeechModel") private var localSpeechModel = "base-q5_1"
     #endif
+    private var notificationStatus: String {
+        switch notifications.status {
+        case "": return pairing.connection == nil ? "未连接服务" : "正在检查"
+        case "后台通知待配置": return "服务端未启用"
+        case "任务完成通知已开启": return "已开启"
+        default: return notifications.status
+        }
+    }
+    private var speechSource: String {
+        if pairing.connection?.speech != nil { return "自托管服务" }
+        #if DEBUG
+        if localSpeechTest && LocalSpeech.available { return "手表本地测试" }
+        #endif
+        return "iPhone 转写"
+    }
     var body: some View {
-        List {
-            if !notifications.status.isEmpty { Text(notifications.status).font(.caption2).listRowBackground(Color.clear) }
-            if !pairing.status.isEmpty { Text(pairing.status).font(.caption2).listRowBackground(Color.clear) }
-            #if DEBUG
-            Section("语音验证") {
-                Toggle("手表本地识别测试", isOn: $localSpeechTest)
-                if localSpeechTest {
-                    Picker("模型", selection: $localSpeechModel) {
-                        Text("Base").tag("base-q5_1"); Text("Tiny").tag("tiny-q5_1")
-                    }
-                }
-            }
-            #endif
-        }.navigationTitle("设置")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                statusRow("后台通知", value: notificationStatus)
+                Divider()
+                statusRow("语音转写", value: pairing.connection == nil ? "未配置" : speechSource)
+                #if DEBUG
+                Divider()
+                NavigationLink { WatchSpeechValidation() } label: {
+                    HStack {
+                        Text("语音验证").font(.footnote)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.secondary)
+                    }.frame(minHeight: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain)
+                #endif
+            }.padding(.horizontal, 4)
+        }.scrollIndicators(.hidden).navigationTitle("设置")
+    }
+    private func statusRow(_ title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.footnote)
+            Text(value).font(.caption2).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(.vertical, 8).accessibilityElement(children: .combine)
     }
 }
+#if DEBUG
+struct WatchSpeechValidation: View {
+    @AppStorage("steer.localSpeechTest") private var localSpeechTest = false
+    @AppStorage("steer.localSpeechModel") private var localSpeechModel = "base-q5_1"
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("手表本地识别", isOn: $localSpeechTest).font(.footnote)
+                if localSpeechTest {
+                    Divider()
+                    Picker("模型", selection: $localSpeechModel) {
+                        Text("Base").tag("base-q5_1")
+                        Text("Tiny").tag("tiny-q5_1")
+                    }
+                }
+            }.padding(.horizontal, 4)
+        }.scrollIndicators(.hidden).navigationTitle("语音验证")
+    }
+}
+#endif
 struct WatchDetail: View {
     let id: String
     var autoDictate = false
@@ -208,52 +347,64 @@ struct WatchDetail: View {
     @State private var confirmingStop = false
     @State private var cancelling = false
     @State private var voicePresented = false
-    @State private var fullResult = false
     @State private var message: String?
     private var item: Conversation? { model.items.first { $0.id == id } }
     var body: some View {
         Group {
             if let item {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text("\(item.projectName) / \(item.agentName)").lineLimit(1)
-                            Spacer(minLength: 2)
-                            Text(item.label).fixedSize()
-                        }.font(.caption2).foregroundStyle(.secondary)
-                        Text(item.title).font(.headline).lineLimit(2)
-                        if let error = model.error { Text("暂未同步：\(error)").font(.caption2).foregroundStyle(.orange) }
-                        if item.running {
-                            if let prompt = item.lastUserMessage { Text(prompt).font(.footnote) }
-                        } else {
-                            Text(WatchResultText.preview(item.summary.isEmpty ? "暂未返回结果" : item.summary)).font(.footnote).lineLimit(6)
-                            if item.summary.count > 100 || item.summary.contains("\n") { Button("展开结果") { fullResult = true }.font(.caption) }
-                            if !item.summary.isEmpty {
-                                Button {
-                                    if resultSpeech.speaking { resultSpeech.stop() } else { resultSpeech.play(item.summary, locale: model.connection?.recognitionLocale ?? "zh-CN") }
-                                } label: { Label(resultSpeech.speaking ? "停止朗读" : "朗读结果", systemImage: resultSpeech.speaking ? "stop.fill" : "speaker.wave.2") }.font(.caption)
+                ZStack(alignment: .bottom) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                Text("\(item.projectName) / \(item.agentName)").lineLimit(1)
+                                Spacer(minLength: 2)
+                                if item.executing {
+                                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                                        if let elapsed = item.elapsed(at: context.date) { Text(elapsed).monospacedDigit() }
+                                    }
+                                } else if !["running", "succeeded"].contains(item.status) { Text(item.label).fixedSize() }
+                            }.font(.caption2).foregroundStyle(.secondary)
+                            Text(item.title).font(.headline).lineLimit(2)
+                            if let error = model.error { Text("暂未同步：\(error)").font(.caption2).foregroundStyle(.orange) }
+                            if item.running {
+                                if let prompt = item.lastUserMessage { Text(prompt).font(.footnote) }
+                            } else {
+                                if item.summary.isEmpty { Text("暂未返回结果").font(.footnote).foregroundStyle(.secondary) }
+                                else { WatchResultText(text: item.summary) }
                                 if let error = resultSpeech.error { Text(error).font(.caption2).foregroundStyle(.orange) }
                             }
-                        }
-                        if let message {
-                            Text(message).font(.caption2).foregroundStyle(.orange)
-                        }
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 3)
-                }
-                .safeAreaInset(edge: .bottom) {
+                            if let message {
+                                Text(message).font(.caption2).foregroundStyle(.orange)
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 3)
+                            .padding(.bottom, item.canContinue || model.draft(id).attempted ? 60 : 0)
+                    }
+                    .scrollIndicators(.hidden)
                     if item.canContinue || model.draft(id).attempted {
-                        Button { message = nil; voicePresented = true } label: {
-                            Label(model.draft(id).attempted ? "确认发送" : "语音继续", systemImage: model.draft(id).attempted ? "arrow.up" : "mic.fill")
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                        }.buttonStyle(.borderedProminent).disabled(voicePresented || model.sending).padding(.horizontal, 4).background(.black)
+                        Button { resultSpeech.stop(); message = nil; voicePresented = true } label: {
+                            Image(systemName: model.draft(id).attempted ? "arrow.up" : "mic.fill")
+                                .font(.system(size: 18, weight: .medium)).foregroundStyle(.black)
+                                .frame(width: 36, height: 36).background(Color.mint, in: Circle())
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }.buttonStyle(.plain).disabled(voicePresented || model.sending)
+                            .accessibilityLabel(model.draft(id).attempted ? "确认发送" : "语音继续")
+                            .padding(.bottom, 8)
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea(.container, edges: item.canContinue || model.draft(id).attempted ? .bottom : [])
                 .toolbar {
-                    if item.running { ToolbarItem(placement: .topBarTrailing) { Button(role: .destructive) { confirmingStop = true } label: { Image(systemName: "stop.circle") }.disabled(cancelling).accessibilityLabel("停止任务") } }
-                }
-                .sheet(isPresented: $fullResult) {
-                    NavigationStack {
-                        ScrollView { WatchResultText(text: item.summary).padding(.horizontal, 8) }.navigationTitle("任务结果")
+                    ToolbarItem(placement: .topBarTrailing) {
+                        if item.running {
+                            Button(role: .destructive) { confirmingStop = true } label: { Image(systemName: "stop.circle") }
+                                .disabled(cancelling).accessibilityLabel("停止任务")
+                        } else if !item.summary.isEmpty {
+                            Button {
+                                if resultSpeech.speaking { resultSpeech.stop() }
+                                else { resultSpeech.play(item.summary, locale: model.connection?.recognitionLocale ?? "zh-CN") }
+                            } label: { Image(systemName: resultSpeech.speaking ? "stop.fill" : "speaker.wave.2") }
+                                .buttonStyle(.plain).accessibilityLabel(resultSpeech.speaking ? "停止朗读" : "朗读结果")
+                        }
                     }
                 }
                 .confirmationDialog("停止当前任务？已有改动不会撤销。", isPresented: $confirmingStop, titleVisibility: .visible) {
@@ -270,7 +421,7 @@ struct WatchDetail: View {
         .onDisappear { resultSpeech.stop() }
         .task {
             if autoDictate, !autoStarted, let item, item.canContinue {
-                autoStarted = true; voicePresented = true
+                resultSpeech.stop(); autoStarted = true; voicePresented = true
             }
             await model.refreshTask(id)
         }
@@ -290,23 +441,29 @@ struct WatchVoiceFlow: View {
     @State private var attempt = UUID()
     var body: some View {
         Group {
-            if let reviewing { WatchCompose(item: reviewing, recognitionSource: dictation.recognitionSource) }
+            if let reviewing { WatchCompose(item: reviewing) }
             else if let failure {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("语音未完成").font(.headline)
                         Text(failure).font(.footnote).foregroundStyle(.secondary)
                         Button("重试") { self.failure = nil; checking = true; attempt = UUID() }.buttonStyle(.borderedProminent)
-                        Button("返回任务") { dismiss() }.buttonStyle(.plain)
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8)
-                }.navigationTitle("语音")
+                }.scrollIndicators(.hidden).navigationTitle("")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(role: .cancel) { dismiss() } label: {
+                                Image(systemName: "xmark").foregroundStyle(.secondary)
+                            }.buttonStyle(.plain).accessibilityLabel("关闭语音输入")
+                        }
+                    }
             } else if checking {
                 VStack(spacing: 12) {
                     ProgressView()
                     Text("检查任务状态").font(.footnote).foregroundStyle(.secondary)
                     Button("取消") { dismiss() }.buttonStyle(.plain)
                 }.navigationTitle("语音")
-            } else { VoiceListening(dictation: dictation, title: model.items.first { $0.id == id }?.title ?? "", onCancel: { dismiss() }) }
+            } else { VoiceListening(dictation: dictation, onCancel: { dismiss() }) }
         }
         .interactiveDismissDisabled(reviewing == nil && failure == nil)
         .task(id: attempt) { await capture() }
@@ -379,7 +536,6 @@ struct WatchResultText: View {
 
 struct WatchCompose: View {
     let item: Conversation
-    var recognitionSource = ""
     @EnvironmentObject var model: WatchModel
     @Environment(\.dismiss) private var dismiss
     @State private var draft = Draft(text: "")
@@ -392,31 +548,44 @@ struct WatchCompose: View {
     }
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("\(item.projectName) · \(item.agentName)").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                    Text(item.title).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                }
+            VStack(alignment: .leading, spacing: 8) {
                 if sent {
                     Label("已提交", systemImage: "checkmark.circle").foregroundStyle(.mint)
                     Text("等待执行").font(.footnote).foregroundStyle(.secondary)
-                    Button { dismiss() } label: { primaryLabel("返回任务") }
-                        .buttonStyle(.plain)
                 } else {
-                    if !recognitionSource.isEmpty { Text(recognitionSource).font(.caption2).foregroundStyle(.secondary) }
+                    if draft.attempted, !model.sending {
+                        Text(item.title).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    }
                     Text(draft.text.isEmpty ? "还没有识别到文字" : draft.text).font(.footnote)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if draft.attempted { Text("发送结果待确认，重试不会重复创建任务。").font(.caption2).foregroundStyle(.secondary) }
                     if let error { Text(error).font(.caption2).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
+                }
+            }.padding(.horizontal, 2).padding(.bottom, 8)
+        }.scrollIndicators(.hidden)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Group {
+                if sent {
+                    Button { dismiss() } label: { primaryLabel("返回任务") }
+                        .buttonStyle(.plain)
+                } else {
                     Button { Task { await send() } } label: {
                         primaryLabel(model.sending ? "发送中…" : draft.attempted ? "重试发送" : "发送")
                     }.buttonStyle(.plain).disabled(!canSend).opacity(canSend ? 1 : 0.4)
-                    Button(role: .cancel) { cancelDraft() } label: { secondaryLabel("取消") }
-                        .buttonStyle(.plain).disabled(model.sending)
                 }
-            }.padding(.horizontal, 2).padding(.bottom, 8)
-        }.navigationTitle(sent ? "完成" : "确认发送")
+            }.padding(.horizontal, 4).padding(.vertical, 4).background(.black)
+        }
+        .navigationTitle("").navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(role: .cancel) {
+                    if sent { dismiss() } else { cancelDraft() }
+                } label: {
+                    Image(systemName: "xmark").foregroundStyle(.secondary)
+                }.buttonStyle(.plain).disabled(model.sending).accessibilityLabel("关闭语音输入")
+            }
+        }
         .onChange(of: model.account) { _, _ in cancelDraft() }
         .onAppear { if !loaded { draft = model.draft(item.id); sourceAccount = model.account; loaded = true } }
         .onDisappear { if loaded, !sent, !draft.attempted, !model.sending { model.discardDraft(item.id, account: sourceAccount) } }
@@ -427,13 +596,11 @@ struct WatchCompose: View {
             .frame(maxWidth: .infinity, minHeight: 44)
             .background(Color.mint, in: Capsule()).contentShape(Capsule())
     }
-    private func secondaryLabel(_ title: String) -> some View {
-        Text(title).font(.footnote).foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
-    }
     @MainActor private func cancelDraft() {
-        model.discardDraft(item.id, account: sourceAccount)
-        draft = Draft(text: "")
+        if !draft.attempted {
+            model.discardDraft(item.id, account: sourceAccount)
+            draft = Draft(text: "")
+        }
         dismiss()
     }
     @MainActor private func send() async {
