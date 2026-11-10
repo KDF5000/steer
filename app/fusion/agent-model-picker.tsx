@@ -186,10 +186,14 @@ export function AgentModelPicker({
         className={`ws-agent-model-popup${preview ? ' has-models' : ''}${mobile ? ' is-mobile' : ''}`}
         onKeyDown={onKeyboard}
         initialFocus={() => {
-          const selectedAgent = agentPanel.current?.querySelector<HTMLButtonElement>(
-            'button[data-agent-selected="true"]:not(:disabled)',
-          );
-          selectedAgent?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+          const selectedAgent =
+            agentPanel.current?.querySelector<HTMLButtonElement>(
+              'button[data-agent-selected="true"]:not(:disabled)',
+            );
+          selectedAgent?.scrollIntoView({
+            block: 'nearest',
+            inline: 'nearest',
+          });
           return selectedAgent || false;
         }}
       >
@@ -215,10 +219,6 @@ export function AgentModelPicker({
                       setActiveAgentId(item.id);
                       if (previewId) showModels(item.id);
                     }}
-                    onPointerEnter={(event) => {
-                      if (!mobile && event.pointerType === 'mouse' && !blocked)
-                        showModels(item.id);
-                    }}
                     onKeyDown={(event) => {
                       if (event.key === 'ArrowRight' && !blocked) {
                         event.preventDefault();
@@ -237,7 +237,9 @@ export function AgentModelPicker({
                     </span>
                     <span>
                       <strong>
-                        <span className="ws-agent-picker-name">{item.name}</span>
+                        <span className="ws-agent-picker-name">
+                          {item.name}
+                        </span>
                         {item.id === agent.id && <Check aria-hidden="true" />}
                       </strong>
                     </span>
@@ -252,10 +254,6 @@ export function AgentModelPicker({
                     onFocus={() => {
                       setActiveAgentId(item.id);
                       if (previewId) showModels(item.id);
-                    }}
-                    onPointerEnter={(event) => {
-                      if (!mobile && event.pointerType === 'mouse' && !blocked)
-                        showModels(item.id);
                     }}
                     onClick={() => showModels(item.id, !mobile)}
                   >

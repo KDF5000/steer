@@ -7360,7 +7360,7 @@ button.ws-chat-response-meta:focus-visible {
   width: max-content;
   max-width: calc(100vw - 32px);
   flex-direction: row;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 4px;
   padding: 0;
   border: 0;
@@ -7371,10 +7371,12 @@ button.ws-chat-response-meta:focus-visible {
 }
 .ws-agent-picker-pane,
 .ws-model-picker-pane {
+  display: flex;
   width: 302px;
   max-width: calc(100vw - 32px);
-  max-height: min(600px, calc(100dvh - 100px));
-  overflow: auto;
+  max-height: min(400px, var(--available-height, 400px), calc(100dvh - 32px));
+  flex-direction: column;
+  overflow: hidden;
   padding: 6px;
   border: 1px solid var(--ws-border);
   border-radius: 12px;
@@ -7389,9 +7391,16 @@ button.ws-chat-response-meta:focus-visible {
 }
 .ws-model-picker-pane {
   width: 314px;
+}
+.ws-agent-picker-options,
+.ws-model-picker-options {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: none;
 }
-.ws-model-picker-pane::-webkit-scrollbar {
+.ws-agent-picker-options::-webkit-scrollbar,
+.ws-model-picker-options::-webkit-scrollbar {
   display: none;
 }
 .ws-agent-picker-row {
@@ -7470,6 +7479,7 @@ button.ws-chat-response-meta:focus-visible {
 }
 .ws-model-picker-search {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 8px;
   margin: 0 4px 8px;
@@ -7558,6 +7568,7 @@ button.ws-chat-response-meta:focus-visible {
 }
 .ws-model-picker-back {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
