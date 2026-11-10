@@ -1,14 +1,18 @@
 import SwiftUI
 
+private enum PhoneRoute: Hashable {
+    case project(WatchProject)
+    case conversation(String)
+}
 struct PhoneHome: View {
     @ObservedObject var pairing: Pairing
     @EnvironmentObject var model: WatchModel
     @Environment(\.scenePhase) private var phase
-    @State private var path: [String] = []
+    @State private var path: [PhoneRoute] = []
     @State private var showSettings = false
     @State private var search = ""
     private var visible: [Conversation] {
-        model.items.filter { search.isEmpty || "\($0.title) \($0.projectName) \($0.agentName)".localizedCaseInsensitiveContains(search) }
+        search.isEmpty ? model.items : (model.projectItems["__search__"] ?? []).filter { "\($0.title) \($0.projectName) \($0.agentName)".localizedCaseInsensitiveContains(search) }
     }
     var body: some View {
         NavigationStack(path: $path) {
@@ -22,12 +26,39 @@ struct PhoneHome: View {
                 } else {
                     List {
                         let active = visible.filter { $0.running }
-                        let recent = visible.filter { !$0.running && $0.taskID != nil }
                         if !active.isEmpty {
                             Section("进行中 · \(active.count)") { ForEach(active) { row($0) } }
                         }
-                        if !recent.isEmpty {
-                            Section("最近结束") { ForEach(recent) { row($0) } }
+                        Section("项目") {
+                            ForEach(model.projects.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { project in
+                                NavigationLink(value: PhoneRoute.project(project)) {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "folder").foregroundStyle(.secondary)
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(project.name).font(.headline)
+                                            Text("\(project.conversations) 个会话").font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        if project.activeTasks > 0 {
+                                            Text("\(project.activeTasks) 进行中").font(.caption).foregroundStyle(.mint)
+                                        }
+                                    }.padding(.vertical, 8)
+                                }
+                            }
+                        }
+                        if !search.isEmpty {
+                            Section("会话") { ForEach(visible.filter { !$0.running }) { row($0) } }
+                            if model.loadingProjects.contains("__search__") { ProgressView() }
+                            if let error = model.projectErrors["__search__"] { Text(error).font(.footnote).foregroundStyle(.secondary) }
+                            if model.projectHasMore["__search__"] == true {
+                                Button("加载更多搜索结果") { Task { await model.searchConversations(search, more: true) } }
+                                    .disabled(model.loadingProjects.contains("__search__"))
+                            }
+                        }
+                        if let error = model.projectsError {
+                            Section { Text(error).font(.footnote).foregroundStyle(.secondary)
+                                Button("重试") { Task { await model.refreshProjects() } }
+                            }
                         }
                         if let error = model.error {
                             Section { Label(error, systemImage: "wifi.exclamationmark").font(.footnote).foregroundStyle(.secondary) }
@@ -36,8 +67,16 @@ struct PhoneHome: View {
                     .listStyle(.plain)
                     .searchable(text: $search, prompt: "搜索任务或项目")
                     .refreshable { await model.refresh() }
+                    .task(id: "\(model.account):\(search)") {
+                        do { try await Task.sleep(for: .milliseconds(300)); await model.searchConversations(search) }
+                        catch {}
+                    }
                     .overlay {
-                        if visible.filter({ $0.running || $0.taskID != nil }).isEmpty && model.error == nil {
+                        if !search.isEmpty, visible.isEmpty,
+                           !model.projects.contains(where: { $0.name.localizedCaseInsensitiveContains(search) }),
+                           !model.loadingProjects.contains("__search__"), model.projectErrors["__search__"] == nil {
+                            ContentUnavailableView.search(text: search)
+                        } else if model.projects.isEmpty && visible.isEmpty && model.error == nil && model.projectsError == nil {
                             if model.refreshing && model.items.isEmpty { ProgressView("加载任务") }
                             else if !search.isEmpty { ContentUnavailableView.search(text: search) }
                             else { ContentUnavailableView("暂无任务", systemImage: "tray") }
@@ -51,8 +90,11 @@ struct PhoneHome: View {
                     Button { showSettings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("设置")
                 }
             }
-            .navigationDestination(for: String.self) { id in
-                PhoneConversation(id: id).id(model.account + ":" + id)
+            .navigationDestination(for: PhoneRoute.self) { route in
+                switch route {
+                case .project(let project): PhoneProject(project: project).id(model.account + ":" + project.id)
+                case .conversation(let id): PhoneConversation(id: id).id(model.account + ":" + id)
+                }
             }
             .sheet(isPresented: $showSettings) { PhoneSetup(pairing: pairing) }
             .onChange(of: pairing.connection, initial: true) { _, value in
@@ -70,12 +112,66 @@ struct PhoneHome: View {
         }.tint(.mint)
     }
     private func row(_ item: Conversation) -> some View {
-        NavigationLink(value: item.id) {
+        NavigationLink(value: PhoneRoute.conversation(item.id)) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(item.title).font(.headline).lineLimit(2).foregroundStyle(.primary)
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("\(item.projectName) / \(item.agentName)").lineLimit(1)
                     Spacer(minLength: 8)
+                    PhoneTaskStatus(item: item, grouped: true)
+                }.font(.caption).foregroundStyle(.secondary)
+            }.padding(.vertical, 12)
+        }
+    }
+}
+
+struct PhoneProject: View {
+    let project: WatchProject
+    @EnvironmentObject var model: WatchModel
+    @Environment(\.scenePhase) private var phase
+    private var items: [Conversation] {
+        (model.projectItems[project.id] ?? []).compactMap { entry in model.items.first { $0.id == entry.id } ?? entry }
+    }
+    var body: some View {
+        List {
+            let active = items.filter { $0.running }
+            let recent = items.filter { !$0.running }
+            if !active.isEmpty { Section("进行中") { ForEach(active) { row($0) } } }
+            if !recent.isEmpty { Section("会话") { ForEach(recent) { row($0) } } }
+            if let error = model.projectErrors[project.id] {
+                Section { Text(error).font(.footnote).foregroundStyle(.secondary)
+                    Button("重试") { Task { await model.refreshProject(project.id) } }
+                }
+            }
+            if model.projectHasMore[project.id] == true {
+                Button(model.loadingProjects.contains(project.id) ? "加载中…" : "加载更多会话") {
+                    Task { await model.refreshProject(project.id, more: true) }
+                }.disabled(model.loadingProjects.contains(project.id))
+            }
+        }.listStyle(.plain)
+            .navigationTitle(project.name).navigationBarTitleDisplayMode(.inline)
+            .refreshable { await model.refreshProject(project.id) }
+            .overlay {
+                if items.isEmpty && model.projectErrors[project.id] == nil {
+                    if model.loadingProjects.contains(project.id) { ProgressView() }
+                    else { ContentUnavailableView("暂无会话", systemImage: "bubble.left") }
+                }
+            }
+            .task(id: "\(model.account):\(phase)") {
+                guard phase == .active else { return }
+                while !Task.isCancelled {
+                    await model.refreshProject(project.id)
+                    try? await Task.sleep(for: .seconds(15))
+                }
+            }
+    }
+    private func row(_ item: Conversation) -> some View {
+        NavigationLink(value: PhoneRoute.conversation(item.id)) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(item.title).font(.headline).lineLimit(2)
+                HStack {
+                    Text(item.agentName).lineLimit(1)
+                    Spacer()
                     PhoneTaskStatus(item: item, grouped: true)
                 }.font(.caption).foregroundStyle(.secondary)
             }.padding(.vertical, 12)
@@ -237,12 +333,12 @@ struct PhoneConversation: View {
             if !text.isEmpty { PhoneMarkdown(text: text) }
             if let error, !error.isEmpty { Text(error).font(.footnote).foregroundStyle(.red) }
             if !text.isEmpty {
-                HStack(spacing: 16) {
+                HStack(spacing: 0) {
                     PhoneCopyButton(text: text, label: "复制回复")
                     Button {
                         if speech.speaking && spokenID == key { speech.stop() }
                         else { spokenID = key; speech.play(text, locale: model.connection?.recognitionLocale ?? "zh-CN") }
-                    } label: { Image(systemName: speech.speaking && spokenID == key ? "stop.fill" : "speaker.wave.2").frame(minWidth: 32, minHeight: 32) }
+                    } label: { Image(systemName: speech.speaking && spokenID == key ? "stop.fill" : "speaker.wave.2").frame(width: 40, height: 44).contentShape(Rectangle()) }
                         .accessibilityLabel(speech.speaking && spokenID == key ? "停止朗读" : "朗读回复")
                 }.font(.footnote).buttonStyle(.plain).foregroundStyle(.secondary)
                 if spokenID == key, let error = speech.error { Text(error).font(.caption).foregroundStyle(.secondary) }
@@ -356,7 +452,7 @@ private struct PhoneCopyButton: View {
     @State private var copied = false
     var body: some View {
         Button { UIPasteboard.general.string = text; copied = true } label: {
-            Image(systemName: copied ? "checkmark" : "doc.on.doc").frame(minWidth: 32, minHeight: 32)
+            Image(systemName: copied ? "checkmark" : "doc.on.doc").frame(width: 40, height: 44).contentShape(Rectangle())
         }.accessibilityLabel(copied ? "已复制" : label)
             .task(id: copied) {
                 guard copied else { return }

@@ -588,7 +588,7 @@ func taskAPIScope(r *http.Request) (string, bool) {
 	if r.Method == http.MethodPost && (path == "/api/v1/tasks" || (strings.HasPrefix(path, "/api/v1/conversations/") && strings.HasSuffix(path, "/tasks"))) {
 		return "tasks:write", true
 	}
-	if r.Method == http.MethodGet && (path == "/api/v1/watch/overview" || path == "/api/v1/watch/conversations" || (strings.HasPrefix(path, "/api/v1/watch/conversations/") && len(strings.Split(strings.TrimPrefix(path, "/api/v1/watch/conversations/"), "/")) == 1 && strings.TrimPrefix(path, "/api/v1/watch/conversations/") != "")) {
+	if r.Method == http.MethodGet && (path == "/api/v1/watch/projects" || path == "/api/v1/watch/overview" || path == "/api/v1/watch/conversations" || (strings.HasPrefix(path, "/api/v1/watch/conversations/") && len(strings.Split(strings.TrimPrefix(path, "/api/v1/watch/conversations/"), "/")) == 1 && strings.TrimPrefix(path, "/api/v1/watch/conversations/") != "")) {
 		return "tasks:read", true
 	}
 	if r.Method == http.MethodGet && strings.HasPrefix(path, "/api/v1/tasks/") {

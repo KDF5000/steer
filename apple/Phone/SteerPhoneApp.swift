@@ -18,51 +18,46 @@ struct PhoneSetup: View {
     @State private var speechKey = ""
     @State private var phoneSpeechLocale = "zh-CN"
     @State private var phoneSpeechEngine = "enhanced"
+    private enum Page: Hashable { case connection, watch, speech }
+    @State private var path: [Page] = []
+    private var serverSummary: String { pairing.connection?.baseURL?.host ?? "未连接" }
+    private var voiceSummary: String {
+        guard let c = pairing.connection else { return "未配置" }
+        return c.speech == nil ? (c.prefersEnhancedSpeech ? "iPhone · 增强转写" : "iPhone · 标准听写") : "自托管服务"
+    }
+    private var watchSummary: String {
+        if !pairing.watchPaired { return "未配对" }
+        if !pairing.watchAppInstalled { return "待安装" }
+        return pairing.status == "手表已确认收到配置" ? "配置已同步" : "已配对"
+    }
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("连接 Steer") {
-                    TextField("服务器地址，如 https://steer.example.com", text: $server).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                    SecureField("Workspace API Key", text: $key).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Text("在 Steer 网页 Settings → API access 创建 Key。需要 tasks:read、tasks:write、tasks:cancel 权限。").font(.footnote).foregroundStyle(.secondary)
-                    Button(checking ? "正在验证…" : "验证并同步到手表") { Task { await connect() } }.disabled(checking)
-                }
-                if !message.isEmpty { Section { Text(message).font(.footnote) } }
-                Section("手表配置") {
-                    if pairing.watchPaired {
-                        Label(pairing.watchAppInstalled ? "Watch 端已安装" : "手表已配对 · Watch 端尚未安装", systemImage: pairing.watchAppInstalled ? "checkmark.circle" : "applewatch")
-                            .font(.footnote)
+        NavigationStack(path: $path) {
+            List {
+                Section {
+                    NavigationLink(value: Page.connection) {
+                        settingsRow("Steer 连接", icon: "network", value: serverSummary)
                     }
-                    Text(pairing.status.isEmpty ? "请安装并打开配对手表上的 Steer App。" : pairing.status).font(.footnote)
-                    Button("重新同步配置") { pairing.flush() }.disabled(pairing.connection == nil)
-                }
-                Section("语音转写") {
-                    Toggle("使用自托管语音服务", isOn: Binding(get: { useSpeechService }, set: setSpeechServiceEnabled)).disabled(checking)
-                    if useSpeechService {
-                        TextField("语音服务地址，如 https://speech.example.com", text: $speechServer).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                        SecureField("语音服务密钥", text: $speechKey).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        Text("手表录音直接发送到此服务，识别后确认文字再提交任务。请使用独立语音密钥；公网使用 HTTPS。填写后点击上方验证并同步。").font(.footnote).foregroundStyle(.secondary)
-                    } else {
-                        Picker("iPhone 识别语言", selection: $phoneSpeechLocale) {
-                            Text("中文（普通话）").tag("zh-CN")
-                            Text("English").tag("en-US")
-                        }
-                        if #available(iOS 26.0, *) {
-                            Picker("本地识别模式", selection: $phoneSpeechEngine) {
-                                Text("增强转写").tag("enhanced")
-                                Text("标准听写").tag("standard")
-                            }
-                        }
-                        Text("语言不会跟随系统地区自动变化。修改语言或模式后点击上方验证并同步。").font(.footnote).foregroundStyle(.secondary)
-                        Text(speech.status.isEmpty ? "手表录音由配对 iPhone 转为文字，支持时在本机识别，必要时使用 Apple 识别服务。" : speech.status).font(.footnote)
-                        Button("允许语音识别") { Task { await speech.authorize() } }
-                        if #available(iOS 26.0, *) {
-                            Button(speech.preparingModel ? "正在准备模型…" : "准备增强本地识别") { Task { await speech.prepareLocalModel() } }.disabled(speech.preparingModel)
-                        }
+                    NavigationLink(value: Page.watch) {
+                        settingsRow("Apple Watch", icon: "applewatch", value: watchSummary)
                     }
                 }
-            }.navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
+                Section {
+                    NavigationLink(value: Page.speech) {
+                        settingsRow("语音输入", icon: "waveform", value: voiceSummary)
+                    }
+                }
+            }.navigationTitle("设置").navigationBarTitleDisplayMode(.large)
                 .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }
+                .navigationDestination(for: Page.self) { page in
+                    Group {
+                        switch page {
+                        case .connection: connectionEditor
+                        case .watch: watchEditor
+                        case .speech: speechEditor
+                        }
+                    }.navigationBarTitleDisplayMode(.inline)
+                }
+            .onChange(of: path) { _, _ in message = "" }
             .onAppear { if let c = pairing.connection {
                 server = c.server; key = c.apiKey
                 useSpeechService = c.speech != nil; speechServer = c.speech?.server ?? ""; speechKey = c.speech?.apiKey ?? ""
@@ -90,6 +85,117 @@ struct PhoneSetup: View {
 
         }
     }
+    private func settingsRow(_ title: String, icon: String, value: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon).foregroundStyle(.secondary).frame(width: 24)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.body)
+                Text(value).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }.padding(.vertical, 8)
+    }
+    private var connectionEditor: some View {
+        Form {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("服务器地址").font(.caption).foregroundStyle(.secondary)
+                    TextField("https://steer.example.com", text: $server)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                }.padding(.vertical, 4)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Workspace API Key").font(.caption).foregroundStyle(.secondary)
+                    SecureField("输入密钥", text: $key).textInputAutocapitalization(.never).autocorrectionDisabled()
+                }.padding(.vertical, 4)
+            }
+            Section {
+                Button(checking ? "正在验证…" : "验证并保存") { Task { await connect() } }.disabled(checking)
+                if !message.isEmpty { Text(message).font(.footnote).foregroundStyle(.secondary) }
+            }
+            Section {
+                DisclosureGroup("获取 API Key") {
+                    Text("在 Steer 网页的 Settings → API access 创建密钥，选择 tasks:read、tasks:write、tasks:cancel 权限。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+        }.navigationTitle("Steer 连接")
+    }
+    private var watchEditor: some View {
+        Form {
+            Section {
+                LabeledContent("配对", value: pairing.watchPaired ? "已配对" : "未配对")
+                LabeledContent("Steer 应用", value: pairing.watchAppInstalled ? "已安装" : "未安装")
+            }
+            Section {
+                Button("重新同步配置") { pairing.flush() }.disabled(pairing.connection == nil)
+            } footer: {
+                Text(pairing.status.isEmpty ? "打开手表上的 Steer 接收配置。" : pairing.status)
+            }
+        }.navigationTitle("Apple Watch")
+    }
+    private var speechEditor: some View {
+        Form {
+            Section {
+                Toggle("自托管语音服务", isOn: Binding(get: { useSpeechService }, set: setSpeechServiceEnabled)).disabled(checking)
+            }
+            if useSpeechService {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("服务地址").font(.caption).foregroundStyle(.secondary)
+                        TextField("https://speech.example.com", text: $speechServer)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("语音服务密钥").font(.caption).foregroundStyle(.secondary)
+                        SecureField("输入密钥", text: $speechKey).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    }
+                }
+            } else {
+                Section {
+                    Picker("语言", selection: $phoneSpeechLocale) {
+                        Text("中文（普通话）").tag("zh-CN")
+                        Text("English").tag("en-US")
+                    }
+                    if #available(iOS 26.0, *) {
+                        Picker("识别模式", selection: $phoneSpeechEngine) {
+                            Text("增强转写").tag("enhanced")
+                            Text("标准听写").tag("standard")
+                        }
+                    }
+                }
+                Section {
+                    Button("检查语音权限") { Task { await speech.authorize() } }
+                    if #available(iOS 26.0, *) {
+                        Button(speech.preparingModel ? "正在准备模型…" : "准备增强识别模型") {
+                            Task { await speech.prepareLocalModel() }
+                        }.disabled(speech.preparingModel)
+                    }
+                } footer: {
+                    if !speech.status.isEmpty { Text(speech.status) }
+                }
+            }
+            Section {
+                Button(checking ? "正在保存…" : "保存并同步") { Task { await saveSpeech() } }
+                    .disabled(checking || pairing.connection == nil)
+                if !message.isEmpty { Text(message).font(.footnote).foregroundStyle(.secondary) }
+            }
+        }.navigationTitle("语音输入")
+    }
+    @MainActor private func saveSpeech() async {
+        guard var config = pairing.connection else { return }
+        checking = true; defer { checking = false }
+        config.phoneSpeechLocale = phoneSpeechLocale
+        config.phoneSpeechEngine = phoneSpeechEngine
+        do {
+            if useSpeechService {
+                let service = SpeechService(server: speechServer.trimmingCharacters(in: .whitespacesAndNewlines), apiKey: speechKey.trimmingCharacters(in: .whitespacesAndNewlines))
+                guard service.baseURL != nil, !service.apiKey.isEmpty else { message = "请填写有效的语音服务地址与密钥"; return }
+                try await RemoteSpeech(service: service).check()
+                config.speech = service
+            } else { config.speech = nil }
+            try pairing.save(config)
+            message = "已保存，等待手表确认配置。"
+        } catch { message = error.localizedDescription }
+    }
     @MainActor private func setSpeechServiceEnabled(_ enabled: Bool) {
         useSpeechService = enabled
         guard !enabled, var config = pairing.connection, config.speech != nil else { return }
@@ -116,9 +222,10 @@ struct PhoneSetup: View {
         guard c.baseURL != nil, !c.apiKey.isEmpty else { message = "请填写有效的服务器地址与 API Key"; return }
         checking = true; defer { checking = false }
         do {
-            let items = try await SteerAPI(connection: c).conversations()
+            _ = try await SteerAPI(connection: c).conversations()
+            _ = try await SteerAPI(connection: c).projectDirectory()
             if let service = c.speech { try await RemoteSpeech(service: service).check() }
-            try pairing.save(c); message = "连接成功 · 找到 \(items.count) 个会话。请打开手表确认收到配置。"
+            try pairing.save(c); message = "连接已验证，配置已保存。"
         }
         catch { message = error.localizedDescription }
     }

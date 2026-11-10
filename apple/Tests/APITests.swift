@@ -65,4 +65,130 @@ final class APITests: XCTestCase {
         for url in ["", "file:///tmp/config", "https://user:secret@host", "https://host?token=secret"] { XCTAssertNil(Connection(server: url, apiKey: "", web: "").baseURL) }
         XCTAssertNotNil(Connection(server: "http://steer.local:8080", apiKey: "", web: "").baseURL)
     }
+    func testProjectDirectoryAndFilteredPagination() async throws {
+        RequestStub.handler = { req in
+            if req.url?.path == "/api/v1/watch/projects" {
+                return (200, Data(#"[{"id":"project-a","name":"Steer","conversations":72,"activeTasks":2}]"#.utf8))
+            }
+            let query = URLComponents(url: req.url!, resolvingAgainstBaseURL: false)!.queryItems!
+            XCTAssertEqual(query.first { $0.name == "projectId" }?.value, "project-a")
+            XCTAssertEqual(query.first { $0.name == "offset" }?.value, "50")
+            XCTAssertEqual(query.first { $0.name == "q" }?.value, "语音 & Watch")
+            return (200, Data("[]".utf8))
+        }
+        let projects = try await api().projects()
+        XCTAssertEqual(projects.first?.conversations, 72)
+        _ = try await api().conversations(offset: 50, projectID: "project-a", search: "语音 & Watch")
+    }
+    func testLegacyDirectoryUsesAuthorizedFeedAndIncludesLaterProjects() async throws {
+        let feed = (0..<51).map { index in
+            Conversation(id: "session-\(index)", title: "Task", agentID: "a", agentName: "Agent", projectName: index < 50 ? "Steer" : "Relay", taskID: "task-\(index)", status: index == 0 ? "running" : "succeeded", summary: "", updatedAt: "")
+        }
+        for unsupported in [403, 404] {
+            var offsets: [Int] = []
+            RequestStub.handler = { req in
+                if req.url?.path == "/api/v1/watch/projects" { return (unsupported, Data(#"{"error":"API key does not have permission for this operation."}"#.utf8)) }
+                XCTAssertEqual(req.url?.path, "/api/v1/watch/conversations")
+                let query = URLComponents(url: req.url!, resolvingAgainstBaseURL: false)!.queryItems!
+                let offset = Int(query.first { $0.name == "offset" }!.value!)!
+                offsets.append(offset)
+                return (200, try JSONEncoder().encode(Array(feed.dropFirst(offset).prefix(50))))
+            }
+            let directory = try await api().projectDirectory()
+            XCTAssertEqual(offsets, [0, 50])
+            XCTAssertEqual(directory.legacyFeed?.count, 51)
+            XCTAssertEqual(directory.projects.map(\.id), ["legacy:Steer", "legacy:Relay"])
+            XCTAssertEqual(directory.projects.map(\.conversations), [50, 1])
+            XCTAssertEqual(directory.projects.first?.activeTasks, 1)
+        }
+    }
+    func testDirectoryDoesNotHideInvalidCredentialsOrServerOutages() async throws {
+        for status in [401, 503] {
+            var calls = 0
+            var client = api(); client.retryDelay = { _ in }
+            RequestStub.handler = { req in
+                calls += 1; XCTAssertEqual(req.url?.path, "/api/v1/watch/projects")
+                return (status, Data(#"{"error":"Unavailable"}"#.utf8))
+            }
+            do { _ = try await client.projectDirectory(); XCTFail("Expected failure") }
+            catch { XCTAssertEqual((error as? APIError)?.statusCode, status) }
+            XCTAssertEqual(calls, status == 401 ? 1 : 3)
+        }
+    }
+    func testLegacyDirectoryStopsWhenOldServerIgnoresPagination() async throws {
+        let item = Conversation(id: "s", title: "Task", agentID: "a", agentName: "Agent", projectName: "Steer", taskID: "t", status: "succeeded", summary: "", updatedAt: "")
+        var calls = 0
+        RequestStub.handler = { req in
+            calls += 1
+            if req.url?.path == "/api/v1/watch/projects" { return (403, Data(#"{"error":"Unsupported route"}"#.utf8)) }
+            return (200, try JSONEncoder().encode(Array(repeating: item, count: 50)))
+        }
+        do { _ = try await api().projectDirectory(); XCTFail("Expected pagination error") }
+        catch { XCTAssertEqual(error.localizedDescription, "服务端版本不支持会话分页，请更新 Steer Server") }
+        XCTAssertEqual(calls, 3)
+    }
+    func testReadRecoversFromNetworkAndServerFailures() async throws {
+        var calls = 0
+        var delays: [Double] = []
+        var client = api()
+        client.retryDelay = { delays.append($0) }
+        RequestStub.handler = { _ in
+            calls += 1
+            if calls == 1 { throw URLError(.networkConnectionLost) }
+            if calls == 2 { return (503, Data(#"{"error":"Temporarily unavailable"}"#.utf8)) }
+            return (200, Data("[]".utf8))
+        }
+        let items = try await client.conversations()
+        XCTAssertTrue(items.isEmpty)
+        XCTAssertEqual(calls, 3)
+        XCTAssertEqual(delays, [1, 2])
+    }
+    func testReadReportsFinalFailureAfterThreeAttempts() async throws {
+        var calls = 0
+        var client = api()
+        client.retryDelay = { _ in }
+        RequestStub.handler = { _ in calls += 1; throw URLError(.timedOut) }
+        do { _ = try await client.conversations(); XCTFail("Expected final failure") }
+        catch { XCTAssertEqual((error as? URLError)?.code, .timedOut) }
+        XCTAssertEqual(calls, 3)
+    }
+    func testPermanentFailuresDoNotRetry() async throws {
+        var calls = 0
+        var client = api()
+        client.retryDelay = { _ in XCTFail("Permanent failure should not retry") }
+        for status in [401, 403, 404] {
+            RequestStub.handler = { _ in calls += 1; return (status, Data(#"{"error":"Rejected"}"#.utf8)) }
+            do { _ = try await client.conversations(); XCTFail("Expected rejection") }
+            catch { XCTAssertEqual((error as? APIError)?.statusCode, status) }
+        }
+        RequestStub.handler = { _ in calls += 1; return (200, Data("invalid JSON".utf8)) }
+        do { _ = try await client.conversations(); XCTFail("Expected decoding failure") }
+        catch { XCTAssertTrue(error is DecodingError) }
+        XCTAssertEqual(calls, 4)
+    }
+    func testCancellationStopsReadsWithoutRetry() async throws {
+        var calls = 0
+        var client = api()
+        client.retryDelay = { _ in XCTFail("Cancelled request should not retry") }
+        RequestStub.handler = { _ in calls += 1; throw URLError(.cancelled) }
+        do { _ = try await client.conversations(); XCTFail("Expected cancellation") }
+        catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertEqual(calls, 1)
+    }
+    func testCancellationDuringBackoffStopsFurtherRequests() async throws {
+        var calls = 0
+        var client = api()
+        let delaying = expectation(description: "Waiting to retry")
+        client.retryDelay = { _ in
+            delaying.fulfill()
+            try await Task.sleep(for: .seconds(30))
+        }
+        RequestStub.handler = { _ in calls += 1; throw URLError(.timedOut) }
+        let request = Task { try await client.conversations() }
+        await fulfillment(of: [delaying], timeout: 2)
+        request.cancel()
+        do { _ = try await request.value; XCTFail("Expected cancellation") }
+        catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertEqual(calls, 1)
+    }
 }

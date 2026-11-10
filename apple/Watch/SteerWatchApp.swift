@@ -218,13 +218,45 @@ struct WatchRunningPage: View {
 }
 struct WatchTaskList: View {
     @EnvironmentObject var model: WatchModel
-    private var active: [Conversation] { model.items.filter { $0.running && $0.taskID != nil } }
-    private var recent: [Conversation] { model.items.filter { !$0.running && $0.taskID != nil } }
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                if model.refreshing, model.items.isEmpty { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 12) }
-                if let error = model.error { Text(error).font(.caption2).foregroundStyle(.orange).padding(.vertical, 8) }
+                ForEach(model.projects) { project in
+                    NavigationLink { WatchProjectTasks(project: project) } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(project.name).font(.headline).foregroundStyle(.primary)
+                            HStack(spacing: 8) {
+                                Text("\(project.conversations) 个会话").foregroundStyle(.secondary)
+                                if project.activeTasks > 0 { Text("\(project.activeTasks) 进行中").foregroundStyle(.mint) }
+                            }.font(.caption2)
+                        }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).padding(.vertical, 8).contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                    Divider()
+                }
+                if let error = model.projectsError {
+                    Text(error).font(.caption2).foregroundStyle(.orange).padding(.vertical, 8)
+                    Button("重试") { Task { await model.refreshProjects() } }.buttonStyle(.plain)
+                } else if model.projects.isEmpty {
+                    if model.refreshing { ProgressView().frame(maxWidth: .infinity) }
+                    else { Text("暂无任务").font(.footnote).foregroundStyle(.secondary) }
+                }
+            }.padding(.horizontal, 4)
+        }.scrollIndicators(.hidden).navigationTitle("所有任务").navigationBarTitleDisplayMode(.inline)
+            .task { await model.refreshProjects() }
+    }
+}
+struct WatchProjectTasks: View {
+    let project: WatchProject
+    @Environment(\.scenePhase) private var phase
+    private var items: [Conversation] { (model.projectItems[project.id] ?? []).map { entry in model.items.first { $0.id == entry.id } ?? entry } }
+    @EnvironmentObject var model: WatchModel
+    private var active: [Conversation] { items.filter { $0.running && $0.taskID != nil } }
+    private var recent: [Conversation] { items.filter { !$0.running } }
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if model.loadingProjects.contains(project.id), items.isEmpty { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 12) }
+                if let error = model.projectErrors[project.id] { Text(error).font(.caption2).foregroundStyle(.orange).padding(.vertical, 8) }
                 if !active.isEmpty {
                     heading("进行中")
                     ForEach(active) { row($0) }
@@ -233,17 +265,24 @@ struct WatchTaskList: View {
                     heading("最近结束")
                     ForEach(recent) { row($0) }
                 }
-                if !model.refreshing, active.isEmpty, recent.isEmpty {
+                if !model.loadingProjects.contains(project.id), active.isEmpty, recent.isEmpty {
                     Text("暂无任务").font(.footnote).foregroundStyle(.secondary).padding(.vertical, 12)
                 }
-                if model.hasMoreTasks {
-                    Button { Task { await model.loadMoreTasks() } } label: {
-                        Text(model.refreshing ? "加载中…" : "加载更多").font(.footnote).frame(maxWidth: .infinity, minHeight: 44)
-                    }.buttonStyle(.plain).disabled(model.refreshing)
+                if model.projectHasMore[project.id] == true {
+                    Button { Task { await model.refreshProject(project.id, more: true) } } label: {
+                        Text(model.loadingProjects.contains(project.id) ? "加载中…" : "加载更多").font(.footnote).frame(maxWidth: .infinity, minHeight: 44)
+                    }.buttonStyle(.plain).disabled(model.loadingProjects.contains(project.id))
                 }
             }.padding(.horizontal, 4)
         }.scrollIndicators(.hidden)
-            .navigationTitle("所有任务").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(project.name).navigationBarTitleDisplayMode(.inline)
+            .task(id: "\(model.account):\(phase)") {
+                guard phase == .active else { return }
+                while !Task.isCancelled {
+                    await model.refreshProject(project.id)
+                    try? await Task.sleep(for: .seconds(15))
+                }
+            }
     }
     private func heading(_ title: String) -> some View {
         Text(title).font(.caption2).foregroundStyle(.secondary).padding(.vertical, 8)

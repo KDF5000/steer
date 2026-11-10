@@ -3,10 +3,12 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/KDF5000/steer/server/internal/store"
 	"github.com/google/uuid"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -119,5 +121,70 @@ func TestWatchFeedScopesAndWorkspaceIsolation(t *testing.T) {
 	invalid := call(http.MethodGet, "/api/v1/watch/conversations", "steer_sk_invalid")
 	if invalid.Code != 401 {
 		t.Fatalf("invalid key read feed: %d", invalid.Code)
+	}
+	if denied := call(http.MethodGet, "/api/v1/watch/projects", "steer_sk_invalid"); denied.Code != 401 {
+		t.Fatalf("invalid key read project directory: %d", denied.Code)
+	}
+	// A project directory must find projects beyond the first 50 sessions,
+	// use stable project IDs, and never leak another workspace.
+	var projects []store.Project
+	for i := 0; i < 2; i++ {
+		project, err := st.CreateProject(ctx, wid, store.Project{Name: fmt.Sprintf("项目%d", i), WorkspaceKind: "local", WorkspaceSource: "/workspace/test", ExecutionMode: "in_place"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		projects = append(projects, project)
+	}
+	session, err := st.Session(ctx, wid, ids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 53; i++ {
+		project := projects[0]
+		if i == 52 {
+			project = projects[1]
+		}
+		if _, err := st.EnsureSession(ctx, wid, uuid.NewString(), "检索目标", session.AgentID, &project.ID, nil, nil, &project); err != nil {
+			t.Fatal(err)
+		}
+	}
+	directory := call(http.MethodGet, "/api/v1/watch/projects", token)
+	var groups []store.WatchProject
+	if directory.Code != 200 || directory.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("directory: %d %s", directory.Code, directory.Body.String())
+	}
+	if err := json.Unmarshal(directory.Body.Bytes(), &groups); err != nil {
+		t.Fatal(err)
+	}
+	counts := map[string]int{}
+	for _, group := range groups {
+		counts[group.ID] = group.Conversations
+	}
+	if len(groups) != 3 || counts[projects[0].ID] != 52 || counts[projects[1].ID] != 1 || counts["__unassigned__"] != 1 {
+		t.Fatalf("wrong directory: %+v", groups)
+	}
+	for _, check := range []struct {
+		query string
+		count int
+	}{
+		{"?projectId=" + projects[0].ID + "&limit=50", 50},
+		{"?projectId=" + projects[0].ID + "&limit=50&offset=50", 2},
+		{"?projectId=" + projects[1].ID, 1},
+		{"?projectId=__unassigned__", 1},
+		{"?projectId=foreign-project", 0},
+		{"?q=" + url.QueryEscape("检索目标") + "&offset=50", 3},
+		{"?q=" + url.QueryEscape("another private message"), 0},
+	} {
+		response := call(http.MethodGet, "/api/v1/watch/conversations"+check.query, token)
+		var page []store.WatchConversation
+		if response.Code != 200 {
+			t.Fatalf("filtered page: %d %s", response.Code, response.Body.String())
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+			t.Fatal(err)
+		}
+		if len(page) != check.count {
+			t.Fatalf("%s: got %d want %d", check.query, len(page), check.count)
+		}
 	}
 }

@@ -12,6 +12,17 @@ import CryptoKit
     @Published var overview: WatchOverview?
     @Published var overviewError: String?
     @Published var hasMoreTasks = false
+    @Published var projects: [WatchProject] = []
+    @Published var projectsError: String?
+    @Published var projectItems: [String: [Conversation]] = [:]
+    @Published var loadingProjects: Set<String> = []
+    @Published var projectErrors: [String: String] = [:]
+    @Published var projectHasMore: [String: Bool] = [:]
+    private var projectSizes: [String: Int] = [:]
+    private var loadingDirectory = false
+    private var searchQuery = ""
+    private var legacyFeed: [Conversation]?
+    private var legacyDirectory = false
     private var requestedFeedSize = 50
     private var loadingOverview = false
     private var loadingHistory: Set<String> = []
@@ -24,6 +35,9 @@ import CryptoKit
         guard config != connection else { return }
         connection = config; generation = UUID(); items = []; syncedAt = nil; error = nil; refreshing = false; histories = [:]; historyErrors = [:]; loadingHistory = []
         overview = nil; overviewError = nil; requestedFeedSize = 50; hasMoreTasks = false; loadingOverview = false
+        projects = []; projectsError = nil; projectItems = [:]; loadingProjects = []; projectErrors = [:]; projectHasMore = [:]; projectSizes = [:]; loadingDirectory = false; searchQuery = ""
+        legacyFeed = nil; legacyDirectory = false
+        if let cache: CachedProjects = SecureStore.read("project-directory"), cache.account == account { projects = cache.projects; legacyDirectory = cache.legacy == true }
         if let cache: CachedOverview = SecureStore.read("watch-overview"), cache.account == account { overview = cache.overview }
         if let cache: CachedFeed = SecureStore.read("feed"), cache.account == account {
             items = cache.items; syncedAt = cache.syncedAt
@@ -59,7 +73,10 @@ import CryptoKit
                     entry.startedAt = entry.startedAt ?? previous.startedAt
                 }
                 return entry
-            }; syncedAt = Date(); error = nil
+            }
+            var feedIDs = Set(items.map(\.id))
+            items += projectItems.values.flatMap { $0 }.filter { feedIDs.insert($0.id).inserted }
+            syncedAt = Date(); error = nil
             // Keep Relay status current even when no web page is open. Bound
             // concurrent requests to four while the watch app is foregrounded.
             let active = feed.filter { $0.running && $0.taskID != nil }
@@ -69,13 +86,13 @@ import CryptoKit
                 let results = await withTaskGroup(of: (String, TaskSnapshot?, String?).self) { group in
                     for item in batch { group.addTask {
                         do { return (item.id, try await SteerAPI(connection: connection).task(item.taskID!), nil) }
-                        catch { return (item.id, nil, error.localizedDescription) }
+                        catch { return (item.id, nil, Task.isCancelled || SteerAPI.isCancellation(error) ? nil : error.localizedDescription) }
                     } }
                     var results: [(String, TaskSnapshot?, String?)] = []
                     for await result in group { results.append(result) }
                     return results
                 }
-                guard revision == generation else { return }
+                guard revision == generation, !Task.isCancelled else { return }
                 for (id, snapshot, failure) in results {
                     if let failure { error = failure }
                     if let snapshot, let index = items.firstIndex(where: { $0.id == id && $0.taskID == snapshot.task.id }) {
@@ -86,14 +103,89 @@ import CryptoKit
                 }
             }
             if source == "apple-watch" { await refreshOverview() }
+            await refreshProjects()
             guard revision == generation else { return }
             try SecureStore.write(CachedFeed(account: account, items: items, syncedAt: syncedAt!), key: "feed")
-        } catch { if revision == generation { self.error = error.localizedDescription } }
+        } catch { if revision == generation, !Task.isCancelled, !SteerAPI.isCancellation(error) { self.error = error.localizedDescription } }
     }
     func loadMoreTasks() async {
         guard !refreshing, hasMoreTasks else { return }
         requestedFeedSize += 50
         await refresh()
+    }
+    func refreshProjects() async {
+        guard let connection, !loadingDirectory else { return }
+        let revision = generation
+        loadingDirectory = true
+        defer { if revision == generation { loadingDirectory = false } }
+        do {
+            let directory = try await SteerAPI(connection: connection).projectDirectory()
+            guard revision == generation else { return }
+            projects = directory.projects; legacyFeed = directory.legacyFeed; legacyDirectory = legacyFeed != nil; projectsError = nil
+            if let feed = legacyFeed {
+                for id in projectItems.keys {
+                    let entries = id == "__search__" ? feed.filter { matchesSearch($0, query: searchQuery) } : feed.filter { $0.projectKey == id }
+                    projectItems[id] = Array(entries.prefix(projectSizes[id] ?? 50))
+                    projectHasMore[id] = entries.count > (projectSizes[id] ?? 50)
+                }
+                items = feed
+            }
+            try SecureStore.write(CachedProjects(account: account, projects: directory.projects, legacy: legacyDirectory), key: "project-directory")
+        } catch { if revision == generation, !Task.isCancelled, !SteerAPI.isCancellation(error) { projectsError = error.localizedDescription } }
+    }
+    func refreshProject(_ id: String, more: Bool = false, search: String? = nil) async {
+        guard let connection, !loadingProjects.contains(id) else { return }
+        let revision = generation
+        let size = (projectSizes[id] ?? 50) + (more ? 50 : 0)
+        if legacyDirectory, legacyFeed == nil {
+            while loadingDirectory {
+                do { try await Task.sleep(for: .milliseconds(20)) } catch { return }
+            }
+            await refreshProjects()
+            guard revision == generation, legacyFeed != nil else { return }
+        }
+        if let feed = legacyFeed {
+            let entries = search.map { query in feed.filter { matchesSearch($0, query: query) } } ?? feed.filter { $0.projectKey == id }
+            projectItems[id] = Array(entries.prefix(size)); projectSizes[id] = size
+            projectHasMore[id] = entries.count > size; projectErrors[id] = nil
+            return
+        }
+        loadingProjects.insert(id)
+        defer { if revision == generation { loadingProjects.remove(id) } }
+        do {
+            var result: [Conversation] = []
+            var seen = Set<String>()
+            var hasMore = false
+            for offset in stride(from: 0, to: size, by: 50) {
+                let page = try await SteerAPI(connection: connection).conversations(limit: 50, offset: offset, projectID: search == nil ? id : nil, search: search)
+                guard revision == generation, search == nil || search == searchQuery else { return }
+                result += page.filter { seen.insert($0.id).inserted }
+                hasMore = page.count == 50
+                if !hasMore { break }
+            }
+            let previousIDs = Set((projectItems[id] ?? []).map(\.id))
+            items.removeAll { previousIDs.contains($0.id) && !seen.contains($0.id) }
+            projectItems[id] = result; projectErrors[id] = nil; projectSizes[id] = size; projectHasMore[id] = hasMore
+            for item in result {
+                if let index = items.firstIndex(where: { $0.id == item.id }) { items[index] = item }
+                else { items.append(item) }
+            }
+        } catch { if revision == generation, search == nil || search == searchQuery, !Task.isCancelled, !SteerAPI.isCancellation(error) { projectErrors[id] = error.localizedDescription } }
+    }
+    func searchConversations(_ query: String, more: Bool = false) async {
+        if query != searchQuery {
+            searchQuery = query; projectSizes["__search__"] = nil; projectItems["__search__"] = nil
+            projectErrors["__search__"] = nil; projectHasMore["__search__"] = nil
+        }
+        guard !query.isEmpty else { return }
+        while loadingProjects.contains("__search__") {
+            do { try await Task.sleep(for: .milliseconds(20)) } catch { return }
+        }
+        guard query == searchQuery, !Task.isCancelled else { return }
+        await refreshProject("__search__", more: more, search: query)
+    }
+    private func matchesSearch(_ item: Conversation, query: String) -> Bool {
+        "\(item.title) \(item.projectName) \(item.agentName)".localizedCaseInsensitiveContains(query)
     }
     func refreshOverview() async {
         guard let connection, !loadingOverview else { return }
@@ -105,7 +197,7 @@ import CryptoKit
             guard revision == generation else { return }
             overview = value; overviewError = nil
             try SecureStore.write(CachedOverview(account: account, overview: value), key: "watch-overview")
-        } catch { if revision == generation { overviewError = error.localizedDescription } }
+        } catch { if revision == generation, !Task.isCancelled, !SteerAPI.isCancellation(error) { overviewError = error.localizedDescription } }
     }
     func refreshTask(_ id: String) async {
         guard let connection, let item = items.first(where: { $0.id == id }), let taskID = item.taskID else { return }
@@ -117,7 +209,7 @@ import CryptoKit
             items[index].summary = snapshot.task.result ?? snapshot.task.error ?? snapshot.content ?? items[index].summary
             items[index].startedAt = snapshot.task.startedAt ?? items[index].startedAt
             error = nil; syncedAt = Date()
-        } catch { if revision == generation { self.error = error.localizedDescription } }
+        } catch { if revision == generation, !Task.isCancelled, !SteerAPI.isCancellation(error) { self.error = error.localizedDescription } }
     }
     func loadHistory(_ id: String) async {
         guard let connection, !loadingHistory.contains(id) else { return }
@@ -133,7 +225,7 @@ import CryptoKit
                let index = items.firstIndex(where: { $0.id == id }) {
                 items[index].lastUserMessage = text
             }
-        } catch { if revision == generation { historyErrors[id] = error.localizedDescription } }
+        } catch { if revision == generation, !Task.isCancelled, !SteerAPI.isCancellation(error) { historyErrors[id] = error.localizedDescription } }
     }
     func continuationTarget(_ id: String, taskID: String?) async throws -> Conversation {
         guard let connection, let taskID else { throw APIError(message: "只有已完成任务可以继续", statusCode: 409) }

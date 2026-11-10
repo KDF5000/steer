@@ -24,8 +24,10 @@ struct Conversation: Codable, Identifiable, Equatable {
     let updatedAt: String
     var lastUserMessage: String? = nil
     var startedAt: String? = nil
+    var projectID: String? = nil
+    var projectKey: String { projectID ?? "legacy:\(projectName)" }
     enum CodingKeys: String, CodingKey {
-        case id, title, agentID = "agentId", agentName, projectName, taskID = "taskId", status, summary, updatedAt, lastUserMessage, startedAt
+        case id, title, agentID = "agentId", agentName, projectName, taskID = "taskId", status, summary, updatedAt, lastUserMessage, startedAt, projectID = "projectId"
     }
     var running: Bool { ["running", "queued", "pending", "starting"].contains(status) }
     var canContinue: Bool { status == "succeeded" && taskID != nil }
@@ -49,6 +51,11 @@ struct Conversation: Codable, Identifiable, Equatable {
         switch status { case "succeeded": return "已完成"; case "failed": return "执行失败"; case "cancelled": return "已停止"; case "idle": return "待开始"; case "pending", "queued": return "等待执行"; case "starting": return "启动中"; default: return running ? "进行中" : status }
     }
 }
+struct WatchProject: Codable, Identifiable, Hashable {
+    let id, name: String
+    let conversations, activeTasks: Int
+}
+struct CachedProjects: Codable { let account: String; let projects: [WatchProject]; var legacy: Bool? = nil }
 struct TaskSnapshot: Decodable {
     struct Item: Decodable { let id, status: String; let result, error: String?; var startedAt: String? = nil }
     let task: Item

@@ -17,7 +17,17 @@ func (s *Server) watchConversations(w http.ResponseWriter, r *http.Request) {
 			*target = parsed
 		}
 	}
-	items, err := s.store.WatchConversationsPage(r.Context(), s.workspace(r), limit, offset)
+	items, err := s.store.WatchFilteredConversationsPage(r.Context(), s.workspace(r), r.URL.Query().Get("projectId"), r.URL.Query().Get("q"), limit, offset)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (s *Server) watchProjects(w http.ResponseWriter, r *http.Request) {
+	items, err := s.store.WatchProjects(r.Context(), s.workspace(r))
 	if err != nil {
 		writeError(w, err)
 		return
