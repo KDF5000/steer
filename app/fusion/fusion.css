@@ -7355,7 +7355,8 @@ button.ws-chat-response-meta:focus-visible {
 .ws-composer-agent-model[data-popup-open] > svg {
   transform: rotate(180deg);
 }
-.ws-agent-model-popup[data-slot='popover-content'] {
+.ws-agent-model-popup[data-slot='popover-content'],
+.ws-model-picker-popup[data-slot='popover-content'] {
   display: flex;
   width: max-content;
   max-width: calc(100vw - 32px);
@@ -7579,7 +7580,8 @@ button.ws-chat-response-meta:focus-visible {
   width: 16px;
   height: 16px;
 }
-.ws-agent-model-popup button:focus-visible {
+.ws-agent-model-popup button:focus-visible,
+.ws-model-picker-popup button:focus-visible {
   outline: 2px solid var(--ws-accent);
   outline-offset: -2px;
 }
