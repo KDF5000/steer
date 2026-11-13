@@ -209,6 +209,12 @@ xcodegen generate --spec apple/project.yml
 - 恢复网络后重试同一请求，网页不应出现重复任务。
 - 推送配置完成后，退出 Watch App，等待新任务结束，确认系统通知能打开对应任务并语音接续。
 
+## 应用图标（Build 27）
+
+iPhone 和 Apple Watch 已接入确认的“转向 S”图标，使用同一份图稿。母版为 `apple/Brand/steer-app-icon-master.png`，执行 `bash apple/scripts/export-app-icons.sh` 导出两端资产目录的 1024×1024 不透明 PNG。原图不预裁圆角，系统负责 iPhone 圆角与 Watch 圆形外观。
+
+两端配置 `ASSETCATALOG_COMPILER_APPICON_NAME=AppIcon`，Xcode 由 universal 图标资产生成各平台所需尺寸。构建与安装情况见 [Build 27](../docs/ui-validation/build27/VALIDATION.md)。
+
 ## 旧服务端项目目录兼容（Build 26）
 
 手机实际连接的 `steer.byted.org` 与开发机 Docker 是不同实例。旧服务端允许会话读取，但未知的项目目录路由会被 API Key 白名单拒绝为 403，导致设置验证成功、首页失败。

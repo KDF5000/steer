@@ -56,12 +56,14 @@
 		AA3DFDA90C03B5AAD567B1B7 /* PhoneSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A9D18D488BC757F56E46BCA /* PhoneSpeech.swift */; };
 		B0B037DC0DE222E7696F92F0 /* RemoteSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4AAE2E2374C6FCD36A679B2 /* RemoteSpeech.swift */; };
 		B96A6691C5CDDA2728B7355E /* VoiceUploadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972C9D6A1149F131CB81404A /* VoiceUploadTests.swift */; };
+		BA044A28D68F490E325528EB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 45F64E52C4A826A19776F75B /* Assets.xcassets */; };
 		BB441330A5A0D44940A82807 /* SpeechEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FD1BA9D5D8BD5C93862D922 /* SpeechEndpoint.swift */; };
 		BC1D14CCB39AA982A5692269 /* ggml-tiny-q5_1.bin in Resources */ = {isa = PBXBuildFile; fileRef = 3411E47A8B353F47EFF9E166 /* ggml-tiny-q5_1.bin */; };
 		C17C8EE87BC0E53E20A20282 /* WHISPER-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 005BB98F0DEB0BEE60AB52DC /* WHISPER-LICENSE.txt */; };
 		C65B5567010CAC477C409210 /* VoiceUpload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8BA01F7A72B7B01A83A87E5 /* VoiceUpload.swift */; };
 		C8FA0C73ADEE058D4CF77799 /* WHISPER-MODEL-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 89478C1373327E2721CF279B /* WHISPER-MODEL-LICENSE.txt */; };
 		D0D2A3E0B8552DEA72E8BC43 /* TaskModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09AE370860C10D623AADE131 /* TaskModel.swift */; };
+		D863B6D5C7964880EF71166B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DCF47742BB741CEBFC38C87C /* Assets.xcassets */; };
 		DD8D1B949CB9B063CE9AA425 /* Pairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D05BBB54F81695A14AA3BC /* Pairing.swift */; };
 		E42A4CECBCE14BB21D057050 /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471026D350F357265FEB9445 /* API.swift */; };
 		E74947C6B4FE379D4F69DE51 /* Pairing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1D05BBB54F81695A14AA3BC /* Pairing.swift */; };
@@ -107,6 +109,7 @@
 		202084AEB6D0AD43FE2BE58E /* WatchOverviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchOverviewTests.swift; sourceTree = "<group>"; };
 		2DEA473A63E3F583DFEAFC39 /* ggml-base-q5_1.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "ggml-base-q5_1.bin"; sourceTree = "<group>"; };
 		3411E47A8B353F47EFF9E166 /* ggml-tiny-q5_1.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "ggml-tiny-q5_1.bin"; sourceTree = "<group>"; };
+		45F64E52C4A826A19776F75B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		471026D350F357265FEB9445 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
 		5019866C58CA5ED4B128DA61 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		6B4253AF172A764DF9CEA858 /* APITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APITests.swift; sourceTree = "<group>"; };
@@ -129,6 +132,7 @@
 		C537E12E0A1486C4703791EB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CC3080C9863ACE7ED7B409D2 /* MessageFormattingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageFormattingTests.swift; sourceTree = "<group>"; };
 		CD76BB7E694B203BA94F73E5 /* SpeechVocabulary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechVocabulary.swift; sourceTree = "<group>"; };
+		DCF47742BB741CEBFC38C87C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DD8EB7C08A6368D0B8CD6F54 /* SteerLocalASR.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = SteerLocalASR.xcframework; path = .cache/asr/SteerLocalASR.xcframework; sourceTree = "<group>"; };
 		E1D05BBB54F81695A14AA3BC /* Pairing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pairing.swift; sourceTree = "<group>"; };
 		E66889B8C0F518184A7E9148 /* SteerPhoneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteerPhoneApp.swift; sourceTree = "<group>"; };
@@ -168,6 +172,7 @@
 		10FAA74A63168ED480A26A1A /* Watch */ = {
 			isa = PBXGroup;
 			children = (
+				45F64E52C4A826A19776F75B /* Assets.xcassets */,
 				B0A77A1C8DCA0A70CEE841C6 /* Dictation.swift */,
 				C537E12E0A1486C4703791EB /* Info.plist */,
 				C39D7E116270A36D11143874 /* Notifications.swift */,
@@ -259,6 +264,7 @@
 		F076D6BA78D8E5B617295266 /* Phone */ = {
 			isa = PBXGroup;
 			children = (
+				DCF47742BB741CEBFC38C87C /* Assets.xcassets */,
 				C15F2D93F3A745BBE681F5CA /* Info.plist */,
 				99E6A4F4DDF344578844FC6E /* PhoneHome.swift */,
 				E66889B8C0F518184A7E9148 /* SteerPhoneApp.swift */,
@@ -383,6 +389,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BA044A28D68F490E325528EB /* Assets.xcassets in Resources */,
 				36635E4C353EBC6B51D83D87 /* WHISPER-LICENSE.txt in Resources */,
 				915210BE8FA708BDE32AB5F6 /* WHISPER-MODEL-LICENSE.txt in Resources */,
 				27334C5D7E4FD850E21ADFFE /* ggml-base-q5_1.bin in Resources */,
@@ -394,6 +401,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D863B6D5C7964880EF71166B /* Assets.xcassets in Resources */,
 				C17C8EE87BC0E53E20A20282 /* WHISPER-LICENSE.txt in Resources */,
 				C8FA0C73ADEE058D4CF77799 /* WHISPER-MODEL-LICENSE.txt in Resources */,
 				28DB7ECE0BCB8682DE499FCF /* ggml-base-q5_1.bin in Resources */,
@@ -550,7 +558,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 27;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -657,7 +665,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 27;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;

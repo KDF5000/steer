@@ -10140,3 +10140,67 @@ button.ws-chat-response-meta:focus-visible {
     outline: 2px solid #ead38a;
   }
 }
+
+.ws-composer-effort {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--ws-text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ws-composer-effort:hover {
+  background: var(--ws-surface-hover);
+}
+.ws-composer-effort:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ws-composer-effort > span:nth-child(2) {
+  color: var(--ws-text);
+}
+.ws-composer-effort svg {
+  width: 12px;
+  height: 12px;
+}
+.ws-effort-picker-popup {
+  width: 200px;
+  padding: 5px;
+}
+.ws-model-load {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: var(--ws-text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ws-model-load > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #669882;
+}
+.ws-model-load.is-busy > span {
+  background: #c1914b;
+}
+
+.ws-model-picker-options > button > .ws-model-load {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  font-size: 11px;
+}
+.ws-chatbox-context:has(.ws-composer-effort) {
+  flex-wrap: wrap;
+}
+.ws-composer-effort {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

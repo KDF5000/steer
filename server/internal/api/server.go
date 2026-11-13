@@ -657,6 +657,7 @@ func (s *Server) artifactContent(w http.ResponseWriter, r *http.Request) {
 }
 
 type chatRequest struct {
+	ReasoningEffort     *string         `json:"reasoningEffort"`
 	Model               *string         `json:"model"`
 	TargetAgentID       string          `json:"targetAgentId"`
 	ReferencedMessageID string          `json:"referencedMessageId"`
@@ -697,6 +698,10 @@ func decodeChatRequest(w http.ResponseWriter, r *http.Request) (chatRequest, []s
 		return chatRequest{}, nil, fmt.Errorf("invalid image upload: %w", err)
 	}
 	in := chatRequest{Prompt: r.FormValue("prompt"), AgentID: r.FormValue("agentId"), TargetAgentID: r.FormValue("targetAgentId"), ReferencedMessageID: r.FormValue("referencedMessageId"), ReferenceMode: r.FormValue("referenceMode")}
+	if values, ok := r.MultipartForm.Value["reasoningEffort"]; ok && len(values) > 0 {
+		effort := strings.TrimSpace(values[0])
+		in.ReasoningEffort = &effort
+	}
 	if values, ok := r.MultipartForm.Value["model"]; ok && len(values) > 0 {
 		model := strings.TrimSpace(values[0])
 		in.Model = &model

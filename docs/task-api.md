@@ -504,3 +504,25 @@ DELETE /api/v1/api-keys/{apiKeyId}
 Web 固定按最后一条消息的发送时间倒序排列，置顶优先；仅点击查看、重命名和
 工具进度更新不会改变顺序。没有消息时使用创建时间。搜索结果点击后定位到匹配消息。
 不再提供排序切换或会话归档；此前归档的会话仍显示在普通列表中，并可搜索和继续使用。
+
+
+### Conversation Effort
+
+Task requests accept an optional `reasoningEffort` alongside `model` (JSON or
+multipart). A nonempty value selects that model's reasoning level for this turn
+and subsequent turns in the same conversation. An empty string restores Runtime
+and model defaults. Omission retains the saved choice for the same Agent/model;
+switching Agent or model resets it. Delegation does not inherit the parent's
+Effort. Agent configuration is not modified.
+
+The server validates choices against the Node's `model_catalog` and
+`supports_reasoning_effort` capability. Unsupported values return 400; old Nodes
+return 409 rather than silently ignoring the setting. Sessions expose
+`reasoningEffort`; message context snapshots it for each turn.
+
+Relay models may report `supported_reasoning_efforts`, `default_reasoning_effort`,
+and `load_percent`. Load is a provider snapshot, can exceed 100%, and is omitted
+when unavailable. Compatible Nodes refresh their catalogs in the background every
+minute without blocking heartbeats. The picker refreshes on open and every 30
+seconds while open, and hides load snapshots older than five minutes. These
+fields and per-task Effort require the matching Relay Server/Node update.

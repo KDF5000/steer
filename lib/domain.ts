@@ -48,6 +48,7 @@ export type ChatActivity = {
 };
 
 export type MessageContext = {
+  reasoningEffort?: string | null;
   model?: string;
   modelOverride?: string | null;
   userId?: string;
@@ -119,6 +120,14 @@ export type RelayEvent = {
   created_at?: string;
 };
 
+export type RuntimeModel = {
+  id: string;
+  display_name?: string;
+  supported_reasoning_efforts?: { effort: string; description?: string }[];
+  default_reasoning_effort?: string;
+  load_percent?: number;
+};
+
 export type RelayRuntime = {
   id: string;
   provider: string;
@@ -126,6 +135,10 @@ export type RelayRuntime = {
   state?: string;
   default_model?: string;
   models?: string[];
+  model_catalog?: RuntimeModel[];
+  checked_at?: string;
+  model_catalog_checked_at?: string;
+  supports_reasoning_effort?: boolean;
 };
 
 export type RelayNode = {

@@ -40,3 +40,7 @@ next-env.d.ts
 
 # Apple push signing keys
 *.p8
+
+# Local Go workspace for developing Steer and Relay together
+/go.work
+/go.work.sum

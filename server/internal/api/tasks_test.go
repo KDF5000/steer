@@ -57,7 +57,7 @@ func TestTaskAPIHTTPAndChatCompatibility(t *testing.T) {
 			mu.Unlock()
 			writeJSON(w, http.StatusAccepted, map[string]any{"id": uuid.NewString(), "status": "running"})
 		case r.URL.Path == "/v1/nodes":
-			writeJSON(w, http.StatusOK, []map[string]any{{"id": "test-node", "runtimes": []map[string]any{{"id": "test-node/test", "provider": "test"}}}})
+			writeJSON(w, http.StatusOK, []map[string]any{{"id": "test-node", "runtimes": []map[string]any{{"id": "test-node/test", "provider": "test", "supports_reasoning_effort": true, "model_catalog": []map[string]any{{"id": "alternate-model", "supported_reasoning_efforts": []map[string]any{{"effort": "xhigh"}}}}}}}})
 		case strings.HasSuffix(r.URL.Path, "/events") || strings.HasSuffix(r.URL.Path, "/artifacts"):
 			writeJSON(w, http.StatusOK, []any{})
 		case strings.HasPrefix(r.URL.Path, "/v1/runs/"):
@@ -147,6 +147,27 @@ func TestTaskAPIHTTPAndChatCompatibility(t *testing.T) {
 	unchangedAgent, err := st.Agent(context.Background(), wid, agent.ID)
 	if err != nil || unchangedAgent.Model != nil {
 		t.Fatalf("conversation override changed Agent default: %+v %v", unchangedAgent, err)
+	}
+
+	call(http.MethodPost, "/conversations/"+conversationID+"/tasks", `{"prompt":"Use effort","agentId":"`+agent.ID+`","model":"alternate-model","reasoningEffort":"xhigh"}`, "effort-"+uuid.NewString(), "", http.StatusAccepted)
+	call(http.MethodPost, "/conversations/"+conversationID+"/tasks", `{"prompt":"Keep effort","agentId":"`+agent.ID+`"}`, "effort-"+uuid.NewString(), "", http.StatusAccepted)
+	effortSession, err := st.Session(context.Background(), wid, conversationID)
+	if err != nil || value(effortSession.ReasoningEffort) != "xhigh" {
+		t.Fatalf("Effort was not persisted: %+v %v", effortSession, err)
+	}
+	mu.Lock()
+	effortTurns := append([]relay.Request(nil), relayRequests[len(relayRequests)-2:]...)
+	mu.Unlock()
+	for _, turn := range effortTurns {
+		if turn.Runtime.ReasoningEffort != "xhigh" || turn.SessionID != conversationID {
+			t.Fatalf("Effort propagation failed: %+v", turn)
+		}
+	}
+	call(http.MethodPost, "/conversations/"+conversationID+"/tasks", `{"prompt":"Unsupported effort","agentId":"`+agent.ID+`","reasoningEffort":"max"}`, "effort-"+uuid.NewString(), "", http.StatusBadRequest)
+	call(http.MethodPost, "/conversations/"+conversationID+"/tasks", `{"prompt":"Default effort","agentId":"`+agent.ID+`","reasoningEffort":""}`, "effort-"+uuid.NewString(), "", http.StatusAccepted)
+	effortSession, err = st.Session(context.Background(), wid, conversationID)
+	if err != nil || effortSession.ReasoningEffort != nil {
+		t.Fatalf("Effort reset failed: %+v %v", effortSession, err)
 	}
 
 	readToken := "steer_sk_test_" + uuid.NewString()

@@ -323,6 +323,12 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	if len(model) > 256 || strings.ContainsAny(model, "\r\n\x00") {
 		return submittedTask{}, false, taskRequestError{Status: http.StatusBadRequest, Message: "Invalid model name"}
 	}
+	reasoningEffort := conversationEffort(session, agent, in.Model, in.ReasoningEffort, delegated)
+	if reasoningEffort != nil {
+		if err := s.validateReasoningEffort(ctx, wid, physicalRuntimeID, model, *reasoningEffort); err != nil {
+			return submittedTask{}, false, err
+		}
+	}
 	pendingDelegations, err := s.store.PendingDelegations(ctx, wid, conversationID)
 	if err != nil {
 		return submittedTask{}, false, err
@@ -338,7 +344,7 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	if runPrompt == "" {
 		runPrompt = "Please inspect the attached image and respond to it."
 	}
-	messageContext := &store.MessageContext{Model: model, ModelOverride: modelOverride, UserID: userFromContext(ctx).ID, UserName: userFromContext(ctx).DisplayName, AgentID: agent.ID, AgentName: agent.Name, OwnerAgentID: owner.ID, Delegated: delegated}
+	messageContext := &store.MessageContext{ReasoningEffort: reasoningEffort, Model: model, ModelOverride: modelOverride, UserID: userFromContext(ctx).ID, UserName: userFromContext(ctx).DisplayName, AgentID: agent.ID, AgentName: agent.Name, OwnerAgentID: owner.ID, Delegated: delegated}
 	reference, referenceErr := resolveMessageReference(previous, strings.TrimSpace(in.ReferencedMessageID), in.ReferenceMode, delegated)
 	if referenceErr != nil {
 		return submittedTask{}, false, referenceErr
@@ -385,7 +391,7 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	request := relay.Request{
 		TenantID: wid, ProjectID: value(session.ProjectID), SessionID: conversationID, AgentID: agent.ID,
 		IdempotencyKey: relayIdempotencyKey,
-		Runtime:        relay.RuntimeRequirement{ID: physicalRuntimeID, Provider: agent.RuntimeProvider, Model: model},
+		Runtime:        relay.RuntimeRequirement{ID: physicalRuntimeID, Provider: agent.RuntimeProvider, Model: model, ReasoningEffort: value(reasoningEffort)},
 		Source:         relay.Source{Kind: relaySourceKind, ExternalID: conversationID}, Input: input,
 		Principal: relay.Principal{Type: "user", ID: firstNonEmpty(userFromContext(ctx).ID, "workspace:"+wid)},
 	}

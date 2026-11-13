@@ -44,10 +44,18 @@ stack:
 docker compose -f docker-compose.yml -f docker-compose.relay-dev.yml up -d --build
 ```
 
-The override builds Relay from `../relay` by default. Set `RELAY_SOURCE_DIR` if
-the Relay checkout lives elsewhere. The regular Compose file continues to use a
-versioned Relay release, so production packaging does not depend on a sibling
-source checkout.
+The override builds Relay Server from `../relay` and compiles Steer Server
+against that same checkout through a named Docker build context. Set
+`RELAY_SOURCE_DIR` if the Relay checkout lives elsewhere. This also applies to
+`docker-compose.local-relay.yml`. A host `go.work` file does not affect Docker
+builds.
+
+The regular Compose file continues to use a versioned Relay release, so
+production packaging does not depend on a sibling source checkout. Protocol
+changes must be released in Relay before updating Steer's `server/go.mod`,
+`server/go.sum`, and the default `RELAY_VERSION`. Update any existing `.env`
+version override as well. Node runtime changes also require upgrading the
+Relay Node binaries.
 
 ## Local deployment
 

@@ -1,8 +1,14 @@
 services:
+  steer-server:
+    build:
+      dockerfile: server/Dockerfile.relay-dev
+      additional_contexts:
+        relay-source: ${RELAY_SOURCE_DIR:-../relay}
   relay-server:
     build:
       context: ${RELAY_SOURCE_DIR:-../relay}
       dockerfile: Dockerfile
       args:
         VERSION: dev
+        GOPROXY: https://goproxy.cn|https://proxy.golang.org|direct
     image: steer-relay-server:dev

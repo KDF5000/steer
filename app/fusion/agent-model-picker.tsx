@@ -16,33 +16,42 @@ import {
 } from '@/components/ui/popover';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useI18n } from '@/lib/i18n';
-import type { AgentProfile } from '@/lib/domain';
+import type { AgentProfile, RuntimeModel } from '@/lib/domain';
 
 export type AgentModelRuntime = {
   provider: string;
   runtimeId: string;
   models: string[];
   defaultModel: string;
+  modelCatalog?: RuntimeModel[];
+  checkedAt?: string;
+  supportsReasoningEffort?: boolean;
 };
 
 export function AgentModelPicker({
   agent,
   agents,
   modelOverride,
+  reasoningEffort = null,
+  onReasoningEffort,
   runtimes,
   runtimeRestricted = false,
   disabled = false,
   agentLocked = false,
   onSelect,
+  onRefresh,
 }: {
   agent: AgentProfile;
   agents: AgentProfile[];
   modelOverride: string | null;
+  reasoningEffort?: string | null;
+  onReasoningEffort?: (effort: string | null) => void;
   runtimes: AgentModelRuntime[];
   runtimeRestricted?: boolean;
   disabled?: boolean;
   agentLocked?: boolean;
   onSelect: (agentId: string, model: string | null) => void;
+  onRefresh?: () => void;
 }) {
   const { t } = useI18n();
   const mobile = useIsMobile();
@@ -75,7 +84,17 @@ export function AgentModelPicker({
         runtime.provider === item.runtimeProvider &&
         (!item.runtimeId || item.runtimeId === runtime.runtimeId),
     );
+  useEffect(() => {
+    if (!open || !onRefresh) return;
+    onRefresh();
+    const timer = setInterval(onRefresh, 30_000);
+    return () => clearInterval(timer);
+  }, [open, onRefresh]);
   const currentModel = modelOverride || effectiveDefault(agent);
+  const currentRuntime = runtimeFor(agent);
+  const currentModelInfo = currentRuntime?.modelCatalog?.find(
+    (item) => item.id === currentModel,
+  );
   const preview = agents.find((item) => item.id === previewId);
   const unavailable = (item: AgentProfile) =>
     (agentLocked && item.id !== agent.id) ||
@@ -178,187 +197,205 @@ export function AgentModelPicker({
     buttons[next]?.focus();
   };
   return (
-    <Popover
-      open={open && !disabled}
-      onOpenChange={(next) => {
-        setOpen(next);
-        setActiveAgentId(next ? agent.id : null);
-        if (!next) {
-          clearHover();
-          setPreviewId(null);
-          setQuery('');
-        }
-      }}
-    >
-      <PopoverTrigger
-        render={
-          <button
-            type="button"
-            className="ws-composer-agent ws-composer-agent-model"
-            disabled={disabled}
-            aria-label={t('Select Agent and model')}
-            title={`${agent.name} · ${currentModel}`}
-          />
-        }
-      >
-        <span className="ws-agent-avatar" aria-hidden="true">
-          {agent.name[0]}
-        </span>
-        <span className="ws-agent-model-label">
-          <span>{agent.name}</span>
-          <span className="ws-agent-model-dot">·</span>
-          <span className="ws-agent-model-value">{currentModel}</span>
-        </span>
-        <ChevronDown aria-hidden="true" />
-      </PopoverTrigger>
-      <PopoverContent
-        side="top"
-        align="start"
-        sideOffset={8}
-        className={`ws-agent-model-popup${preview ? ' has-models' : ''}${mobile ? ' is-mobile' : ''}`}
-        onKeyDown={onKeyboard}
-        initialFocus={() => {
-          const selectedAgent =
-            agentPanel.current?.querySelector<HTMLButtonElement>(
-              'button[data-agent-selected="true"]:not(:disabled)',
-            );
-          selectedAgent?.scrollIntoView({
-            block: 'nearest',
-            inline: 'nearest',
-          });
-          return selectedAgent || false;
+    <>
+      <Popover
+        open={open && !disabled}
+        onOpenChange={(next) => {
+          setOpen(next);
+          setActiveAgentId(next ? agent.id : null);
+          if (!next) {
+            clearHover();
+            setPreviewId(null);
+            setQuery('');
+          }
         }}
       >
-        <Popover
-          open={open && !disabled && !mobile && Boolean(preview)}
-          onOpenChange={(next) => {
-            if (!next && !mobile) {
-              clearHover();
-              setPreviewId(null);
-              setQuery('');
-            }
+        <PopoverTrigger
+          render={
+            <button
+              type="button"
+              className="ws-composer-agent ws-composer-agent-model"
+              disabled={disabled}
+              aria-label={t('Select Agent and model')}
+              title={`${agent.name} · ${currentModel}`}
+            />
+          }
+        >
+          <span className="ws-agent-avatar" aria-hidden="true">
+            {agent.name[0]}
+          </span>
+          <span className="ws-agent-model-label">
+            <span>{agent.name}</span>
+            <span className="ws-agent-model-dot">·</span>
+            <span className="ws-agent-model-value">{currentModel}</span>
+          </span>
+          <ChevronDown aria-hidden="true" />
+        </PopoverTrigger>
+        <PopoverContent
+          side="top"
+          align="start"
+          sideOffset={8}
+          className={`ws-agent-model-popup${preview ? ' has-models' : ''}${mobile ? ' is-mobile' : ''}`}
+          onKeyDown={onKeyboard}
+          initialFocus={() => {
+            const selectedAgent =
+              agentPanel.current?.querySelector<HTMLButtonElement>(
+                'button[data-agent-selected="true"]:not(:disabled)',
+              );
+            selectedAgent?.scrollIntoView({
+              block: 'nearest',
+              inline: 'nearest',
+            });
+            return selectedAgent || false;
           }}
         >
-          <div
-            className="ws-agent-picker-pane"
-            ref={agentPanel}
-            hidden={mobile && Boolean(preview)}
+          <Popover
+            open={open && !disabled && !mobile && Boolean(preview)}
+            onOpenChange={(next) => {
+              if (!next && !mobile) {
+                clearHover();
+                setPreviewId(null);
+                setQuery('');
+              }
+            }}
           >
             <div
-              className="ws-agent-picker-options"
-              onScroll={() => {
-                if (!mobile) {
-                  clearHover();
-                  setPreviewId(null);
-                }
-              }}
+              className="ws-agent-picker-pane"
+              ref={agentPanel}
+              hidden={mobile && Boolean(preview)}
             >
-              {agents.map((item) => {
-                const blocked = unavailable(item);
-                return (
-                  <div
-                    className={`ws-agent-picker-row${activeAgentId === item.id ? ' is-active' : ''}`}
-                    key={item.id}
-                    ref={(element) => {
-                      if (element) agentRows.current.set(item.id, element);
-                      else agentRows.current.delete(item.id);
-                    }}
-                    onPointerEnter={(event) => {
-                      if (!mobile && event.pointerType === 'mouse' && !blocked)
-                        hoverAgent(item.id);
-                    }}
-                    onPointerMove={(event) => {
-                      if (
-                        !mobile &&
-                        event.pointerType === 'mouse' &&
-                        !blocked &&
-                        previewId &&
-                        previewId !== item.id
-                      )
-                        hoverAgent(item.id);
-                    }}
-                    onPointerLeave={() => {
-                      clearHover();
-                      setActiveAgentId((current) =>
-                        current === item.id ? null : current,
-                      );
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="ws-agent-picker-choice"
-                      disabled={blocked}
-                      data-agent-selected={item.id === agent.id || undefined}
-                      onFocus={() => {
-                        setActiveAgentId(item.id);
-                        if (previewId) showModels(item.id);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'ArrowRight' && !blocked) {
-                          event.preventDefault();
-                          showModels(item.id, true);
-                        }
-                      }}
-                      onClick={() =>
-                        selected(
-                          item.id,
-                          item.id === agent.id ? modelOverride : null,
-                        )
-                      }
-                    >
-                      <span className="ws-agent-avatar" aria-hidden="true">
-                        {item.name[0]}
-                      </span>
-                      <span>
-                        <strong>
-                          <span className="ws-agent-picker-name">
-                            {item.name}
-                          </span>
-                          {item.id === agent.id && <Check aria-hidden="true" />}
-                        </strong>
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="ws-agent-model-sub-trigger"
-                      data-agent-models={item.id}
-                      disabled={blocked}
-                      aria-label={`${t('Select model')} · ${item.name}`}
-                      aria-expanded={previewId === item.id}
-                      onFocus={() => {
-                        setActiveAgentId(item.id);
-                        if (previewId) showModels(item.id);
-                      }}
-                      onClick={() => showModels(item.id, !mobile)}
-                    >
-                      <ChevronRight aria-hidden="true" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          {preview &&
-            (mobile ? (
-              renderModelPane()
-            ) : (
-              <PopoverContent
-                side="right"
-                align="start"
-                sideOffset={8}
-                anchor={modelAnchor}
-                className="ws-model-picker-popup"
-                initialFocus={false}
-                finalFocus={false}
-                onKeyDown={onKeyboard}
-                onPointerEnter={clearHover}
+              <div
+                className="ws-agent-picker-options"
+                onScroll={() => {
+                  if (!mobile) {
+                    clearHover();
+                    setPreviewId(null);
+                  }
+                }}
               >
-                {renderModelPane()}
-              </PopoverContent>
-            ))}
-        </Popover>
-      </PopoverContent>
-    </Popover>
+                {agents.map((item) => {
+                  const blocked = unavailable(item);
+                  return (
+                    <div
+                      className={`ws-agent-picker-row${activeAgentId === item.id ? ' is-active' : ''}`}
+                      key={item.id}
+                      ref={(element) => {
+                        if (element) agentRows.current.set(item.id, element);
+                        else agentRows.current.delete(item.id);
+                      }}
+                      onPointerEnter={(event) => {
+                        if (
+                          !mobile &&
+                          event.pointerType === 'mouse' &&
+                          !blocked
+                        )
+                          hoverAgent(item.id);
+                      }}
+                      onPointerMove={(event) => {
+                        if (
+                          !mobile &&
+                          event.pointerType === 'mouse' &&
+                          !blocked &&
+                          previewId &&
+                          previewId !== item.id
+                        )
+                          hoverAgent(item.id);
+                      }}
+                      onPointerLeave={() => {
+                        clearHover();
+                        setActiveAgentId((current) =>
+                          current === item.id ? null : current,
+                        );
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="ws-agent-picker-choice"
+                        disabled={blocked}
+                        data-agent-selected={item.id === agent.id || undefined}
+                        onFocus={() => {
+                          setActiveAgentId(item.id);
+                          if (previewId) showModels(item.id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'ArrowRight' && !blocked) {
+                            event.preventDefault();
+                            showModels(item.id, true);
+                          }
+                        }}
+                        onClick={() =>
+                          selected(
+                            item.id,
+                            item.id === agent.id ? modelOverride : null,
+                          )
+                        }
+                      >
+                        <span className="ws-agent-avatar" aria-hidden="true">
+                          {item.name[0]}
+                        </span>
+                        <span>
+                          <strong>
+                            <span className="ws-agent-picker-name">
+                              {item.name}
+                            </span>
+                            {item.id === agent.id && (
+                              <Check aria-hidden="true" />
+                            )}
+                          </strong>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="ws-agent-model-sub-trigger"
+                        data-agent-models={item.id}
+                        disabled={blocked}
+                        aria-label={`${t('Select model')} · ${item.name}`}
+                        aria-expanded={previewId === item.id}
+                        onFocus={() => {
+                          setActiveAgentId(item.id);
+                          if (previewId) showModels(item.id);
+                        }}
+                        onClick={() => showModels(item.id, !mobile)}
+                      >
+                        <ChevronRight aria-hidden="true" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {preview &&
+              (mobile ? (
+                renderModelPane()
+              ) : (
+                <PopoverContent
+                  side="right"
+                  align="start"
+                  sideOffset={8}
+                  anchor={modelAnchor}
+                  className="ws-model-picker-popup"
+                  initialFocus={false}
+                  finalFocus={false}
+                  onKeyDown={onKeyboard}
+                  onPointerEnter={clearHover}
+                >
+                  {renderModelPane()}
+                </PopoverContent>
+              ))}
+          </Popover>
+        </PopoverContent>
+      </Popover>
+      {onReasoningEffort &&
+        currentRuntime?.supportsReasoningEffort &&
+        Boolean(currentModelInfo?.supported_reasoning_efforts?.length) && (
+          <ReasoningEffortPicker
+            model={currentModelInfo!}
+            value={reasoningEffort}
+            onChange={onReasoningEffort}
+            disabled={disabled}
+          />
+        )}
+    </>
   );
 
   function renderModelPane() {
@@ -413,6 +450,12 @@ export function AgentModelPicker({
                   </small>
                 )}
               </span>
+              <ModelLoad
+                model={previewRuntime?.modelCatalog?.find(
+                  (item) => item.id === model,
+                )}
+                checkedAt={previewRuntime?.checkedAt}
+              />
               {preview.id === agent.id && modelOverride === model && (
                 <Check aria-hidden="true" />
               )}
@@ -431,4 +474,133 @@ export function AgentModelPicker({
       </div>
     );
   }
+}
+
+function ModelLoad({
+  model,
+  checkedAt,
+}: {
+  model?: RuntimeModel;
+  checkedAt?: string;
+}) {
+  const { t } = useI18n();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  const percent = model?.load_percent;
+  // Load is a snapshot from Node discovery. Do not present old snapshots as live data.
+  if (
+    percent === undefined ||
+    !Number.isFinite(percent) ||
+    percent < 0 ||
+    !checkedAt ||
+    now - Date.parse(checkedAt) > 5 * 60_000 ||
+    !Number.isFinite(Date.parse(checkedAt))
+  )
+    return null;
+  return (
+    <span
+      className={`ws-model-load${percent >= 100 ? ' is-busy' : ''}`}
+      title={`${t('Model load')} · ${new Date(checkedAt).toLocaleTimeString()}`}
+    >
+      <span aria-hidden="true" />
+      {percent}%
+    </span>
+  );
+}
+
+function ReasoningEffortPicker({
+  model,
+  value,
+  onChange,
+  disabled,
+}: {
+  model: RuntimeModel;
+  value: string | null;
+  onChange: (value: string | null) => void;
+  disabled: boolean;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const panel = useRef<HTMLDivElement>(null);
+  const choices = model.supported_reasoning_efforts || [];
+  const effective = choices.some((item) => item.effort === value)
+    ? value
+    : null;
+  return (
+    <Popover open={open && !disabled} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className="ws-composer-effort"
+            disabled={disabled}
+            aria-label={t('Select Effort')}
+          />
+        }
+      >
+        <span>Effort</span>
+        <span>
+          {effective || model.default_reasoning_effort || t('Default')}
+        </span>
+        <ChevronDown aria-hidden="true" />
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className="ws-effort-picker-popup"
+        initialFocus={() =>
+          panel.current?.querySelector<HTMLButtonElement>(
+            'button[aria-pressed="true"]',
+          ) || false
+        }
+        onKeyDown={(event) => {
+          if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key))
+            return;
+          const buttons = [
+            ...(panel.current?.querySelectorAll<HTMLButtonElement>('button') ||
+              []),
+          ];
+          if (!buttons.length) return;
+          event.preventDefault();
+          const index = buttons.indexOf(event.target as HTMLButtonElement);
+          const next =
+            event.key === 'Home'
+              ? 0
+              : event.key === 'End'
+                ? buttons.length - 1
+                : event.key === 'ArrowDown'
+                  ? (index + 1) % buttons.length
+                  : (index - 1 + buttons.length) % buttons.length;
+          buttons[next]?.focus();
+        }}
+      >
+        <div className="ws-model-picker-options" ref={panel}>
+          {[
+            { effort: '', description: t('Follow model default') },
+            ...choices,
+          ].map((item) => (
+            <button
+              type="button"
+              key={item.effort}
+              aria-pressed={(effective || '') === item.effort}
+              title={item.description}
+              onClick={() => {
+                onChange(item.effort || null);
+                setOpen(false);
+              }}
+            >
+              <span>{item.effort || t('Follow model default')}</span>
+              {(effective || '') === item.effort && (
+                <Check aria-hidden="true" />
+              )}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }

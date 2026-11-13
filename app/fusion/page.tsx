@@ -239,6 +239,9 @@ type RuntimeChoice = {
   runtimeId: string;
   models: string[];
   defaultModel: string;
+  modelCatalog?: import('@/lib/domain').RuntimeModel[];
+  checkedAt?: string;
+  supportsReasoningEffort?: boolean;
   unavailable?: boolean;
 };
 
@@ -914,6 +917,9 @@ export default function Fusion() {
   const [relayError, setRelayError] = useState('');
   const [relayPublicURL, setRelayPublicURL] = useState('http://localhost:8787');
   const [chatAgent, setChatAgent] = useState('');
+  const [chatReasoningEffort, setChatReasoningEffort] = useState<string | null>(
+    null,
+  );
   const [chatModelOverride, setChatModelOverride] = useState<string | null>(
     null,
   );
@@ -1167,6 +1173,27 @@ export default function Fusion() {
     activeChatSession?.sharedAgentGrantId ||
     sharedAgentProject?.sharedAgentGrantId,
   );
+  const composerRuntimeRefresh = useRef(false);
+  const refreshComposerRuntimes = useCallback(() => {
+    if (composerRuntimeRefresh.current) return;
+    composerRuntimeRefresh.current = true;
+    const requestedWorkspace = steer.workspace();
+    const requestedScope = steer.collaboration();
+    void steer
+      .bootstrap()
+      .then((data) => {
+        if (
+          mounted.current &&
+          steer.workspace() === requestedWorkspace &&
+          steer.collaboration() === requestedScope
+        )
+          setRuntimeNodes(data.relay.nodes || []);
+      })
+      .catch(() => {})
+      .finally(() => {
+        composerRuntimeRefresh.current = false;
+      });
+  }, []);
   const runtimeChoices = runtimeNodes.flatMap((node) =>
     (node.runtimes || []).map((runtime) => ({
       value: `${runtime.provider}::${runtime.id}`,
@@ -1175,6 +1202,9 @@ export default function Fusion() {
       runtimeId: runtime.id,
       models: runtime.models || [],
       defaultModel: runtime.default_model || '',
+      modelCatalog: runtime.model_catalog,
+      checkedAt: runtime.model_catalog_checked_at || runtime.checked_at,
+      supportsReasoningEffort: runtime.supports_reasoning_effort,
     })),
   );
   const selectedProject = collaborationShare
@@ -1332,6 +1362,7 @@ export default function Fusion() {
     setRelayPublicURL(data.relay.publicUrl || 'http://localhost:8787');
     setChatAgent(agents[0]?.id || '');
     setChatModelOverride(null);
+    setChatReasoningEffort(null);
     setChatProject(data.projects?.[0]?.id || 'none');
     const firstRuntime = data.relay.nodes?.flatMap(
       (node) => node.runtimes || [],
@@ -1699,6 +1730,7 @@ export default function Fusion() {
       );
       setChatSession(sessionID);
       setChatModelOverride(sessionSummary?.modelOverride || null);
+      setChatReasoningEffort(sessionSummary?.reasoningEffort || null);
       setMessages([]);
       setChatSessionLoading(true);
       setView('chat');
@@ -1735,6 +1767,7 @@ export default function Fusion() {
         }
         setChatAgent(data.session.agentId);
         setChatModelOverride(data.session.modelOverride || null);
+        setChatReasoningEffort(data.session.reasoningEffort || null);
         setChatProject(data.session.projectId || 'none');
         const group = data.session.projectId || noProjectSessionGroup;
         setExpandedSessionGroups((current) => {
@@ -2125,6 +2158,7 @@ export default function Fusion() {
     setMessages([]);
     setChatSession('');
     setChatModelOverride(null);
+    setChatReasoningEffort(null);
     setChatInput('');
     chatImages.forEach((image) => URL.revokeObjectURL(image.url));
     setChatImages([]);
@@ -2211,7 +2245,12 @@ export default function Fusion() {
         prompt: text,
         ...options,
         agentId: currentAgent.id,
-        ...(!options?.targetAgentId ? { model: chatModelOverride || '' } : {}),
+        ...(!options?.targetAgentId
+          ? {
+              model: chatModelOverride || '',
+              reasoningEffort: chatReasoningEffort || '',
+            }
+          : {}),
         ...(chatProject !== 'none' ? { projectId: chatProject } : {}),
         ...(conversationId ? { conversationId } : {}),
         images: images.map((image) => image.file),
@@ -2244,6 +2283,7 @@ export default function Fusion() {
             title: (text || images[0]?.file.name || 'Image').slice(0, 72),
             agentId: currentAgent.id,
             modelOverride: chatModelOverride,
+            reasoningEffort: chatReasoningEffort,
             projectId: chatProject === 'none' ? null : chatProject,
             executionRuntimeId:
               currentAgent.runtimeId ||
@@ -2272,6 +2312,7 @@ export default function Fusion() {
                   lastMessageAt: now,
                   agentId: currentAgent.id,
                   modelOverride: chatModelOverride,
+                  reasoningEffort: chatReasoningEffort,
                   sharedAgentGrantId:
                     sharedAgentGrant?.id || existing.sharedAgentGrantId,
                   sharedAgentAccess: sharedAgentGrant
@@ -2988,6 +3029,7 @@ export default function Fusion() {
     setView('chat');
     setChatSession('');
     setChatModelOverride(null);
+    setChatReasoningEffort(null);
     setMessages([]);
     activeRun.current = '';
     activeTask.current = '';
@@ -3579,6 +3621,9 @@ export default function Fusion() {
             }
             agent={currentAgent}
             modelOverride={chatModelOverride}
+            reasoningEffort={chatReasoningEffort}
+            onReasoningEffort={setChatReasoningEffort}
+            onRefreshRuntimes={refreshComposerRuntimes}
             modelRuntimes={runtimeChoices}
             showHumanAuthors={Boolean(
               collaborationShare ||
@@ -3682,6 +3727,8 @@ export default function Fusion() {
             images={chatImages}
             working={chatWorking}
             onAgentModel={(id, model) => {
+              if (id !== chatAgent || model !== chatModelOverride)
+                setChatReasoningEffort(null);
               setChatAgent(id);
               setChatModelOverride(model);
             }}
@@ -4367,6 +4414,9 @@ function ChatView({
   agents,
   agent,
   modelOverride,
+  reasoningEffort,
+  onReasoningEffort,
+  onRefreshRuntimes,
   modelRuntimes,
   projectRuntimeChoices,
   projects,
@@ -4412,6 +4462,9 @@ function ChatView({
   agents: AgentItem[];
   agent?: AgentItem;
   modelOverride: string | null;
+  reasoningEffort: string | null;
+  onReasoningEffort: (effort: string | null) => void;
+  onRefreshRuntimes: () => void;
   modelRuntimes: RuntimeChoice[];
   projectRuntimeChoices?: RuntimeChoice[];
   projects: ProjectRecord[];
@@ -5639,6 +5692,9 @@ function ChatView({
                         agent={agent}
                         agents={agents}
                         modelOverride={modelOverride}
+                        reasoningEffort={reasoningEffort}
+                        onReasoningEffort={onReasoningEffort}
+                        onRefresh={onRefreshRuntimes}
                         runtimes={projectRuntimeChoices || modelRuntimes}
                         runtimeRestricted={Boolean(projectRuntimeChoices)}
                         disabled={working || readOnly || sessionLoading}

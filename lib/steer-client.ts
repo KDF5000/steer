@@ -134,6 +134,7 @@ export type ArtifactRecord = {
 
 export type ChatSessionRecord = {
   modelOverride?: string | null;
+  reasoningEffort?: string | null;
   lastMessageAt?: string;
   pinned?: boolean;
   archived?: boolean;
@@ -969,6 +970,7 @@ export const steer = {
       projectId?: string;
       conversationId?: string;
       model?: string;
+      reasoningEffort?: string;
       images?: File[];
       idempotencyKey?: string;
     },
@@ -983,6 +985,8 @@ export const steer = {
     if (input.projectId) body.set('projectId', input.projectId);
     if (input.conversationId) body.set('conversationId', input.conversationId);
     if (input.model !== undefined) body.set('model', input.model);
+    if (input.reasoningEffort !== undefined)
+      body.set('reasoningEffort', input.reasoningEffort);
     input.images?.forEach((image) => body.append('images', image, image.name));
     const idempotencyKey =
       input.idempotencyKey ??
