@@ -2,8 +2,9 @@
 
 Steer can run a Feishu app bot inside `steer-server`. A Workspace owner enters
 the Feishu application credentials in **Settings → Integrations**, selects an
-Agent, and enables the connection. Project binding is managed from Feishu for
-each direct chat or group thread. No separate bridge deployment or Workspace
+Agent, optionally selects a default Project, and enables the connection.
+Project bindings set in Feishu take priority over that default.
+No separate bridge deployment or Workspace
 API key is required.
 
 Each Feishu App ID can be connected to only one Workspace in a Steer database.
@@ -38,7 +39,7 @@ webhook bots cannot receive and reply to conversations through this integration.
 4. Subscribe to `im.message.receive_v1`.
 5. Publish the application and make it available to the intended users.
 6. In Steer, open **Settings → Integrations → Connect Feishu**, enter the App
-   ID and App Secret, and select the Agent.
+   ID and App Secret, and select the Agent and an optional default Project.
 
 The status changes from `connecting` to `connected` after Feishu accepts the
 long connection. Configuration or permission failures appear on the same
@@ -55,11 +56,18 @@ console.
   context for the Agent.
 - Group messages must explicitly mention the bot.
 - `/projects` lists the available Projects in the connected Workspace.
+- Integration settings can specify an optional default Project. New private
+  and group conversations use the chat's Project binding first, then the
+  integration default. With neither configured, tasks run without a Project.
+  Existing conversations retain their original Project and execution context,
+  even when the integration default changes. Use `/project <project name>`
+  to switch the current thread to a different Project.
 - `/project` shows the effective Project for the current Feishu chat.
 - `/project <project name>` changes the chat-level default Project, resets the
   current thread, and makes new group threads inherit that Project.
 - `/project none` removes the chat-level default Project and resets the current
-  thread. Existing conversations in other threads remain pinned to the Project
+  thread. New conversations fall back to the integration default Project.
+  Existing conversations in other threads remain pinned to the Project
   they started with.
 - `/new` starts a new Steer conversation while preserving the current Project
   binding.
@@ -78,8 +86,12 @@ Runtime.
 
 Incoming Feishu event IDs are persisted and are also used as Steer task
 idempotency keys. Pending events are recovered when the connection restarts.
-The integration adds a typing reaction while the Agent is working. Commentary,
-tool activity, and reasoning are hidden by default. When the Agent starts its
+The integration adds a typing reaction while the Agent is working. By default,
+the complete reply is sent once the task finishes. **Stream replies** in the
+integration settings enables incremental final replies. Existing integrations
+also default to non-streaming after the database migration.
+Commentary, tool activity, and reasoning are hidden by default.
+When streaming is enabled and the Agent starts its
 `final_answer` phase, Steer removes the reaction and streams only that final
 answer into a normal Feishu rich-text reply. If the runtime does not expose a
 streamable final phase, Steer sends the authoritative final Task content once

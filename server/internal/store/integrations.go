@@ -20,6 +20,7 @@ type WorkspaceIntegration struct {
 	AgentID              string     `json:"agentId"`
 	ProjectID            *string    `json:"projectId"`
 	Enabled              bool       `json:"enabled"`
+	StreamReplies        bool       `json:"streamReplies"`
 	Status               string     `json:"status"`
 	LastError            *string    `json:"lastError"`
 	LastConnectedAt      *time.Time `json:"lastConnectedAt"`
@@ -51,11 +52,11 @@ type IntegrationEvent struct {
 	LastError         *string
 }
 
-const integrationColumns = `id,workspace_id,provider,name,external_app_id,encrypted_credentials,agent_id,project_id,enabled,status,last_error,last_connected_at,created_by_user_id,created_at,updated_at`
+const integrationColumns = `id,workspace_id,provider,name,external_app_id,encrypted_credentials,agent_id,project_id,enabled,status,last_error,last_connected_at,created_by_user_id,created_at,updated_at,stream_replies`
 
 func scanIntegration(row pgx.Row) (WorkspaceIntegration, error) {
 	var item WorkspaceIntegration
-	err := row.Scan(&item.ID, &item.WorkspaceID, &item.Provider, &item.Name, &item.ExternalAppID, &item.EncryptedCredentials, &item.AgentID, &item.ProjectID, &item.Enabled, &item.Status, &item.LastError, &item.LastConnectedAt, &item.CreatedByUserID, &item.CreatedAt, &item.UpdatedAt)
+	err := row.Scan(&item.ID, &item.WorkspaceID, &item.Provider, &item.Name, &item.ExternalAppID, &item.EncryptedCredentials, &item.AgentID, &item.ProjectID, &item.Enabled, &item.Status, &item.LastError, &item.LastConnectedAt, &item.CreatedByUserID, &item.CreatedAt, &item.UpdatedAt, &item.StreamReplies)
 	item.SecretConfigured = len(item.EncryptedCredentials) > 0
 	return item, err
 }
@@ -69,7 +70,7 @@ func (s *Store) WorkspaceIntegrations(ctx context.Context, workspaceID string) (
 	items := []WorkspaceIntegration{}
 	for rows.Next() {
 		var item WorkspaceIntegration
-		if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.Provider, &item.Name, &item.ExternalAppID, &item.EncryptedCredentials, &item.AgentID, &item.ProjectID, &item.Enabled, &item.Status, &item.LastError, &item.LastConnectedAt, &item.CreatedByUserID, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.Provider, &item.Name, &item.ExternalAppID, &item.EncryptedCredentials, &item.AgentID, &item.ProjectID, &item.Enabled, &item.Status, &item.LastError, &item.LastConnectedAt, &item.CreatedByUserID, &item.CreatedAt, &item.UpdatedAt, &item.StreamReplies); err != nil {
 			return nil, err
 		}
 		item.SecretConfigured = len(item.EncryptedCredentials) > 0
@@ -87,7 +88,7 @@ func (s *Store) EnabledWorkspaceIntegrations(ctx context.Context) ([]WorkspaceIn
 	items := []WorkspaceIntegration{}
 	for rows.Next() {
 		var item WorkspaceIntegration
-		if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.Provider, &item.Name, &item.ExternalAppID, &item.EncryptedCredentials, &item.AgentID, &item.ProjectID, &item.Enabled, &item.Status, &item.LastError, &item.LastConnectedAt, &item.CreatedByUserID, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.Provider, &item.Name, &item.ExternalAppID, &item.EncryptedCredentials, &item.AgentID, &item.ProjectID, &item.Enabled, &item.Status, &item.LastError, &item.LastConnectedAt, &item.CreatedByUserID, &item.CreatedAt, &item.UpdatedAt, &item.StreamReplies); err != nil {
 			return nil, err
 		}
 		item.SecretConfigured = len(item.EncryptedCredentials) > 0
@@ -106,13 +107,13 @@ func (s *Store) WorkspaceIntegration(ctx context.Context, workspaceID, id string
 
 func (s *Store) CreateWorkspaceIntegration(ctx context.Context, item WorkspaceIntegration) (WorkspaceIntegration, error) {
 	item.ID = uuid.NewString()
-	return scanIntegration(s.pool.QueryRow(ctx, `INSERT INTO workspace_integrations(id,workspace_id,provider,name,external_app_id,encrypted_credentials,agent_id,project_id,enabled,status,created_by_user_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING `+integrationColumns,
-		item.ID, item.WorkspaceID, item.Provider, item.Name, item.ExternalAppID, item.EncryptedCredentials, item.AgentID, item.ProjectID, item.Enabled, item.Status, item.CreatedByUserID))
+	return scanIntegration(s.pool.QueryRow(ctx, `INSERT INTO workspace_integrations(id,workspace_id,provider,name,external_app_id,encrypted_credentials,agent_id,project_id,enabled,status,created_by_user_id,stream_replies) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING `+integrationColumns,
+		item.ID, item.WorkspaceID, item.Provider, item.Name, item.ExternalAppID, item.EncryptedCredentials, item.AgentID, item.ProjectID, item.Enabled, item.Status, item.CreatedByUserID, item.StreamReplies))
 }
 
 func (s *Store) UpdateWorkspaceIntegration(ctx context.Context, item WorkspaceIntegration) (WorkspaceIntegration, error) {
-	updated, err := scanIntegration(s.pool.QueryRow(ctx, `UPDATE workspace_integrations SET name=$3,external_app_id=$4,encrypted_credentials=$5,agent_id=$6,project_id=$7,enabled=$8,status=$9,last_error=NULL,updated_at=now() WHERE workspace_id=$1 AND id=$2 RETURNING `+integrationColumns,
-		item.WorkspaceID, item.ID, item.Name, item.ExternalAppID, item.EncryptedCredentials, item.AgentID, item.ProjectID, item.Enabled, item.Status))
+	updated, err := scanIntegration(s.pool.QueryRow(ctx, `UPDATE workspace_integrations SET name=$3,external_app_id=$4,encrypted_credentials=$5,agent_id=$6,project_id=$7,enabled=$8,status=$9,stream_replies=$10,last_error=NULL,updated_at=now() WHERE workspace_id=$1 AND id=$2 RETURNING `+integrationColumns,
+		item.WorkspaceID, item.ID, item.Name, item.ExternalAppID, item.EncryptedCredentials, item.AgentID, item.ProjectID, item.Enabled, item.Status, item.StreamReplies))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return WorkspaceIntegration{}, ErrNotFound
 	}

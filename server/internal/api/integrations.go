@@ -10,12 +10,13 @@ import (
 )
 
 type integrationInput struct {
-	Name      string  `json:"name"`
-	AppID     string  `json:"appId"`
-	AppSecret string  `json:"appSecret"`
-	AgentID   string  `json:"agentId"`
-	ProjectID *string `json:"projectId"` // Accepted for compatibility; Projects are bound per conversation.
-	Enabled   *bool   `json:"enabled"`
+	Name          string  `json:"name"`
+	AppID         string  `json:"appId"`
+	AppSecret     string  `json:"appSecret"`
+	AgentID       string  `json:"agentId"`
+	ProjectID     *string `json:"projectId"`
+	Enabled       *bool   `json:"enabled"`
+	StreamReplies *bool   `json:"streamReplies"`
 }
 
 func (s *Server) listIntegrations(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +39,17 @@ func (s *Server) validateIntegrationInput(r *http.Request, input *integrationInp
 	if _, err := s.store.Agent(r.Context(), s.workspace(r), input.AgentID); err != nil {
 		return nil, err
 	}
-	input.ProjectID = nil
+	if input.ProjectID != nil {
+		projectID := strings.TrimSpace(*input.ProjectID)
+		input.ProjectID = nil
+		if projectID != "" {
+			project, err := s.store.Project(r.Context(), s.workspace(r), projectID)
+			if err != nil || project.DeletedAt != nil {
+				return nil, taskRequestError{Status: http.StatusBadRequest, Message: "Default Project must be an available Project in this workspace."}
+			}
+			input.ProjectID = &project.ID
+		}
+	}
 	if input.AppSecret == "" {
 		if existing == nil {
 			return nil, taskRequestError{Status: http.StatusBadRequest, Message: "appSecret is required"}
@@ -69,8 +80,9 @@ func (s *Server) createFeishuIntegration(w http.ResponseWriter, r *http.Request)
 	}
 	created, err := s.store.CreateWorkspaceIntegration(r.Context(), store.WorkspaceIntegration{
 		WorkspaceID: s.workspace(r), Provider: "feishu", Name: input.Name, ExternalAppID: input.AppID,
-		EncryptedCredentials: credentials, AgentID: input.AgentID, ProjectID: nil,
+		EncryptedCredentials: credentials, AgentID: input.AgentID, ProjectID: input.ProjectID,
 		Enabled: enabled, Status: status, CreatedByUserID: userFromContext(r.Context()).ID,
+		StreamReplies: input.StreamReplies != nil && *input.StreamReplies,
 	})
 	if err != nil {
 		writeIntegrationError(w, err)
@@ -104,7 +116,10 @@ func (s *Server) updateIntegration(w http.ResponseWriter, r *http.Request) {
 	}
 	bindingChanged := existing.ExternalAppID != input.AppID || existing.AgentID != input.AgentID
 	existing.Name, existing.ExternalAppID, existing.EncryptedCredentials = input.Name, input.AppID, credentials
-	existing.AgentID, existing.ProjectID, existing.Enabled = input.AgentID, nil, enabled
+	existing.AgentID, existing.ProjectID, existing.Enabled = input.AgentID, input.ProjectID, enabled
+	if input.StreamReplies != nil {
+		existing.StreamReplies = *input.StreamReplies
+	}
 	existing.Status = "connecting"
 	if !enabled {
 		existing.Status = "disabled"

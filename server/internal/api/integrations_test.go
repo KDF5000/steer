@@ -206,17 +206,33 @@ func TestFeishuProjectCommand(t *testing.T) {
 }
 
 func TestFeishuEffectiveProjectID(t *testing.T) {
-	projectID := "project-default"
-	chatDefault := store.IntegrationConversation{ProjectID: &projectID}
-	if got := feishuEffectiveProjectID(store.IntegrationConversation{}, store.ErrNotFound, chatDefault, nil); got == nil || *got != projectID {
-		t.Fatalf("new thread did not inherit chat project: %v", got)
+	integrationProject := "project-integration"
+	chatProject := "project-chat"
+	threadProject := "project-thread"
+	cases := []struct {
+		name            string
+		conversation    store.IntegrationConversation
+		conversationErr error
+		chat            store.IntegrationConversation
+		chatErr         error
+		fallback        *string
+		want            *string
+	}{
+		{"unbound private chat", store.IntegrationConversation{}, store.ErrNotFound, store.IntegrationConversation{}, store.ErrNotFound, &integrationProject, &integrationProject},
+		{"unbound group thread", store.IntegrationConversation{}, store.ErrNotFound, store.IntegrationConversation{}, nil, &integrationProject, &integrationProject},
+		{"chat overrides integration", store.IntegrationConversation{}, store.ErrNotFound, store.IntegrationConversation{ProjectID: &chatProject}, nil, &integrationProject, &chatProject},
+		{"thread overrides chat", store.IntegrationConversation{ProjectID: &threadProject}, nil, store.IntegrationConversation{ProjectID: &chatProject}, nil, &integrationProject, &threadProject},
+		{"existing unbound session stays unbound", store.IntegrationConversation{ConversationID: "existing"}, nil, store.IntegrationConversation{ProjectID: &chatProject}, nil, &integrationProject, nil},
+		{"project none restores integration default", store.IntegrationConversation{}, nil, store.IntegrationConversation{}, nil, &integrationProject, &integrationProject},
+		{"no defaults", store.IntegrationConversation{}, store.ErrNotFound, store.IntegrationConversation{}, store.ErrNotFound, nil, nil},
 	}
-	if got := feishuEffectiveProjectID(store.IntegrationConversation{ConversationID: "existing"}, nil, chatDefault, nil); got != nil {
-		t.Fatalf("existing unbound conversation unexpectedly changed project: %q", *got)
-	}
-	threadProjectID := "project-thread"
-	if got := feishuEffectiveProjectID(store.IntegrationConversation{ProjectID: &threadProjectID}, nil, chatDefault, nil); got == nil || *got != threadProjectID {
-		t.Fatalf("thread project should take precedence: %v", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := feishuEffectiveProjectID(tc.conversation, tc.conversationErr, tc.chat, tc.chatErr, tc.fallback)
+			if (got == nil) != (tc.want == nil) || got != nil && *got != *tc.want {
+				t.Fatalf("project = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -276,8 +292,12 @@ func TestFeishuIntegrationManagement(t *testing.T) {
 	if !created.SecretConfigured || created.Status != "disabled" {
 		t.Fatalf("unexpected integration: %+v", created)
 	}
-	if created.ProjectID != nil {
-		t.Fatalf("integration-level project should be ignored, got %q", *created.ProjectID)
+	if created.StreamReplies {
+		t.Fatal("new integration should default to non-streaming")
+	}
+
+	if created.ProjectID == nil || *created.ProjectID != project.ID {
+		t.Fatalf("default project did not persist: %v", created.ProjectID)
 	}
 	stored, err := st.WorkspaceIntegration(context.Background(), wid, created.ID)
 	if err != nil {
@@ -359,6 +379,31 @@ func TestFeishuIntegrationManagement(t *testing.T) {
 		t.Fatalf("duplicate App ID = %d: %s", response.Code, response.Body.String())
 	}
 
+	foreignProject, err := st.CreateProject(context.Background(), otherWorkspaceID, store.Project{
+		Name: "Foreign Project", WorkspaceKind: "local", WorkspaceSource: "/tmp/foreign", ExecutionMode: "in_place",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deletedProject, err := st.CreateProject(context.Background(), wid, store.Project{
+		Name: "Deleted Project", WorkspaceKind: "local", WorkspaceSource: "/tmp/deleted", ExecutionMode: "in_place",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.DeleteProject(context.Background(), wid, deletedProject.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, invalidProject := range []string{foreignProject.ID, deletedProject.ID, "missing-project"} {
+		payload, _ := json.Marshal(integrationInput{Name: created.Name, AppID: appID, AgentID: agent.ID, ProjectID: &invalidProject})
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/integrations/"+created.ID, strings.NewReader(string(payload)))
+		response = httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("invalid default project = %d: %s", response.Code, response.Body.String())
+		}
+	}
+
 	update := `{"name":"Renamed bot","appId":"` + created.ExternalAppID + `","agentId":"` + agent.ID + `","projectId":null,"enabled":false}`
 	req = httptest.NewRequest(http.MethodPut, "/api/v1/integrations/"+created.ID, strings.NewReader(update))
 	req.Header.Set("Content-Type", "application/json")
@@ -374,6 +419,51 @@ func TestFeishuIntegrationManagement(t *testing.T) {
 	secret, err = server.decryptCredential(stored.EncryptedCredentials)
 	if err != nil || secret != "super-secret" {
 		t.Fatalf("blank update replaced secret: %q %v", secret, err)
+	}
+
+	if stored.ProjectID != nil {
+		t.Fatal("clearing default project did not persist")
+	}
+	binding, err := st.IntegrationConversation(context.Background(), created.ID, "group-chat", "thread:active")
+	if err != nil || binding.ConversationID != "conversation-active" || binding.ProjectID == nil || *binding.ProjectID != project.ID {
+		t.Fatalf("default project update reset existing conversation: %+v, %v", binding, err)
+	}
+	payload, _ := json.Marshal(integrationInput{Name: created.Name, AppID: appID, AgentID: agent.ID, ProjectID: &project.ID})
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/integrations/"+created.ID, strings.NewReader(string(payload)))
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, req)
+	if response.Code != http.StatusOK {
+		t.Fatalf("setting default project = %d: %s", response.Code, response.Body.String())
+	}
+	stored, err = st.WorkspaceIntegration(context.Background(), wid, created.ID)
+	if err != nil || stored.ProjectID == nil || *stored.ProjectID != project.ID {
+		t.Fatalf("updated default project = %v, %v", stored.ProjectID, err)
+	}
+
+	for _, enabled := range []bool{true, false} {
+		payload, _ := json.Marshal(integrationInput{Name: created.Name, AppID: appID, AgentID: agent.ID, ProjectID: &project.ID, StreamReplies: &enabled})
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/integrations/"+created.ID, strings.NewReader(string(payload)))
+		response = httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		if response.Code != http.StatusOK {
+			t.Fatalf("stream setting update = %d: %s", response.Code, response.Body.String())
+		}
+		stored, err = st.WorkspaceIntegration(context.Background(), wid, created.ID)
+		if err != nil || stored.StreamReplies != enabled {
+			t.Fatalf("stream setting did not persist: %v, %v", stored.StreamReplies, err)
+		}
+		// Updating other settings without the stream field must preserve it.
+		payload, _ = json.Marshal(map[string]any{"name": created.Name, "appId": appID, "agentId": agent.ID, "projectId": project.ID, "enabled": false})
+		req = httptest.NewRequest(http.MethodPut, "/api/v1/integrations/"+created.ID, strings.NewReader(string(payload)))
+		response = httptest.NewRecorder()
+		handler.ServeHTTP(response, req)
+		if response.Code != http.StatusOK {
+			t.Fatalf("unrelated settings update = %d: %s", response.Code, response.Body.String())
+		}
+		items, err := st.WorkspaceIntegrations(context.Background(), wid)
+		if err != nil || len(items) != 1 || items[0].StreamReplies != enabled {
+			t.Fatalf("unrelated update changed stream setting: %+v, %v", items, err)
+		}
 	}
 
 	req = httptest.NewRequest(http.MethodDelete, "/api/v1/integrations/"+created.ID, nil)

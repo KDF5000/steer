@@ -450,16 +450,16 @@ const maxFeishuCardContentBytes = 24 << 10
 
 const feishuChatProjectThreadKey = "__chat_project_default__"
 
-func feishuEffectiveProjectID(conversation store.IntegrationConversation, conversationErr error, chatDefault store.IntegrationConversation, chatDefaultErr error) *string {
+func feishuEffectiveProjectID(conversation store.IntegrationConversation, conversationErr error, chatDefault store.IntegrationConversation, chatDefaultErr error, defaultProjectID *string) *string {
 	if conversationErr == nil {
 		if conversation.ProjectID != nil || conversation.ConversationID != "" {
 			return conversation.ProjectID
 		}
 	}
-	if chatDefaultErr == nil {
+	if chatDefaultErr == nil && chatDefault.ProjectID != nil {
 		return chatDefault.ProjectID
 	}
-	return nil
+	return defaultProjectID
 }
 
 func truncateFeishuCardContent(content string) string {
@@ -724,7 +724,7 @@ func (m *integrationManager) processMessage(ctx context.Context, integration sto
 	if projectCommand {
 		if projectQuery == "" {
 			response := "当前未绑定 Project。使用 /projects 查看可用项目。"
-			if projectID := feishuEffectiveProjectID(conversation, conversationErr, chatDefault, chatDefaultErr); projectID != nil {
+			if projectID := feishuEffectiveProjectID(conversation, conversationErr, chatDefault, chatDefaultErr, integration.ProjectID); projectID != nil {
 				if project, err := m.server.store.Project(ctx, integration.WorkspaceID, *projectID); err == nil && project.DeletedAt == nil {
 					response = "当前 Project：" + project.Name
 				}
@@ -749,7 +749,7 @@ func (m *integrationManager) processMessage(ctx context.Context, integration sto
 				return
 			}
 			_ = m.server.store.UpdateIntegrationEvent(context.Background(), integration.ID, eventID, "succeeded", nil, nil)
-			_, _ = bot.Send(context.Background(), &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Text: "已解除当前飞书会话的默认 Project，当前话题的下一条消息将开启新的 Steer 会话，后续新话题也将不再绑定 Project。"})
+			_, _ = bot.Send(context.Background(), &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Text: "已解除当前飞书聊天的 Project 绑定。当前话题的下一条消息将开启新的 Steer 会话，后续新话题将使用集成设置中的默认 Project；未设置默认 Project 时不绑定项目。"})
 			return
 		}
 		projects, err := m.server.store.Projects(ctx, integration.WorkspaceID)
@@ -872,7 +872,7 @@ func (m *integrationManager) processMessage(ctx context.Context, integration sto
 		defer removeTyping()
 	}
 
-	selectedProjectID := feishuEffectiveProjectID(conversation, conversationErr, chatDefault, chatDefaultErr)
+	selectedProjectID := feishuEffectiveProjectID(conversation, conversationErr, chatDefault, chatDefaultErr, integration.ProjectID)
 	if selectedProjectID != nil {
 		project, err := m.server.store.Project(ctx, integration.WorkspaceID, *selectedProjectID)
 		if err != nil || project.DeletedAt != nil {
@@ -944,23 +944,26 @@ func (m *integrationManager) processMessage(ctx context.Context, integration sto
 			}
 			return
 		}
-		content := strings.TrimSpace(feishuFinalContent(projection.Events))
-		if content != "" && finalStream == nil {
-			stream, streamErr := bot.Stream(ctx, &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Markdown: content})
-			if streamErr != nil {
-				slog.Warn("Could not create Feishu final response stream", "integration_id", integration.ID, "message_id", msg.MessageID, "error", streamErr)
-			} else {
-				finalStream = stream
-				lastFinalContent = content
-				removeTyping()
-			}
-		} else if finalStream != nil && strings.HasPrefix(content, lastFinalContent) && len(content) > len(lastFinalContent) {
-			if appendErr := finalStream.Append(ctx, content[len(lastFinalContent):]); appendErr != nil {
-				slog.Warn("Could not stream final Feishu response", "integration_id", integration.ID, "message_id", msg.MessageID, "error", appendErr)
-			} else {
-				lastFinalContent = content
+		if integration.StreamReplies {
+			content := strings.TrimSpace(feishuFinalContent(projection.Events))
+			if content != "" && finalStream == nil {
+				stream, streamErr := bot.Stream(ctx, &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Markdown: content})
+				if streamErr != nil {
+					slog.Warn("Could not create Feishu final response stream", "integration_id", integration.ID, "message_id", msg.MessageID, "error", streamErr)
+				} else {
+					finalStream = stream
+					lastFinalContent = content
+					removeTyping()
+				}
+			} else if finalStream != nil && strings.HasPrefix(content, lastFinalContent) && len(content) > len(lastFinalContent) {
+				if appendErr := finalStream.Append(ctx, content[len(lastFinalContent):]); appendErr != nil {
+					slog.Warn("Could not stream final Feishu response", "integration_id", integration.ID, "message_id", msg.MessageID, "error", appendErr)
+				} else {
+					lastFinalContent = content
+				}
 			}
 		}
+
 		select {
 		case <-ctx.Done():
 			return

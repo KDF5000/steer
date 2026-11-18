@@ -3833,6 +3833,7 @@ export default function Fusion() {
         ) : view === 'settings' ? (
           <SystemSettingsView
             agents={agentList}
+            projects={projectList}
             settings={workspaceSettings}
             onSettings={setWorkspaceSettings}
             onNotice={setNotice}
@@ -7516,11 +7517,13 @@ function AgentsView({
 
 function SystemSettingsView({
   agents,
+  projects,
   settings,
   onSettings,
   onNotice,
 }: {
   agents: AgentItem[];
+  projects: ProjectRecord[];
   settings: WorkspaceSettingsRecord | null;
   onSettings: (settings: WorkspaceSettingsRecord) => void;
   onNotice: (message: string) => void;
@@ -7547,13 +7550,19 @@ function SystemSettingsView({
   const [integrationAppID, setIntegrationAppID] = useState('');
   const [integrationSecret, setIntegrationSecret] = useState('');
   const [integrationAgentID, setIntegrationAgentID] = useState('');
+  const [integrationProjectID, setIntegrationProjectID] = useState('');
   const [integrationEnabled, setIntegrationEnabled] = useState(true);
+  const [integrationStreamReplies, setIntegrationStreamReplies] =
+    useState(false);
   const [integrationSaving, setIntegrationSaving] = useState(false);
   const [deletingIntegration, setDeletingIntegration] =
     useState<WorkspaceIntegrationRecord | null>(null);
   const selected = agents.find((agent) => agent.id === settings?.systemAgentId);
   const selectedIntegrationAgent = agents.find(
     (agent) => agent.id === integrationAgentID,
+  );
+  const selectedIntegrationProject = projects.find(
+    (project) => project.id === integrationProjectID,
   );
   const interfaceLanguage = settings?.interfaceLanguage || 'auto';
   const aiOutputLanguage = settings?.aiOutputLanguage || 'auto';
@@ -7604,7 +7613,9 @@ function SystemSettingsView({
     setIntegrationAppID(item?.appId || '');
     setIntegrationSecret('');
     setIntegrationAgentID(item?.agentId || agents[0]?.id || '');
+    setIntegrationProjectID(item?.projectId || '');
     setIntegrationEnabled(item?.enabled ?? true);
+    setIntegrationStreamReplies(item?.streamReplies ?? false);
     setIntegrationDialog(true);
   };
 
@@ -7620,7 +7631,9 @@ function SystemSettingsView({
           ? { appSecret: integrationSecret.trim() }
           : {}),
         agentId: integrationAgentID,
+        projectId: integrationProjectID || null,
         enabled: integrationEnabled,
+        streamReplies: integrationStreamReplies,
       };
       const saved = editingIntegration
         ? await steer.updateIntegration(editingIntegration.id, input)
@@ -7672,6 +7685,8 @@ function SystemSettingsView({
         name: item.name,
         appId: item.appId,
         agentId: item.agentId,
+        projectId: item.projectId,
+        streamReplies: item.streamReplies,
         enabled,
       });
       setIntegrations((current) =>
@@ -8110,7 +8125,7 @@ function SystemSettingsView({
           </DialogTitle>
           <DialogDescription>
             {t(
-              'Connect a Feishu app bot to an Agent in this workspace. Choose a Project later with bot commands.',
+              'Connect a Feishu app bot to an Agent and choose an optional default Project.',
             )}
           </DialogDescription>
           <form onSubmit={(event) => void saveIntegration(event)}>
@@ -8187,35 +8202,69 @@ function SystemSettingsView({
                   <strong>{t('Task routing')}</strong>
                   <span>
                     {t(
-                      'Choose which Agent handles messages. Project is selected separately in Feishu.',
+                      'Chat Project bindings take priority over the default Project.',
                     )}
                   </span>
                 </div>
               </div>
-              <label className="ws-integration-agent-field">
-                {t('Agent')}
-                <Select
-                  value={integrationAgentID}
-                  onValueChange={(value) =>
-                    setIntegrationAgentID(String(value))
-                  }
-                >
-                  <SelectTrigger className="ws-integration-select">
-                    <span>
-                      {selectedIntegrationAgent?.name || t('Select Agent')}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent className="ws-select-popup">
-                    {agents.map((agent) => (
-                      <SelectItem key={agent.id} value={agent.id}>
-                        {agent.name}
+              <div className="ws-integration-fields">
+                <label className="ws-integration-agent-field">
+                  {t('Agent')}
+                  <Select
+                    value={integrationAgentID}
+                    onValueChange={(value) =>
+                      setIntegrationAgentID(String(value))
+                    }
+                  >
+                    <SelectTrigger className="ws-integration-select">
+                      <span>
+                        {selectedIntegrationAgent?.name || t('Select Agent')}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent className="ws-select-popup">
+                      {agents.map((agent) => (
+                        <SelectItem key={agent.id} value={agent.id}>
+                          {agent.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label>
+                  {t('Default Project')}
+                  <Select
+                    value={integrationProjectID || '__none__'}
+                    onValueChange={(value) =>
+                      setIntegrationProjectID(
+                        value === '__none__' ? '' : String(value),
+                      )
+                    }
+                  >
+                    <SelectTrigger className="ws-integration-select">
+                      <span>
+                        {selectedIntegrationProject?.name ||
+                          t('No default Project')}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent className="ws-select-popup">
+                      <SelectItem value="__none__">
+                        {t('No default Project')}
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+              </div>
               <div className="ws-integration-project-note">
-                <p>{t('Choose a Project after connecting')}</p>
+                <p>
+                  {t(
+                    'Private and group chats use the default Project unless separately bound.',
+                  )}
+                </p>
                 <div>
                   <span>
                     <code>/projects</code>
@@ -8228,6 +8277,26 @@ function SystemSettingsView({
                 </div>
               </div>
             </section>
+            <label
+              className="ws-integration-enabled"
+              aria-label={t('Stream replies')}
+            >
+              <input
+                type="checkbox"
+                checked={integrationStreamReplies}
+                onChange={(event) =>
+                  setIntegrationStreamReplies(event.target.checked)
+                }
+              />
+              <span>
+                <strong>{t('Stream replies')}</strong>
+                <small>
+                  {t(
+                    'Off by default. Send the complete reply when the task finishes.',
+                  )}
+                </small>
+              </span>
+            </label>
             <label
               className="ws-integration-enabled"
               aria-label={t('Enable after saving')}

@@ -320,6 +320,17 @@ const zhCN: Record<string, string> = {
   'Enter the credentials from the Feishu developer console.':
     '填写飞书开发者后台中的应用凭证。',
   'Task routing': '任务路由',
+  'Stream replies': '流式回复',
+  'Off by default. Send the complete reply when the task finishes.':
+    '默认关闭，任务完成后一次性发送完整回复。',
+  'Connect a Feishu app bot to an Agent and choose an optional default Project.':
+    '将飞书机器人绑定到 Agent，并可选择默认项目。',
+  'Default Project': '默认项目',
+  'No default Project': '不设置默认项目',
+  'Chat Project bindings take priority over the default Project.':
+    '聊天中单独绑定的项目优先于默认项目。',
+  'Private and group chats use the default Project unless separately bound.':
+    '私聊和群聊未单独绑定项目时，使用默认项目。',
   'Choose which Agent handles messages. Project is selected separately in Feishu.':
     '选择由哪个 Agent 处理机器人消息；项目在飞书会话中单独选择。',
   'In Feishu, send /projects to list projects and /project <project name> to bind the current chat or thread.':

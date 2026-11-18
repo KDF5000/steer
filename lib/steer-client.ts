@@ -74,6 +74,7 @@ export type WorkspaceIntegrationRecord = {
   agentId: string;
   projectId: string | null;
   enabled: boolean;
+  streamReplies: boolean;
   status: 'connecting' | 'connected' | 'error' | 'disabled';
   lastError: string | null;
   lastConnectedAt: string | null;
@@ -86,6 +87,8 @@ export type FeishuIntegrationInput = {
   appId: string;
   appSecret?: string;
   agentId: string;
+  projectId?: string | null;
+  streamReplies?: boolean;
   enabled: boolean;
 };
 
