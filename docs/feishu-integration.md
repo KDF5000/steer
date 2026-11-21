@@ -109,18 +109,22 @@ Incoming Feishu event IDs are persisted and are also used as Steer task
 idempotency keys. Pending events are recovered when the connection restarts.
 The integration adds a typing reaction while the Agent is working and creates
 an execution card immediately after task submission. Its process panel is
-collapsed by default; the heading shows the current activity, with a tool-call
-count beneath it. Expanding it shows execution commentary, tool inputs and
+collapsed by default; the heading shows a short activity label such as tool
+execution, thinking, workspace preparation, or reply generation. It does not
+show commands, paths, generated prose, or a persistent tool-call count.
+The chevron points right when collapsed and down when expanded.
+Expanding it shows execution commentary, tool inputs and
 outputs, and reasoning content actually exposed by the Runtime. Canonical
 item events and the tool protocols used by Claude, Qoder/QwenWork, OpenCode,
 and Pi are projected into the card. The card refreshes when content or status
 changes, at most once per second. Runtime providers that do not expose a given
 kind of activity cannot display it.
 
-While the task is running, a **Cancel this task** button is visible on the card.
+While the task is running, a small **Stop** icon sits beside the process chevron.
 It cancels that specific Run, preserves the session, and disappears when the
-task ends. Public cards currently use a persistent button instead of the
-specialized AI message UI's hover-only button.
+task ends. Public collapsible panels do not expose a hover-only button area;
+the icon is currently persistent, with a tooltip on hover. The documented
+hover button area belongs to the checker component, which this card does not use.
 
 The final answer appears below the collapsed process panel in the same card.
 By default it appears when the task finishes; **Stream replies** enables

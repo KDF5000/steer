@@ -29,15 +29,27 @@
   --ws-reading-width: 860px;
 }
 
-.ws-labs-heading-icon {
-  width: 24px;
-  height: 24px;
-  flex: none;
-  color: var(--ws-text-tertiary);
+/* Labs manages feature availability; actual workflows live in Automation. */
+.ws-labs-page .ws-page-intro h1 {
+  font-size: clamp(24px, 2.4vw, 28px);
+}
+.ws-labs-page .ws-labs-feature-list {
+  border: 0;
+  border-top: 1px solid var(--ws-divider);
+  border-bottom: 1px solid var(--ws-divider);
+  border-radius: 0;
+  background: transparent;
+}
+.ws-labs-page .ws-labs-feature {
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 0;
+  background: transparent;
 }
 .ws-labs-feature > svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   flex: none;
   color: var(--ws-text-secondary);
 }
@@ -45,19 +57,27 @@
   flex: 1;
   min-width: 0;
 }
-.ws-labs-feature .ws-labs-stage-description {
-  color: var(--ws-text-tertiary);
-}
-.ws-labs-open {
-  margin-top: 12px;
-  padding: 4px 0;
-  color: var(--ws-accent);
-  font-size: 12px;
+.ws-labs-feature .ws-settings-copy label {
+  display: inline-block;
   cursor: pointer;
 }
-.ws-labs-open:hover {
-  text-decoration: underline;
+.ws-labs-page .ws-labs-feature .ws-settings-copy p {
+  margin-top: 6px;
+  color: var(--ws-text-secondary);
+  line-height: 1.6;
 }
+.ws-labs-preference-note,
+.ws-labs-scope-note {
+  margin: 12px 0 0;
+  color: var(--ws-text-secondary);
+  font-size: var(--ws-font-caption);
+  line-height: 1.6;
+}
+.ws-labs-scope-note {
+  margin-top: 4px;
+  color: var(--ws-text-tertiary);
+}
+
 .ws-experiment-badge {
   color: var(--ws-text-tertiary);
   font-size: 12px !important;

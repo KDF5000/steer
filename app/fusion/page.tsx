@@ -3911,7 +3911,6 @@ export default function Fusion() {
                 setView('labs');
               }
             }}
-            onOpen={() => setView('automation')}
           />
         ) : view === 'automation' ? (
           <AutomationView

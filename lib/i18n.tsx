@@ -18,6 +18,13 @@ const storageKey = 'steer.interface-language';
 const languageEvent = 'steer:interface-language';
 
 const zhCN: Record<string, string> = {
+  'Manage experimental features available in this workspace.':
+    '管理当前工作区可用的实验功能。',
+  'Configure MR review workflows in Automation, with manual or webhook triggers.':
+    '在自动化中配置 MR 审查流程，支持手动发起和 Webhook 自动触发。',
+  'Enabling adds Automation to the sidebar. Disabling hides the entry without pausing review workflows.':
+    '开启后，侧栏显示“自动化”入口。关闭仅隐藏入口，不会暂停审查流程。',
+
   'Codebase configured': 'Codebase 已配置',
   'Review could not start. Open the run record for details.':
     '审查未能启动，请打开运行记录查看详情。',

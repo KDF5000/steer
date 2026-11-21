@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useSyncExternalStore } from 'react';
-import { FlaskConical, GitBranch } from 'lucide-react';
+import { GitBranch } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/lib/i18n';
 
@@ -49,11 +49,9 @@ export function useWorkspaceLabs(userID?: string, workspaceID?: string) {
 export function LabsView({
   enabled,
   onToggle,
-  onOpen,
 }: {
   enabled: boolean;
   onToggle: (next: boolean) => void;
-  onOpen: () => void;
 }) {
   const { t } = useI18n();
   return (
@@ -63,35 +61,26 @@ export function LabsView({
           <span>{t('System').toUpperCase()}</span>
           <h1>{t('Labs')}</h1>
           <p>
-            {t('Enable experimental features to try them in this workspace.')}
+            {t('Manage experimental features available in this workspace.')}
           </p>
         </div>
-        <FlaskConical className="ws-labs-heading-icon" aria-hidden="true" />
       </div>
-      <section className="ws-settings-group">
-        <div className="ws-settings-heading">
-          <h2>{t('Experimental features')}</h2>
-          <p>
-            {t(
-              'Preferences are saved for this account and workspace in this browser.',
-            )}
-          </p>
-        </div>
-        <div className="ws-settings-list">
+      <section aria-label={t('Experimental features')}>
+        <div className="ws-settings-list ws-labs-feature-list">
           <div className="ws-settings-row ws-labs-feature">
             <GitBranch aria-hidden="true" />
             <div className="ws-settings-copy">
-              <strong id="labs-review-label">
+              <label id="labs-review-label" htmlFor="labs-review-toggle">
                 {t('Automated code review')}
-              </strong>
+              </label>
               <p id="labs-review-description">
-                {t('Connect Codebase and fetch merge requests.')}
-              </p>
-              <p className="ws-labs-stage-description">
-                {t('Merge requests are synced; reviews run on demand.')}
+                {t(
+                  'Configure MR review workflows in Automation, with manual or webhook triggers.',
+                )}
               </p>
             </div>
             <Switch
+              id="labs-review-toggle"
               aria-labelledby="labs-review-label"
               aria-describedby="labs-review-description"
               checked={enabled}
@@ -99,11 +88,16 @@ export function LabsView({
             />
           </div>
         </div>
-        {enabled && (
-          <button className="ws-labs-open" onClick={onOpen}>
-            {t('Open automation')}
-          </button>
-        )}
+        <p className="ws-labs-preference-note">
+          {t(
+            'Enabling adds Automation to the sidebar. Disabling hides the entry without pausing review workflows.',
+          )}
+        </p>
+        <p className="ws-labs-scope-note">
+          {t(
+            'Preferences are saved for this account and workspace in this browser.',
+          )}
+        </p>
       </section>
     </div>
   );

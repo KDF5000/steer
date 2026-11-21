@@ -46,10 +46,13 @@ func TestFeishuExecutionProcessAndCancel(t *testing.T) {
 		t.Fatalf("output duplicated or missing: %+v", process.Items[1])
 	}
 	running := feishuExecutionCard("running", events, "", "task-card-token")
-	for _, text := range []string{"先检查测试结果", "go test ./...", "all tests passed", "已调用 1 次工具", `"expanded":false`, "cancel_task", "task-card-token"} {
+	for _, text := range []string{"先检查测试结果", "go test ./...", "all tests passed", `"expanded":false`, "cancel_task", "task-card-token"} {
 		if !strings.Contains(running, text) {
 			t.Fatalf("card missing %q: %s", text, running)
 		}
+	}
+	if strings.Contains(running, "已调用") || strings.Contains(running, "取消本次任务") {
+		t.Fatal("process card should not contain a persistent count or text cancel row")
 	}
 	if strings.Contains(running, "这是最终答案") {
 		t.Fatal("final answer leaked into process panel")
@@ -57,6 +60,50 @@ func TestFeishuExecutionProcessAndCancel(t *testing.T) {
 	finished := feishuExecutionCard("succeeded", events, "这是最终答案", "task-card-token")
 	if strings.Contains(finished, "cancel_task") || !strings.Contains(finished, "这是最终答案") {
 		t.Fatalf("terminal card = %s", finished)
+	}
+}
+
+func TestFeishuCompactProcessControls(t *testing.T) {
+	var card map[string]any
+	if err := json.Unmarshal([]byte(feishuExecutionCard("running", nil, "", "token")), &card); err != nil {
+		t.Fatal(err)
+	}
+	row := feishuRecord(feishuRecord(card["body"])["elements"].([]any)[0])
+	if row["tag"] != "column_set" {
+		t.Fatal("controls should share one row")
+	}
+	columns := row["columns"].([]any)
+	panel := feishuRecord(feishuRecord(columns[0])["elements"].([]any)[0])
+	header := feishuRecord(panel["header"])
+	if feishuRecord(header["icon"])["token"] != "right-small-ccm_outlined" || header["icon_expanded_angle"] != float64(90) || header["icon_position"] != "follow_text" {
+		t.Fatalf("unexpected chevron: %v", header)
+	}
+	stop := feishuRecord(feishuRecord(columns[1])["elements"].([]any)[0])
+	if stop["tag"] != "button" || stop["type"] != "text" || feishuRecord(stop["icon"])["token"] != "stop_outlined" {
+		t.Fatalf("unexpected stop control: %v", stop)
+	}
+	if _, exists := stop["text"]; exists {
+		t.Fatal("stop control should be icon-only")
+	}
+}
+
+func TestFeishuCollapsedHeadingUsesShortActivityLabels(t *testing.T) {
+	for _, test := range []struct{ name, payload, eventType, want string }{
+		{"command", `{"item":{"id":"tool","type":"commandExecution","command":"a very long command with arguments"}}`, "runtime.trae.item.started", "调用工具"},
+		{"files", `{"item":{"id":"tool","type":"fileChange","path":"/a/very/long/path"}}`, "runtime.trae.item.started", "修改文件"},
+		{"search", `{"item":{"id":"tool","type":"webSearch","query":"a very long query"}}`, "runtime.trae.item.started", "搜索信息"},
+		{"reasoning", `{"item":{"id":"r","type":"reasoning","text":"long reasoning content"}}`, "runtime.trae.item.started", "思考中"},
+		{"commentary", `{"item":{"id":"a","type":"agentMessage","phase":"commentary","text":"long progress commentary"}}`, "runtime.trae.item.started", "处理任务"},
+		{"final", `{"item":{"id":"a","type":"agentMessage","phase":"final_answer"}}`, "runtime.trae.item.started", "生成回复"},
+		{"tool finished", `{"item":{"id":"tool","type":"commandExecution","command":"long command"}}`, "runtime.trae.item.completed", "思考中"},
+		{"raw tool", `{"message":{"content":[{"type":"tool_use","id":"a","name":"long tool name"}]}}`, "runtime.qwenwork.assistant", "调用工具"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			process := feishuRuntimeProcess([]relay.Event{{Type: test.eventType, Data: json.RawMessage(test.payload)}})
+			if process.Activity != test.want {
+				t.Fatalf("heading = %q, want %q", process.Activity, test.want)
+			}
+		})
 	}
 }
 
@@ -77,6 +124,56 @@ func TestFeishuStreamJSONToolProjection(t *testing.T) {
 		if !strings.Contains(card, text) {
 			t.Fatalf("missing %q", text)
 		}
+	}
+}
+
+func TestFeishuSelectRequiredOnlyInsideForm(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		card        string
+		wantSelects int
+	}{
+		{"model picker", feishuModelCard("token", controlplane.Runtime{}, store.Agent{}, "", "", false), 1},
+		{"model confirmation", feishuModelCard("token", controlplane.Runtime{}, store.Agent{}, "", "", true), 2},
+		{"project picker", feishuProjectCard("token", nil, nil), 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var payload map[string]any
+			if err := json.Unmarshal([]byte(test.card), &payload); err != nil {
+				t.Fatal(err)
+			}
+			selects := 0
+			var visit func(any, bool)
+			visit = func(value any, inForm bool) {
+				switch node := value.(type) {
+				case map[string]any:
+					if node["tag"] == "form" {
+						inForm = true
+					}
+					if node["tag"] == "select_static" {
+						selects++
+						_, hasRequired := node["required"]
+						if hasRequired != inForm {
+							t.Errorf("required allowed only within form: %v", node)
+						}
+						if inForm && node["required"] != true {
+							t.Error("form selection must remain required")
+						}
+					}
+					for _, child := range node {
+						visit(child, inForm)
+					}
+				case []any:
+					for _, child := range node {
+						visit(child, inForm)
+					}
+				}
+			}
+			visit(payload, false)
+			if selects != test.wantSelects {
+				t.Fatalf("select count = %d, want %d", selects, test.wantSelects)
+			}
+		})
 	}
 }
 

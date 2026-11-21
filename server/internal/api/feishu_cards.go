@@ -43,10 +43,16 @@ func feishuOption(label, id string) feishuElement {
 const feishuDefaultOption = "__default__"
 
 func feishuSelect(name, placeholder, selected string, options []feishuElement) feishuElement {
-	selectElement := feishuElement{"tag": "select_static", "name": name, "placeholder": feishuText(placeholder), "options": options, "width": "fill", "required": true}
+	selectElement := feishuElement{"tag": "select_static", "name": name, "placeholder": feishuText(placeholder), "options": options, "width": "fill"}
 	if selected != "" {
 		selectElement["initial_option"] = selected
 	}
+	return selectElement
+}
+
+func feishuFormSelect(name, placeholder, selected string, options []feishuElement) feishuElement {
+	selectElement := feishuSelect(name, placeholder, selected, options)
+	selectElement["required"] = true
 	return selectElement
 }
 
@@ -114,9 +120,9 @@ func feishuModelCard(token string, runtime controlplane.Runtime, agent store.Age
 	}
 	// Include the displayed model in the submitted form. Never infer it from
 	// mutable server draft state when multiple people interact with this card.
-	modelField := feishuSelect("model", "模型", selected, []feishuElement{feishuOption(modelLabel, selected)})
+	modelField := feishuFormSelect("model", "模型", selected, []feishuElement{feishuOption(modelLabel, selected)})
 	submit := feishuElement{"tag": "button", "name": "apply_model:" + token, "text": feishuText("应用模型和 effort"), "type": "primary_filled", "width": "fill", "form_action_type": "submit"}
-	form := feishuElement{"tag": "form", "name": "model_settings", "elements": []feishuElement{modelField, feishuSelect("effort", "选择 effort", selectedEffort, efforts), submit}}
+	form := feishuElement{"tag": "form", "name": "model_settings", "elements": []feishuElement{modelField, feishuFormSelect("effort", "选择 effort", selectedEffort, efforts), submit}}
 	return feishuEncodeCard("选择模型和 effort", []feishuElement{form, feishuButton("重新选择模型", "model_back", token)})
 }
 
@@ -133,7 +139,7 @@ func feishuProjectCard(token string, projects []store.Project, selected *string)
 		}
 	}
 	form := feishuElement{"tag": "form", "name": "project_settings", "elements": []feishuElement{
-		feishuSelect("project", "选择项目", initial, options),
+		feishuFormSelect("project", "选择项目", initial, options),
 		{"tag": "button", "name": "apply_project:" + token, "text": feishuText("切换项目"), "type": "primary_filled", "width": "fill", "form_action_type": "submit"},
 	}}
 	return feishuEncodeCard("选择项目", []feishuElement{feishuMarkdown("切换后，当前话题开启新 session，后续新话题也会使用该项目。其他已开始的话题继续使用原项目。"), form})
@@ -184,7 +190,7 @@ func feishuValueText(v any) string {
 }
 
 func feishuRuntimeProcess(events []relay.Event) feishuProcess {
-	process := feishuProcess{Activity: "任务执行中"}
+	process := feishuProcess{Activity: "执行中"}
 	byID := map[string]*feishuActivity{}
 	get := func(id, kind string) *feishuActivity {
 		if item := byID[id]; item != nil {
@@ -219,7 +225,7 @@ func feishuRuntimeProcess(events []relay.Event) feishuProcess {
 		if strings.HasSuffix(eventType, ".item.started") || strings.HasSuffix(eventType, ".item.completed") {
 			if kind == "agentmessage" && (feishuString(item, "phase") != "commentary") {
 				if phase := feishuString(item, "phase"); phase == "final" || phase == "final_answer" {
-					process.Activity = "正在生成回复"
+					process.Activity = "生成回复"
 				}
 				continue
 			}
@@ -273,7 +279,7 @@ func feishuRuntimeProcess(events []relay.Event) feishuProcess {
 			if code, ok := item["exitCode"].(float64); ok && code != 0 {
 				activity.Status = "failed"
 			}
-			process.Activity = activity.Title
+			process.Activity = feishuActivityLabel(activity)
 			continue
 		}
 		if strings.Contains(eventType, ".item.") && (strings.HasSuffix(eventType, ".delta") || strings.HasSuffix(eventType, "textdelta") || strings.HasSuffix(eventType, "outputdelta")) {
@@ -291,9 +297,7 @@ func feishuRuntimeProcess(events []relay.Event) feishuProcess {
 			} else {
 				activity.Text += delta
 			}
-			if activity.Type == "agentmessage" && activity.Text != "" {
-				process.Activity = strings.Split(activity.Text, "\n")[0]
-			}
+			process.Activity = feishuActivityLabel(activity)
 			continue
 		}
 		// Claude-style stream JSON used by Qoder/QwenWork (and Claude): retain
@@ -314,7 +318,7 @@ func feishuRuntimeProcess(events []relay.Event) feishuProcess {
 					activity.Tool = true
 					activity.Title = feishuString(block, "name")
 					activity.Text = feishuValueText(block["input"])
-					process.Activity = activity.Title
+					process.Activity = "调用工具"
 				case "tool_result":
 					if activity := byID[blockID]; activity != nil {
 						activity.Output = feishuValueText(block["content"])
@@ -322,11 +326,13 @@ func feishuRuntimeProcess(events []relay.Event) feishuProcess {
 						if block["is_error"] == true {
 							activity.Status = "failed"
 						}
+						process.Activity = feishuActivityLabel(activity)
 					}
 				case "thinking":
 					activity := get(blockID, "reasoning")
 					activity.Title = "思考过程"
 					activity.Text = feishuString(block, "thinking", "text")
+					process.Activity = "思考中"
 				}
 			}
 		}
@@ -347,7 +353,7 @@ func feishuRuntimeProcess(events []relay.Event) feishuProcess {
 				activity.Status = "failed"
 				activity.Output = feishuValueText(state["error"])
 			}
-			process.Activity = activity.Title
+			process.Activity = feishuActivityLabel(activity)
 		}
 		if strings.HasPrefix(eventType, "runtime.pi.tool_execution_") {
 			activity := get(prefix+feishuString(data, "toolCallId"), "toolcall")
@@ -368,7 +374,7 @@ func feishuRuntimeProcess(events []relay.Event) feishuProcess {
 					activity.Status = "failed"
 				}
 			}
-			process.Activity = activity.Title
+			process.Activity = feishuActivityLabel(activity)
 		}
 		if eventType == "runtime.pi.message_update" {
 			update := feishuRecord(data["assistantMessageEvent"])
@@ -376,6 +382,7 @@ func feishuRuntimeProcess(events []relay.Event) feishuProcess {
 				activity := get(prefix+"thinking:"+fmt.Sprint(update["contentIndex"]), "reasoning")
 				activity.Title = "思考过程"
 				activity.Text += feishuString(update, "delta")
+				process.Activity = "思考中"
 			}
 		}
 		if eventType == "workspace.preparing" {
@@ -384,6 +391,12 @@ func feishuRuntimeProcess(events []relay.Event) feishuProcess {
 		if eventType == "attempt.queued" {
 			process.Activity = "等待 Runtime"
 		}
+		if eventType == "workspace.prepared" {
+			process.Activity = "启动 Runtime"
+		}
+		if eventType == "attempt.started" || strings.HasSuffix(eventType, ".turn.started") {
+			process.Activity = "思考中"
+		}
 	}
 	for _, item := range process.Items {
 		if item.Tool {
@@ -391,6 +404,31 @@ func feishuRuntimeProcess(events []relay.Event) feishuProcess {
 		}
 	}
 	return process
+}
+
+// Keep the collapsed heading bounded and independent of commands, paths,
+// tool arguments and generated prose. Those remain in the expanded details.
+func feishuActivityLabel(activity *feishuActivity) string {
+	if activity.Tool {
+		if activity.Status == "failed" {
+			return "工具调用失败"
+		}
+		if activity.Status == "completed" || activity.Status == "succeeded" {
+			return "思考中"
+		}
+		switch activity.Type {
+		case "filechange":
+			return "修改文件"
+		case "websearch":
+			return "搜索信息"
+		default:
+			return "调用工具"
+		}
+	}
+	if activity.Type == "reasoning" {
+		return "思考中"
+	}
+	return "处理任务"
 }
 
 func feishuLimit(text string, limit int) string {
@@ -407,6 +445,9 @@ func feishuLimit(text string, limit int) string {
 func feishuExecutionCard(status string, events []relay.Event, answer, token string) string {
 	process := feishuRuntimeProcess(events)
 	title := feishuLimit(strings.Join(strings.Fields(process.Activity), " "), 160)
+	if status == "queued" || status == "pending" {
+		title = "等待 Runtime"
+	}
 	if terminal(relay.RunStatus(status)) {
 		title = "任务" + feishuStatusText(status)
 	}
@@ -442,13 +483,20 @@ func feishuExecutionCard(status string, events []relay.Event, answer, token stri
 	if content == "" {
 		content = "Agent 正在执行，暂时还没有可展示的过程输出。"
 	}
-	panel := feishuElement{"tag": "collapsible_panel", "element_id": "execution_process", "expanded": false, "header": feishuElement{"title": feishuText(title), "icon": feishuElement{"tag": "standard_icon", "token": "down-small-ccm_outlined", "size": "16px 16px"}, "icon_position": "follow_text", "icon_expanded_angle": 180}, "elements": []feishuElement{feishuMarkdown(feishuLimit(content, 12<<10))}}
-	elements := []feishuElement{panel, feishuMarkdown(fmt.Sprintf("已调用 %d 次工具", process.ToolCount))}
+	panel := feishuElement{"tag": "collapsible_panel", "element_id": "execution_process", "expanded": false, "header": feishuElement{"title": feishuText(title), "width": "auto_when_fold", "icon": feishuElement{"tag": "standard_icon", "token": "right-small-ccm_outlined", "size": "16px 16px"}, "icon_position": "follow_text", "icon_expanded_angle": 90}, "elements": []feishuElement{feishuMarkdown(feishuLimit(content, 12<<10))}}
+	elements := []feishuElement{panel}
 	if !terminal(relay.RunStatus(status)) && token != "" {
-		cancel := feishuButton("取消本次任务", "cancel_task", token)
-		cancel["type"] = "danger_text"
+		cancel := feishuButton("", "cancel_task", token)
+		delete(cancel, "text")
+		cancel["type"] = "text"
+		cancel["icon"] = feishuElement{"tag": "standard_icon", "token": "stop_outlined"}
 		cancel["hover_tips"] = feishuText("停止这一次任务，保留会话记录")
-		elements = append(elements, cancel)
+		// Public collapsible panels have no hover button area. Use documented
+		// columns for an adjacent icon instead of a separate full-width action.
+		elements = []feishuElement{{"tag": "column_set", "flex_mode": "none", "horizontal_spacing": "4px", "horizontal_align": "left", "columns": []feishuElement{
+			{"tag": "column", "width": "auto", "vertical_align": "top", "elements": []feishuElement{panel}},
+			{"tag": "column", "width": "auto", "vertical_align": "top", "elements": []feishuElement{cancel}},
+		}}}
 	}
 	if answer != "" {
 		response := feishuMarkdown(feishuLimit(answer, 12<<10))
