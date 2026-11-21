@@ -268,9 +268,9 @@ func feishuRuntimeProcess(events []relay.Event) feishuProcess {
 				}
 			}
 			if status := feishuString(item, "status"); status != "" {
-				activity.Status = status
+				activity.Status = feishuToolStatus(status)
 			}
-			if strings.HasSuffix(eventType, ".completed") && activity.Status == "running" {
+			if strings.HasSuffix(eventType, ".completed") && activity.Status != "failed" && activity.Status != "cancelled" {
 				activity.Status = "completed"
 			}
 			if kind == "reasoning" || kind == "agentmessage" {
@@ -318,7 +318,7 @@ func feishuRuntimeProcess(events []relay.Event) feishuProcess {
 					activity.Tool = true
 					activity.Title = feishuString(block, "name")
 					activity.Text = feishuValueText(block["input"])
-					process.Activity = "调用工具"
+					process.Activity = feishuActivityLabel(activity)
 				case "tool_result":
 					if activity := byID[blockID]; activity != nil {
 						activity.Output = feishuValueText(block["content"])
@@ -348,7 +348,7 @@ func feishuRuntimeProcess(events []relay.Event) feishuProcess {
 			activity.Title = feishuString(part, "tool")
 			activity.Text = feishuValueText(state["input"])
 			activity.Output = feishuValueText(state["output"])
-			activity.Status = feishuString(state, "status")
+			activity.Status = feishuToolStatus(feishuString(state, "status"))
 			if activity.Status == "error" {
 				activity.Status = "failed"
 				activity.Output = feishuValueText(state["error"])
@@ -403,7 +403,29 @@ func feishuRuntimeProcess(events []relay.Event) feishuProcess {
 			process.ToolCount++
 		}
 	}
+	// Commentary frequently arrives while a tool is still running. It must not
+	// replace the tool's live status with the generic message label.
+	for index := len(process.Items) - 1; index >= 0; index-- {
+		item := process.Items[index]
+		if item.Tool && item.Status == "running" {
+			process.Activity = feishuActivityLabel(item)
+			break
+		}
+	}
 	return process
+}
+
+func feishuToolStatus(status string) string {
+	switch strings.ToLower(strings.ReplaceAll(status, "_", "")) {
+	case "completed", "complete", "succeeded", "success":
+		return "completed"
+	case "failed", "error", "errored":
+		return "failed"
+	case "cancelled", "canceled":
+		return "cancelled"
+	default:
+		return "running"
+	}
 }
 
 // Keep the collapsed heading bounded and independent of commands, paths,
@@ -416,19 +438,16 @@ func feishuActivityLabel(activity *feishuActivity) string {
 		if activity.Status == "completed" || activity.Status == "succeeded" {
 			return "思考中"
 		}
-		switch activity.Type {
-		case "filechange":
-			return "修改文件"
-		case "websearch":
-			return "搜索信息"
-		default:
-			return "调用工具"
+		label, _ := feishuActivityIntent(activity)
+		if label == "执行 Git 命令" {
+			return "执行命令"
 		}
+		return label
 	}
 	if activity.Type == "reasoning" {
 		return "思考中"
 	}
-	return "处理任务"
+	return "思考中"
 }
 
 func feishuLimit(text string, limit int) string {

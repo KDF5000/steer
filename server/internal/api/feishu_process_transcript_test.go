@@ -36,7 +36,7 @@ func TestFeishuTranscriptKeepsMessagesAndGroupsInterveningTools(t *testing.T) {
 	if feishuRecord(feishuRecord(items[3]["header"])["title"])["content"] != "执行了 1 条命令 · 修改了文件" {
 		t.Fatalf("second action group = %v", items[3])
 	}
-	if !strings.Contains(items[4]["content"].(string), "go vet") || !strings.Contains(items[4]["content"].(string), "执行中") {
+	if !strings.Contains(items[4]["content"].(string), "go vet") || !strings.Contains(items[4]["content"].(string), "正在执行命令") {
 		t.Fatal("active tool should remain visible outside completed group")
 	}
 }
@@ -65,5 +65,16 @@ func TestFeishuReasoningDescriptionMatchesWebCategories(t *testing.T) {
 		if got := feishuReasoningDescription(test.input); got != test.want {
 			t.Fatalf("%q: got %q, want %q", test.input, got, test.want)
 		}
+	}
+}
+
+func TestFeishuToolDetailsUseSeparateLinesWithoutCompletionNoise(t *testing.T) {
+	row := feishuToolDetailElement(&feishuActivity{Type: "commandexecution", Tool: true, Title: "go test ./...", Status: "completed"})
+	if row["content"] != "**运行测试**\n`go test ./...`" {
+		t.Fatalf("tool row = %v", row)
+	}
+	row = feishuToolDetailElement(&feishuActivity{Type: "commandexecution", Tool: true, Title: "go test ./...", Status: "failed", Output: "setup logs\nerror: test assertion failed\nstack trace"})
+	if got := row["content"].(string); !strings.Contains(got, "\n错误：error:") || strings.Contains(got, "stack trace") {
+		t.Fatalf("error row = %s", got)
 	}
 }

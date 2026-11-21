@@ -112,12 +112,17 @@ an execution card immediately after task submission. Its process panel is
 collapsed by default; the heading shows a short activity label such as tool
 execution, thinking, workspace preparation, or reply generation. It does not
 show commands, paths, generated prose, or a persistent tool-call count.
+An active tool takes precedence over incoming commentary in the heading:
+scripts, searches, file reads/changes, and tests get their own short labels.
+Between tools, the heading shows thinking; the final phase shows reply generation.
 The chevron points right when collapsed and down when expanded.
 Expanding it shows a transcript following the Web execution process: Agent
 commentary is displayed directly as Markdown, with its paragraphs intact.
 Consecutive completed tools form nested collapsed groups such as "Ran 2
 commands" or "Ran a command · Updated files". Expanding a group reveals the
-individual commands, targets and short failure messages; successful grep
+individual operations, each with its name and command/target on separate
+lines, followed by a short error line on failure. Completed groups avoid
+repeating a completion badge on every operation. Successful grep
 results, file contents, patches and command logs are not copied into the feed.
 Active tools remain visible beside completed groups. Reasoning events use
 the same short status descriptions as the Web process view. Canonical

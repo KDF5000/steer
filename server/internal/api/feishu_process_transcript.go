@@ -19,16 +19,16 @@ func feishuProcessTranscript(process feishuProcess) []feishuElement {
 		}
 		var completed, active []*feishuActivity
 		for _, action := range actions {
-			if action.Status == "completed" || action.Status == "succeeded" || action.Status == "failed" {
+			if action.Status == "completed" || action.Status == "succeeded" || action.Status == "failed" || action.Status == "cancelled" {
 				completed = append(completed, action)
 			} else {
 				active = append(active, action)
 			}
 		}
 		if len(completed) > 0 {
-			var details []string
+			var details []feishuElement
 			for _, action := range completed {
-				details = append(details, feishuActivitySummary(action))
+				details = append(details, feishuToolDetailElement(action))
 			}
 			// Summarize counts in the group label, retain actual actions inside it.
 			if len(details) > 12 {
@@ -37,11 +37,11 @@ func feishuProcessTranscript(process feishuProcess) []feishuElement {
 			groupID := sha256.Sum256([]byte(completed[0].ID))
 			elements = append(elements, feishuElement{"tag": "collapsible_panel", "element_id": fmt.Sprintf("tools_%x", groupID[:6]), "expanded": false,
 				"header":   feishuElement{"title": feishuText(feishuActionGroupLabel(completed)), "icon": feishuElement{"tag": "standard_icon", "token": "right-small-ccm_outlined", "size": "16px 16px"}, "icon_position": "follow_text", "icon_expanded_angle": 90},
-				"elements": []feishuElement{feishuMarkdown(feishuTranscriptText(strings.Join(details, "\n"), 2500))},
+				"elements": details, "vertical_spacing": "8px", "padding": "4px 0px",
 			})
 		}
 		for _, action := range active {
-			elements = append(elements, feishuMarkdown(feishuActivitySummary(action)))
+			elements = append(elements, feishuToolDetailElement(action))
 		}
 		actions = nil
 	}
@@ -74,6 +74,28 @@ func feishuProcessTranscript(process feishuProcess) []feishuElement {
 		elements = elements[1:]
 	}
 	return elements
+}
+
+func feishuToolDetailElement(action *feishuActivity) feishuElement {
+	label, detail := feishuActivityIntent(action)
+	switch action.Status {
+	case "running":
+		label = "正在" + label
+	case "failed":
+		label += " · 失败"
+	case "cancelled":
+		label += " · 已取消"
+	}
+	text := "**" + label + "**"
+	if detail = feishuActivityExcerpt(detail, 160); detail != "" {
+		text += "\n`" + strings.ReplaceAll(detail, "`", "'") + "`"
+	}
+	if action.Status == "failed" {
+		if message := feishuErrorExcerpt(action.Output); message != "" {
+			text += "\n错误：" + message
+		}
+	}
+	return feishuMarkdown(text)
 }
 
 func feishuTranscriptText(text string, limit int) string {

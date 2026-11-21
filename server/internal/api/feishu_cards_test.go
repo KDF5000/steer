@@ -92,11 +92,11 @@ func TestFeishuCompactProcessControls(t *testing.T) {
 
 func TestFeishuCollapsedHeadingUsesShortActivityLabels(t *testing.T) {
 	for _, test := range []struct{ name, payload, eventType, want string }{
-		{"command", `{"item":{"id":"tool","type":"commandExecution","command":"a very long command with arguments"}}`, "runtime.trae.item.started", "调用工具"},
+		{"command", `{"item":{"id":"tool","type":"commandExecution","command":"a very long command with arguments"}}`, "runtime.trae.item.started", "执行命令"},
 		{"files", `{"item":{"id":"tool","type":"fileChange","path":"/a/very/long/path"}}`, "runtime.trae.item.started", "修改文件"},
-		{"search", `{"item":{"id":"tool","type":"webSearch","query":"a very long query"}}`, "runtime.trae.item.started", "搜索信息"},
+		{"search", `{"item":{"id":"tool","type":"webSearch","query":"a very long query"}}`, "runtime.trae.item.started", "搜索资料"},
 		{"reasoning", `{"item":{"id":"r","type":"reasoning","text":"long reasoning content"}}`, "runtime.trae.item.started", "思考中"},
-		{"commentary", `{"item":{"id":"a","type":"agentMessage","phase":"commentary","text":"long progress commentary"}}`, "runtime.trae.item.started", "处理任务"},
+		{"commentary", `{"item":{"id":"a","type":"agentMessage","phase":"commentary","text":"long progress commentary"}}`, "runtime.trae.item.started", "思考中"},
 		{"final", `{"item":{"id":"a","type":"agentMessage","phase":"final_answer"}}`, "runtime.trae.item.started", "生成回复"},
 		{"tool finished", `{"item":{"id":"tool","type":"commandExecution","command":"long command"}}`, "runtime.trae.item.completed", "思考中"},
 		{"raw tool", `{"message":{"content":[{"type":"tool_use","id":"a","name":"long tool name"}]}}`, "runtime.qwenwork.assistant", "调用工具"},
@@ -127,6 +127,33 @@ func TestFeishuStreamJSONToolProjection(t *testing.T) {
 		if !strings.Contains(card, text) {
 			t.Fatalf("missing %q", text)
 		}
+	}
+}
+
+func TestFeishuActiveToolHeadingSurvivesCommentary(t *testing.T) {
+	events := []relay.Event{
+		{Type: "runtime.trae.item.started", Data: json.RawMessage(`{"item":{"id":"script","type":"commandExecution","command":"python3 check.py","status":"inProgress"}}`)},
+		{Type: "runtime.trae.item.started", Data: json.RawMessage(`{"item":{"id":"comment","type":"agentMessage","phase":"commentary","text":"正在检查代码。"}}`)},
+		{Type: "runtime.trae.item.agentMessage.delta", Data: json.RawMessage(`{"itemId":"comment","delta":"等待脚本结果。"}`)},
+	}
+	if got := feishuRuntimeProcess(events).Activity; got != "运行脚本" {
+		t.Fatalf("commentary replaced active script heading: %q", got)
+	}
+	events = append(events, relay.Event{Type: "runtime.trae.item.completed", Data: json.RawMessage(`{"item":{"id":"script","type":"commandExecution","status":"inProgress"}}`)})
+	process := feishuRuntimeProcess(events)
+	if process.Items[0].Status != "completed" || process.Activity != "思考中" {
+		t.Fatalf("completed script remained active: %+v", process)
+	}
+	events = append(events, relay.Event{Type: "runtime.trae.item.started", Data: json.RawMessage(`{"item":{"id":"final","type":"agentMessage","phase":"final_answer"}}`)})
+	if got := feishuRuntimeProcess(events).Activity; got != "生成回复" {
+		t.Fatalf("final heading = %q", got)
+	}
+}
+
+func TestFeishuScriptToolHeading(t *testing.T) {
+	event := relay.Event{Type: "runtime.trae.item.started", Data: json.RawMessage(`{"item":{"id":"script","type":"mcpToolCall","name":"functions.exec","arguments":{"code":"await tools.exec_command({cmd: 'rg pattern server'})"}}}`)}
+	if got := feishuRuntimeProcess([]relay.Event{event}).Activity; got != "运行脚本" {
+		t.Fatalf("script tool heading = %q", got)
 	}
 }
 

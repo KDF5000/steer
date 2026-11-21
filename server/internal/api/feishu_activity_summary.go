@@ -49,6 +49,10 @@ func feishuActivityIntent(activity *feishuActivity) (label, detail string) {
 		return "修改文件", file
 	}
 	switch name {
+	case "exec", "execute", "run_script":
+		if feishuString(input, "code", "script") != "" {
+			return "运行脚本", feishuString(input, "description")
+		}
 	case "grep", "rg", "search", "glob":
 		if file != "" && query != "" {
 			query += " · " + file
@@ -111,7 +115,7 @@ func feishuCommandIntent(command string) (label, detail string) {
 		label = "查看目录"
 	case "curl", "wget":
 		label = "请求网页"
-	case "python", "python3", "node":
+	case "python", "python3", "node", "bash", "sh", "zsh":
 		label = "运行脚本"
 	case "git":
 		label = "执行 Git 命令"
