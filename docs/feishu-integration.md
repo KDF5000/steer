@@ -113,8 +113,11 @@ collapsed by default; the heading shows a short activity label such as tool
 execution, thinking, workspace preparation, or reply generation. It does not
 show commands, paths, generated prose, or a persistent tool-call count.
 The chevron points right when collapsed and down when expanded.
-Expanding it shows execution commentary, tool inputs and
-outputs, and reasoning content actually exposed by the Runtime. Canonical
+Expanding it shows a concise activity feed: search terms and scope, file
+paths being read or changed, short commands or their descriptions, and brief
+commentary/reasoning excerpts actually exposed by the Runtime. Successful
+grep results, file contents, patches and command logs are not copied into the
+feed; failed tools retain a short error excerpt. Canonical
 item events and the tool protocols used by Claude, Qoder/QwenWork, OpenCode,
 and Pi are projected into the card. The card refreshes when content or status
 changes, at most once per second. Runtime providers that do not expose a given
@@ -129,8 +132,9 @@ hover button area belongs to the checker component, which this card does not use
 The final answer appears below the collapsed process panel in the same card.
 By default it appears when the task finishes; **Stream replies** enables
 incremental final answers when the Runtime exposes `final`/`final_answer`
-events. Tool output and long process histories are bounded in the card; the
-complete events remain in Steer. Answers beyond the card's display budget are
+events. The feed retains up to 60 recent activity summaries within its byte
+budget, without adding omission notices to the Agent's progress. Complete
+events remain in Steer. Answers beyond the card's display budget are
 also sent as a complete rich-text reply. If sending or updating a card fails,
 the complete final reply falls back to a normal message.
 

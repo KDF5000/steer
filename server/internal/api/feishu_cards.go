@@ -451,38 +451,7 @@ func feishuExecutionCard(status string, events []relay.Event, answer, token stri
 	if terminal(relay.RunStatus(status)) {
 		title = "任务" + feishuStatusText(status)
 	}
-	var sections []string
-	// Bound both item count and total bytes; retain the most recent activity.
-	items := process.Items
-	if len(items) > 40 {
-		items = items[len(items)-40:]
-		sections = append(sections, "较早的执行步骤已省略，可在 Steer 查看完整记录。")
-	}
-	for _, item := range items {
-		state := "执行中"
-		if item.Status == "completed" || item.Status == "succeeded" {
-			state = "完成"
-		}
-		if item.Status == "failed" {
-			state = "失败"
-		}
-		section := "**" + feishuLimit(item.Title, 256) + "** · " + state
-		if item.Text != "" {
-			section += "\n" + feishuLimit(item.Text, 2000)
-		}
-		if item.Output != "" {
-			section += "\n输出：\n" + feishuLimit(item.Output, 2000)
-		}
-		sections = append(sections, section)
-	}
-	content := strings.Join(sections, "\n\n")
-	for len(content) > 12<<10 && len(sections) > 1 {
-		sections = sections[1:]
-		content = "较早的执行步骤已省略，可在 Steer 查看完整记录。\n\n" + strings.Join(sections, "\n\n")
-	}
-	if content == "" {
-		content = "Agent 正在执行，暂时还没有可展示的过程输出。"
-	}
+	content := feishuProcessSummary(process)
 	panel := feishuElement{"tag": "collapsible_panel", "element_id": "execution_process", "expanded": false, "header": feishuElement{"title": feishuText(title), "width": "auto_when_fold", "icon": feishuElement{"tag": "standard_icon", "token": "right-small-ccm_outlined", "size": "16px 16px"}, "icon_position": "follow_text", "icon_expanded_angle": 90}, "elements": []feishuElement{feishuMarkdown(feishuLimit(content, 12<<10))}}
 	elements := []feishuElement{panel}
 	if !terminal(relay.RunStatus(status)) && token != "" {

@@ -46,10 +46,13 @@ func TestFeishuExecutionProcessAndCancel(t *testing.T) {
 		t.Fatalf("output duplicated or missing: %+v", process.Items[1])
 	}
 	running := feishuExecutionCard("running", events, "", "task-card-token")
-	for _, text := range []string{"先检查测试结果", "go test ./...", "all tests passed", `"expanded":false`, "cancel_task", "task-card-token"} {
+	for _, text := range []string{"先检查测试结果", "go test ./...", `"expanded":false`, "cancel_task", "task-card-token"} {
 		if !strings.Contains(running, text) {
 			t.Fatalf("card missing %q: %s", text, running)
 		}
+	}
+	if strings.Contains(running, "all tests passed") {
+		t.Fatal("successful command output should not fill the activity feed")
 	}
 	if strings.Contains(running, "已调用") || strings.Contains(running, "取消本次任务") {
 		t.Fatal("process card should not contain a persistent count or text cancel row")
@@ -120,7 +123,7 @@ func TestFeishuStreamJSONToolProjection(t *testing.T) {
 		t.Fatalf("tool count = %d", process.ToolCount)
 	}
 	card := feishuExecutionCard("running", events, "", "token")
-	for _, text := range []string{"检查日志", "pwd", "/workspace", "README.md", "# Project", "失败"} {
+	for _, text := range []string{"检查日志", "pwd", "README.md", "# Project", "失败"} {
 		if !strings.Contains(card, text) {
 			t.Fatalf("missing %q", text)
 		}
@@ -348,7 +351,7 @@ func TestFeishuCardActionsPersistAndPreserveSession(t *testing.T) {
 	}
 	finalCard := patches[len(patches)-1]
 	fakeMu.Unlock()
-	if len(bot.Sent) != 1 || bot.Sent[0].Card == "" || !strings.Contains(finalCard, "Done") || !strings.Contains(finalCard, "passed") || strings.Contains(finalCard, "cancel_task") {
+	if len(bot.Sent) != 1 || bot.Sent[0].Card == "" || !strings.Contains(finalCard, "Done") || !strings.Contains(finalCard, "go test") || strings.Contains(finalCard, "cancel_task") {
 		t.Fatalf("task card not completed: sent=%+v final=%s", bot.Sent, finalCard)
 	}
 	badModel := makeCard("model", feishuCardContext{ConversationID: sessionID, AgentID: agent.ID, RuntimeID: runtimeID})
