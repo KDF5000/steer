@@ -23,6 +23,7 @@ import {
   FileCode,
   FileJson,
   FileImage,
+  FlaskConical,
   Bot,
   Check,
   ChevronRight,
@@ -73,6 +74,8 @@ import {
 import { SessionSearchDialog } from './session-search';
 import type { TaskMessageOptions } from '@/lib/domain';
 import { AgentModelPicker } from './agent-model-picker';
+import { LabsView, useWorkspaceLabs } from './labs';
+import { AutomationView } from './automation';
 import hljs from 'highlight.js/lib/common';
 import { withRuntimeToolEvents } from '@/lib/runtime-events';
 import 'highlight.js/styles/github.css';
@@ -105,6 +108,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { AgentSkillPicker } from './agent-skill-picker';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -163,6 +167,7 @@ import {
 } from '@/lib/polling';
 import { useChatViewport } from './use-chat-viewport';
 import { AssetsView, WorkLogView } from './workspace-library';
+import { SkillDetailView } from './skill-detail';
 import {
   AgentTable,
   CollaborationTree,
@@ -175,7 +180,15 @@ import {
 import type { ResourceShare } from '@/lib/steer-client';
 import './fusion.css';
 
-type View = 'chat' | 'artifacts' | 'agents' | 'assets' | 'notes' | 'settings';
+type View =
+  | 'chat'
+  | 'artifacts'
+  | 'agents'
+  | 'assets'
+  | 'notes'
+  | 'settings'
+  | 'labs'
+  | 'automation';
 const noProjectSessionGroup = '__no-project__';
 const recentSessionLimit = 5;
 
@@ -877,6 +890,11 @@ export default function Fusion() {
     new Set(),
   );
   const [view, setView] = useState<View>('chat');
+  const [skillDetailId, setSkillDetailId] = useState<string | null>(null);
+  const {
+    enabled: automatedReviewEnabled,
+    setEnabled: setAutomatedReviewEnabled,
+  } = useWorkspaceLabs(authUser?.id, workspaceID);
   const [agentTab, setAgentTab] = useState('agents');
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -2023,9 +2041,12 @@ export default function Fusion() {
       } else if (
         section === 'assets' ||
         section === 'notes' ||
-        section === 'settings'
+        section === 'settings' ||
+        section === 'labs'
       ) {
         setView(section);
+      } else if (section === 'automation') {
+        setView(automatedReviewEnabled ? 'automation' : 'labs');
       } else {
         setView('chat');
         if (section === 'chat' && id) void openChatSession(id);
@@ -2046,6 +2067,7 @@ export default function Fusion() {
     openChatSession,
     resourceShares,
     collaborationShare,
+    automatedReviewEnabled,
   ]);
 
   useEffect(() => {
@@ -2055,7 +2077,11 @@ export default function Fusion() {
       return;
     }
     const section =
-      view === 'agents' && agentTab === 'runtimes' ? 'runtimes' : view;
+      view === 'automation' && !automatedReviewEnabled
+        ? 'labs'
+        : view === 'agents' && agentTab === 'runtimes'
+          ? 'runtimes'
+          : view;
     const id =
       view === 'chat'
         ? chatSession
@@ -2074,6 +2100,7 @@ export default function Fusion() {
     selectedArtifact,
     view,
     collaborationShare,
+    automatedReviewEnabled,
   ]);
 
   const loadProjectGitStatus = (projectID: string) => {
@@ -3456,7 +3483,10 @@ export default function Fusion() {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     isActive={view === 'assets'}
-                    onClick={() => setView('assets')}
+                    onClick={() => {
+                      setSkillDetailId(null);
+                      setView('assets');
+                    }}
                   >
                     <Library aria-hidden="true" />
                     <span>{t('Assets')}</span>
@@ -3500,6 +3530,29 @@ export default function Fusion() {
                     <span>{t('Settings')}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={
+                      view === 'labs' ||
+                      (view === 'automation' && !automatedReviewEnabled)
+                    }
+                    onClick={() => setView('labs')}
+                  >
+                    <FlaskConical aria-hidden="true" />
+                    <span>{t('Labs')}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {automatedReviewEnabled && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={view === 'automation'}
+                      onClick={() => setView('automation')}
+                    >
+                      <GitBranch aria-hidden="true" />
+                      <span>{t('Automation')}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     isActive={view === 'agents' && agentTab !== 'runtimes'}
@@ -3577,14 +3630,18 @@ export default function Fusion() {
               {view === 'artifacts'
                 ? t('Artifacts')
                 : view === 'assets'
-                  ? t('Assets')
+                  ? t(skillDetailId ? 'Skill' : 'Assets')
                   : view === 'notes'
                     ? t('Footprints')
                     : view === 'settings'
                       ? t('Settings')
-                      : agentTab !== 'runtimes'
-                        ? t('Agents')
-                        : t('Runtimes')}
+                      : view === 'labs'
+                        ? t('Labs')
+                        : view === 'automation'
+                          ? t(automatedReviewEnabled ? 'Automation' : 'Labs')
+                          : agentTab !== 'runtimes'
+                            ? t('Agents')
+                            : t('Runtimes')}
             </span>
           </header>
         )}
@@ -3810,6 +3867,18 @@ export default function Fusion() {
             selected={selectedArtifact}
             onSelect={setSelectedArtifact}
           />
+        ) : view === 'assets' && skillDetailId ? (
+          <SkillDetailView
+            key={skillDetailId}
+            skillId={skillDetailId}
+            onSkill={(saved) =>
+              setSkillList((items) =>
+                items.map((item) => (item.id === saved.id ? saved : item)),
+              )
+            }
+            onBack={() => setSkillDetailId(null)}
+            onNotice={setNotice}
+          />
         ) : view === 'assets' ? (
           <AssetsView
             skills={skillList}
@@ -3819,6 +3888,7 @@ export default function Fusion() {
             onSkills={setSkillList}
             onDocuments={setDocumentList}
             onAgentSkills={setAgentSkillAssignments}
+            onOpenSkill={setSkillDetailId}
             onNotice={setNotice}
           />
         ) : view === 'notes' ? (
@@ -3828,6 +3898,29 @@ export default function Fusion() {
             sessions={chatSessions}
             projects={projectList}
             onOpenSession={(sessionID) => void openChatSession(sessionID)}
+            onNotice={setNotice}
+          />
+        ) : view === 'labs' ||
+          (view === 'automation' && !automatedReviewEnabled) ? (
+          <LabsView
+            enabled={automatedReviewEnabled}
+            onToggle={(next) => {
+              if (!setAutomatedReviewEnabled(next)) {
+                setNotice(t('Could not save the experiment preference.'));
+              } else {
+                setView('labs');
+              }
+            }}
+            onOpen={() => setView('automation')}
+          />
+        ) : view === 'automation' ? (
+          <AutomationView
+            key={`${authUser.id}:${workspaceID}`}
+            scope={`${authUser.id}:${workspaceID}`}
+            agents={agentList}
+            runtimes={runtimeChoices}
+            skills={skillList}
+            onRefreshRuntimes={refreshComposerRuntimes}
             onNotice={setNotice}
           />
         ) : view === 'settings' ? (
@@ -8826,32 +8919,10 @@ function AgentDialog({
             />
           </label>
           {!!skills.length && (
-            <fieldset className="ws-agent-skill-fieldset">
-              <legend>Skills</legend>
-              <p>
-                Relay installs selected instructions into this Agent’s remote
-                workspace for every run.
-              </p>
-              <div>
-                {skills.map((skill) => (
-                  <label key={skill.id} className="ws-agent-skill-checkbox">
-                    <input
-                      type="checkbox"
-                      name="skills"
-                      value={skill.id}
-                      defaultChecked={selectedSkillIDs.includes(skill.id)}
-                      aria-label={`Assign ${skill.name}`}
-                    />
-                    <span>
-                      <strong>{skill.name}</strong>
-                      <small>
-                        {skill.description || 'Reusable instructions'}
-                      </small>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            <AgentSkillPicker
+              skills={skills}
+              initialSelectedIDs={selectedSkillIDs}
+            />
           )}
           {error && (
             <p className="ws-form-error" role="alert">

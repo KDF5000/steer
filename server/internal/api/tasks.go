@@ -416,6 +416,22 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	if err != nil {
 		return submittedTask{}, false, err
 	}
+	// Workflow-level Skills are added on top of the Agent's own Skills. They are
+	// scoped to this run, so the Agent definition does not change.
+	extraSkills, err := s.store.SkillsByIDs(ctx, executionWid, in.SkillIDs)
+	if err != nil {
+		return submittedTask{}, false, err
+	}
+	seenSkills := make(map[string]bool, len(assignedSkills)+len(extraSkills))
+	for _, skill := range assignedSkills {
+		seenSkills[skill.ID] = true
+	}
+	for _, skill := range extraSkills {
+		if !seenSkills[skill.ID] {
+			assignedSkills = append(assignedSkills, skill)
+			seenSkills[skill.ID] = true
+		}
+	}
 	request.Instructions.Agent = append(request.Instructions.Agent, skillInstructionFragments(assignedSkills)...)
 	if session.WorkspaceKind != nil && session.WorkspaceSource != nil {
 		request.Workspace = relay.WorkspaceSpec{Kind: *session.WorkspaceKind, Source: *session.WorkspaceSource, Ref: value(session.WorkspaceRef), Subdir: value(session.WorkspaceSubdir)}

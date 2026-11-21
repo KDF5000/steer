@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -15,7 +16,13 @@ import (
 	"github.com/KDF5000/steer/server/internal/store"
 )
 
-const maxImportedSkillSize = 1 << 20
+const (
+	maxImportedSkillSize = 1 << 20
+	maxSkillFiles        = 200
+	maxSkillFileSize     = 1 << 20
+	maxSkillTotalSize    = 8 << 20
+	skillEntrypoint      = "SKILL.md"
+)
 
 func (s *Server) listSkills(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.Skills(r.Context(), s.workspace(r))
@@ -26,13 +33,24 @@ func (s *Server) listSkills(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
+// getSkill returns the Skill with every file so the detail page can browse and
+// edit a multi-file package. The list endpoint stays lightweight.
+func (s *Server) getSkill(w http.ResponseWriter, r *http.Request) {
+	item, err := s.store.Skill(r.Context(), s.workspace(r), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
 func (s *Server) createSkill(w http.ResponseWriter, r *http.Request) {
 	var skill store.Skill
 	if err := decodeJSON(r, &skill); err != nil {
 		writeError(w, err)
 		return
 	}
-	if !validateSkill(w, &skill) {
+	if !normalizeSkillPayload(w, &skill) {
 		return
 	}
 	skill.SourceKind = "manual"
@@ -46,10 +64,35 @@ func (s *Server) createSkill(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) importSkill(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		URL string `json:"url"`
+		URL        string `json:"url"`
+		Identifier string `json:"identifier"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, err)
+		return
+	}
+	// AgentBuddy packages are resolved through the registry API rather than
+	// fetched as a single SKILL.md file.
+	if identifier := strings.TrimSpace(input.Identifier); identifier != "" {
+		if !isAgentBuddyInput(identifier) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid AgentBuddy Skill identifier"})
+			return
+		}
+		skill, importErr := importAgentBuddySkill(r.Context(), identifier, "")
+		if importErr != nil {
+			writeCodebaseError(w, importErr)
+			return
+		}
+		s.createImportedSkill(w, r, skill)
+		return
+	}
+	if isAgentBuddyInput(input.URL) {
+		skill, importErr := importAgentBuddySkill(r.Context(), input.URL, input.URL)
+		if importErr != nil {
+			writeCodebaseError(w, importErr)
+			return
+		}
+		s.createImportedSkill(w, r, skill)
 		return
 	}
 	sourceURL, fetchURL, err := skillImportURL(input.URL)
@@ -93,7 +136,7 @@ func (s *Server) importSkill(w http.ResponseWriter, r *http.Request) {
 		name = strings.TrimSuffix(path.Base(request.URL.Path), path.Ext(request.URL.Path))
 	}
 	skill := store.Skill{Name: name, Description: description, Content: string(content), SourceKind: "url", SourceURL: &sourceURL}
-	if !validateSkill(w, &skill) {
+	if !normalizeSkillPayload(w, &skill) {
 		return
 	}
 	created, err := s.store.CreateSkill(r.Context(), s.workspace(r), skill)
@@ -102,6 +145,44 @@ func (s *Server) importSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) createImportedSkill(w http.ResponseWriter, r *http.Request, skill store.Skill) {
+	if !normalizeSkillPayload(w, &skill) {
+		return
+	}
+	created, err := s.store.CreateSkill(r.Context(), s.workspace(r), skill)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+// searchAgentBuddySkills proxies the internal AgentBuddy registry so users can
+// find a Skill by name and import it without leaving Steer.
+func (s *Server) searchAgentBuddySkills(w http.ResponseWriter, r *http.Request) {
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(query) < 2 || len(query) > 120 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "enter at least 2 characters to search AgentBuddy"})
+		return
+	}
+	items, err := agentBuddySearch(r.Context(), query)
+	if err != nil {
+		writeCodebaseError(w, err)
+		return
+	}
+	result := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		result = append(result, map[string]any{
+			"identifier":  item.Identifier,
+			"name":        item.Name,
+			"namespace":   item.Namespace,
+			"description": item.Description,
+			"version":     item.NewestVersion.Version,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": result})
 }
 
 func (s *Server) updateSkill(w http.ResponseWriter, r *http.Request) {
@@ -120,6 +201,46 @@ func (s *Server) updateSkill(w http.ResponseWriter, r *http.Request) {
 	}
 	skill.SourceKind, skill.SourceURL = current.SourceKind, current.SourceURL
 	updated, err := s.store.UpdateSkill(r.Context(), s.workspace(r), current.ID, skill)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	// The settings form edits the instructions directly; mirror them into the
+	// SKILL.md entry so the file view and Agent instructions never diverge.
+	files := syncSkillEntrypoint(current.Files, updated.Content)
+	if updated, err = s.store.UpdateSkillFiles(r.Context(), s.workspace(r), current.ID, files, updated.Content); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+// updateSkillFiles replaces the whole file set from the detail page editor.
+// SKILL.md must be present because it is the entry point used for Agent
+// instructions.
+func (s *Server) updateSkillFiles(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Files []store.SkillFile `json:"files"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, err)
+		return
+	}
+	files, err := normalizeSkillFiles(input.Files)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	content := skillContentFromFiles(files, "")
+	if strings.TrimSpace(content) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "SKILL.md is required and cannot be empty"})
+		return
+	}
+	if len(content) > maxImportedSkillSize {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "SKILL.md must be 1 MB or smaller"})
+		return
+	}
+	updated, err := s.store.UpdateSkillFiles(r.Context(), s.workspace(r), r.PathValue("id"), files, content)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -190,6 +311,162 @@ func validateSkill(w http.ResponseWriter, skill *store.Skill) bool {
 		skill.SourceKind = "manual"
 	}
 	return true
+}
+
+// normalizeSkillPayload validates an incoming file set, keeps content in sync
+// with SKILL.md, and synthesizes the entry point when a Skill was created from
+// a single document (manual editor or URL import).
+func normalizeSkillPayload(w http.ResponseWriter, skill *store.Skill) bool {
+	files, err := normalizeSkillFiles(skill.Files)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return false
+	}
+	skill.Files = files
+	if content := skillContentFromFiles(files, ""); content != "" {
+		skill.Content = content
+	}
+	if !validateSkill(w, skill) {
+		return false
+	}
+	if !hasSkillEntrypoint(skill.Files) {
+		skill.Files = append(skill.Files, store.SkillFile{
+			Path:     skillEntrypoint,
+			Content:  skill.Content,
+			Encoding: "text",
+			Size:     len(skill.Content),
+		})
+		sortSkillFiles(skill.Files)
+	}
+	return true
+}
+
+func normalizeSkillFiles(files []store.SkillFile) ([]store.SkillFile, error) {
+	if len(files) == 0 {
+		return []store.SkillFile{}, nil
+	}
+	if len(files) > maxSkillFiles {
+		return nil, fmt.Errorf("a Skill can contain at most %d files", maxSkillFiles)
+	}
+	seen := make(map[string]bool, len(files))
+	result := make([]store.SkillFile, 0, len(files))
+	total := 0
+	for _, file := range files {
+		cleaned, err := normalizeSkillFilePath(file.Path)
+		if err != nil {
+			return nil, err
+		}
+		key := strings.ToLower(cleaned)
+		if seen[key] {
+			return nil, fmt.Errorf("duplicate file path %q", cleaned)
+		}
+		seen[key] = true
+		encoding := strings.ToLower(strings.TrimSpace(file.Encoding))
+		if encoding == "" {
+			encoding = "text"
+		}
+		if encoding != "text" && encoding != "base64" {
+			return nil, fmt.Errorf("file %q has an unsupported encoding", cleaned)
+		}
+		if len(file.Content) > maxSkillFileSize {
+			return nil, fmt.Errorf("file %q is larger than 1 MB", cleaned)
+		}
+		size := len(file.Content)
+		if encoding == "base64" {
+			decoded, decodeErr := base64.StdEncoding.DecodeString(file.Content)
+			if decodeErr != nil {
+				return nil, fmt.Errorf("file %q is not valid base64", cleaned)
+			}
+			size = len(decoded)
+		}
+		total += size
+		if total > maxSkillTotalSize {
+			return nil, errors.New("Skill files exceed the 8 MB limit")
+		}
+		result = append(result, store.SkillFile{Path: cleaned, Content: file.Content, Encoding: encoding, Size: size})
+	}
+	sortSkillFiles(result)
+	return result, nil
+}
+
+// normalizeSkillFilePath keeps stored paths relative and portable so a Skill
+// can be materialized on a Relay Node without escaping its directory.
+func normalizeSkillFilePath(raw string) (string, error) {
+	cleaned := strings.TrimSpace(strings.ReplaceAll(raw, "\\", "/"))
+	cleaned = strings.TrimPrefix(cleaned, "./")
+	if cleaned == "" {
+		return "", errors.New("skill file paths cannot be empty")
+	}
+	if len(cleaned) > 200 {
+		return "", fmt.Errorf("skill file path %q is too long", cleaned)
+	}
+	if strings.HasPrefix(cleaned, "/") {
+		return "", fmt.Errorf("skill file path %q must be relative", cleaned)
+	}
+	for _, r := range cleaned {
+		if r < 0x20 || r == 0x7f {
+			return "", errors.New("skill file paths cannot contain control characters")
+		}
+	}
+	for _, segment := range strings.Split(cleaned, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return "", fmt.Errorf("skill file path %q is invalid", cleaned)
+		}
+	}
+	return cleaned, nil
+}
+
+func isSkillEntrypoint(filePath string) bool {
+	return strings.EqualFold(filePath, skillEntrypoint)
+}
+
+func hasSkillEntrypoint(files []store.SkillFile) bool {
+	for _, file := range files {
+		if isSkillEntrypoint(file.Path) {
+			return true
+		}
+	}
+	return false
+}
+
+func skillContentFromFiles(files []store.SkillFile, fallback string) string {
+	for _, file := range files {
+		if isSkillEntrypoint(file.Path) && file.Encoding != "base64" {
+			return file.Content
+		}
+	}
+	return fallback
+}
+
+// syncSkillEntrypoint mirrors updated instructions into the SKILL.md file while
+// preserving every other file in the package.
+func syncSkillEntrypoint(files []store.SkillFile, content string) []store.SkillFile {
+	result := make([]store.SkillFile, 0, len(files)+1)
+	found := false
+	for _, file := range files {
+		if isSkillEntrypoint(file.Path) {
+			file.Content, file.Encoding, file.Size = content, "text", len(content)
+			found = true
+		}
+		result = append(result, file)
+	}
+	if !found {
+		result = append(result, store.SkillFile{Path: skillEntrypoint, Content: content, Encoding: "text", Size: len(content)})
+	}
+	sortSkillFiles(result)
+	return result
+}
+
+// sortSkillFiles keeps SKILL.md first and the rest alphabetical so the detail
+// page and imports render in a stable order.
+func sortSkillFiles(files []store.SkillFile) {
+	sort.SliceStable(files, func(i, j int) bool {
+		left, right := files[i].Path, files[j].Path
+		if isSkillEntrypoint(left) != isSkillEntrypoint(right) {
+			return isSkillEntrypoint(left)
+		}
+		return left < right
+	})
 }
 
 func skillImportURL(raw string) (string, string, error) {

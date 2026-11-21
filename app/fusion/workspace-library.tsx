@@ -59,6 +59,7 @@ import {
 import {
   steer,
   type AgentActivityRecord,
+  type AgentBuddySkillRecord,
   type ChatSessionRecord,
   type DocumentRecord,
   type FootprintOverviewRecord,
@@ -128,6 +129,7 @@ export function AssetsView({
   onSkills,
   onDocuments,
   onAgentSkills,
+  onOpenSkill,
   onNotice,
 }: {
   skills: SkillRecord[];
@@ -137,6 +139,7 @@ export function AssetsView({
   onSkills: (items: SkillRecord[]) => void;
   onDocuments: (items: DocumentRecord[]) => void;
   onAgentSkills: (items: Record<string, string[]>) => void;
+  onOpenSkill: (skillId: string) => void;
   onNotice: Notice;
 }) {
   const { t } = useI18n();
@@ -144,12 +147,21 @@ export function AssetsView({
   const [skillDialog, setSkillDialog] = useState(false);
   const [importDialog, setImportDialog] = useState(false);
   const [documentDialog, setDocumentDialog] = useState(false);
-  const [editingSkill, setEditingSkill] = useState<SkillRecord | null>(null);
   const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(
     null,
   );
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
+
+  // Skill import supports a public SKILL.md link or an AgentBuddy package.
+  const [importUrl, setImportUrl] = useState('');
+  const [buddyTarget, setBuddyTarget] = useState<AgentBuddySkillRecord | null>(
+    null,
+  );
+  const [buddyQuery, setBuddyQuery] = useState('');
+  const [buddyResults, setBuddyResults] = useState<AgentBuddySkillRecord[]>([]);
+  const [buddySearching, setBuddySearching] = useState(false);
+  const [buddyError, setBuddyError] = useState('');
 
   const saveSkill = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -163,14 +175,8 @@ export function AssetsView({
         description: formValue(data, 'description'),
         content: formValue(data, 'content'),
       };
-      const saved = editingSkill
-        ? await steer.updateSkill(editingSkill.id, input)
-        : await steer.createSkill(input);
-      onSkills(
-        editingSkill
-          ? skills.map((item) => (item.id === saved.id ? saved : item))
-          : [saved, ...skills],
-      );
+      const saved = await steer.createSkill(input);
+      onSkills([saved, ...skills]);
       const selectedAgents = new Set(data.getAll('agents').map(String));
       const nextAssignments = { ...agentSkills };
       const changedAssignments = agents.flatMap((agent) => {
@@ -192,7 +198,6 @@ export function AssetsView({
       );
       onAgentSkills(nextAssignments);
       setSkillDialog(false);
-      setEditingSkill(null);
       const failedAssignments = assignmentResults.filter(
         (result) => result.status === 'rejected',
       ).length;
@@ -216,16 +221,62 @@ export function AssetsView({
     }
   };
 
+  useEffect(() => {
+    const query = buddyQuery.trim();
+    if (!importDialog || query.length < 2) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setBuddySearching(true);
+      steer
+        .searchAgentBuddySkills(query, controller.signal)
+        .then((data) => {
+          if (!controller.signal.aborted) setBuddyResults(data.items);
+        })
+        .catch((reason) => {
+          if (!controller.signal.aborted) {
+            setBuddyError(
+              reason instanceof Error ? reason.message : 'Search failed.',
+            );
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setBuddySearching(false);
+        });
+    }, 350);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [buddyQuery, importDialog]);
+
+  const closeImportDialog = () => {
+    setImportDialog(false);
+    setImportUrl('');
+    setBuddyTarget(null);
+    setBuddyQuery('');
+    setBuddyResults([]);
+    setBuddyError('');
+    setError('');
+  };
+
   const importSkill = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (working) return;
+    const url = importUrl.trim();
+    const identifier = buddyTarget?.identifier;
+    if (!url && !identifier) {
+      setError('Enter a Skill link or choose an AgentBuddy Skill.');
+      return;
+    }
     setWorking(true);
     setError('');
     try {
-      const data = new FormData(event.currentTarget);
-      const imported = await steer.importSkill(formValue(data, 'url'));
+      const imported = await steer.importSkill(
+        url || `https://skills.bytedance.net/skills/${identifier}`,
+        identifier,
+      );
       onSkills([imported, ...skills]);
-      setImportDialog(false);
+      closeImportDialog();
       onNotice(
         'Skill imported. Configure it to choose which Agents receive it.',
       );
@@ -328,7 +379,6 @@ export function AssetsView({
               </Button>
               <Button
                 onClick={() => {
-                  setEditingSkill(null);
                   setError('');
                   setSkillDialog(true);
                 }}
@@ -385,7 +435,8 @@ export function AssetsView({
                   <h2>{skill.name}</h2>
                   <p>{skill.description || 'Reusable Agent instructions.'}</p>
                   <div className="ws-skill-source">
-                    {skill.sourceKind === 'url' ? (
+                    {skill.sourceKind === 'url' ||
+                    skill.sourceKind === 'agentbuddy' ? (
                       <>
                         <Import /> Imported
                       </>
@@ -403,11 +454,7 @@ export function AssetsView({
                     </span>
                     <button
                       type="button"
-                      onClick={() => {
-                        setEditingSkill(skill);
-                        setError('');
-                        setSkillDialog(true);
-                      }}
+                      onClick={() => onOpenSkill(skill.id)}
                     >
                       {t('Configure')}
                     </button>
@@ -489,15 +536,10 @@ export function AssetsView({
 
       <Dialog
         open={skillDialog}
-        onOpenChange={(open) => {
-          setSkillDialog(open);
-          if (!open) setEditingSkill(null);
-        }}
+        onOpenChange={(open) => setSkillDialog(open)}
       >
         <DialogContent className="ws-library-dialog">
-          <DialogTitle>
-            {editingSkill ? t('Configure') : t('Create skill')}
-          </DialogTitle>
+          <DialogTitle>{t('Create skill')}</DialogTitle>
           <DialogDescription>
             Relay materializes assigned Skills into the native instruction file
             on the Agent’s machine for every run.
@@ -505,17 +547,12 @@ export function AssetsView({
           <form onSubmit={saveSkill}>
             <label>
               Name
-              <input
-                name="name"
-                defaultValue={editingSkill?.name}
-                placeholder="e.g. UI review"
-              />
+              <input name="name" placeholder="e.g. UI review" />
             </label>
             <label>
               Description
               <input
                 name="description"
-                defaultValue={editingSkill?.description}
                 placeholder="When should the Agent use this Skill?"
               />
             </label>
@@ -523,7 +560,6 @@ export function AssetsView({
               Instructions
               <textarea
                 name="content"
-                defaultValue={editingSkill?.content}
                 placeholder="Write the reusable instructions in Markdown…"
                 rows={10}
               />
@@ -537,13 +573,7 @@ export function AssetsView({
                       type="checkbox"
                       name="agents"
                       value={agent.id}
-                      defaultChecked={
-                        editingSkill
-                          ? (agentSkills[agent.id] || []).includes(
-                              editingSkill.id,
-                            )
-                          : false
-                      }
+                      defaultChecked={false}
                     />
                     <span className="ws-avatar">{agent.name[0]}</span>
                     <span>
@@ -582,22 +612,109 @@ export function AssetsView({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={importDialog} onOpenChange={setImportDialog}>
+      <Dialog
+        open={importDialog}
+        onOpenChange={(open) =>
+          open ? setImportDialog(true) : closeImportDialog()
+        }
+      >
         <DialogContent className="ws-library-dialog compact">
           <DialogTitle>{t('Import Skill')}</DialogTitle>
           <DialogDescription>
-            Import a public SKILL.md from GitHub or GitLab. Review the
-            instructions before assigning it to an Agent.
+            Paste a public SKILL.md link, or search the internal AgentBuddy
+            registry and import a published Skill.
           </DialogDescription>
           <form onSubmit={importSkill}>
             <label>
               SKILL.md URL
               <input
                 name="url"
-                type="url"
+                type="text"
+                value={importUrl}
+                onChange={(event) => {
+                  setImportUrl(event.target.value);
+                  setBuddyTarget(null);
+                  setError('');
+                }}
                 placeholder="https://github.com/owner/repo/blob/main/SKILL.md"
               />
             </label>
+            <div className="ws-library-buddy">
+              <span className="ws-library-buddy-label">AgentBuddy</span>
+              <div className="ws-library-buddy-search">
+                <Search aria-hidden="true" />
+                <input
+                  value={buddyQuery}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setBuddyQuery(value);
+                    setBuddyError('');
+                    if (value.trim().length < 2) {
+                      setBuddyResults([]);
+                      setBuddySearching(false);
+                    }
+                  }}
+                  placeholder={t('Search skills.bytedance.net')}
+                  aria-label={t('Search AgentBuddy')}
+                />
+                {buddySearching && (
+                  <span className="ws-library-buddy-hint">
+                    {t('Searching…')}
+                  </span>
+                )}
+              </div>
+              {buddyTarget && (
+                <div className="ws-library-buddy-selected">
+                  <Sparkles aria-hidden="true" />
+                  <span>
+                    <strong>{buddyTarget.name}</strong>
+                    <small>{buddyTarget.identifier}</small>
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={t('Clear selection')}
+                    onClick={() => {
+                      setBuddyTarget(null);
+                      setImportUrl('');
+                    }}
+                  >
+                    <X aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+              {!!buddyResults.length && (
+                <ul className="ws-library-buddy-results">
+                  {buddyResults.map((item) => (
+                    <li key={item.identifier}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBuddyTarget(item);
+                          setImportUrl(
+                            `https://skills.bytedance.net/skills/${item.identifier}`,
+                          );
+                          setError('');
+                        }}
+                      >
+                        <span>
+                          <strong>{item.name}</strong>
+                          <small>{item.namespace}</small>
+                        </span>
+                        <span className="ws-library-buddy-version">
+                          {item.version ? `v${item.version}` : ''}
+                        </span>
+                      </button>
+                      {item.description && <p>{item.description}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {buddyError && (
+                <p className="ws-form-error" role="alert">
+                  {buddyError}
+                </p>
+              )}
+            </div>
             {error && (
               <p className="ws-form-error" role="alert">
                 {error}
@@ -607,7 +724,7 @@ export function AssetsView({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setImportDialog(false)}
+                onClick={closeImportDialog}
               >
                 {t('Cancel')}
               </Button>

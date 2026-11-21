@@ -30,12 +30,14 @@ type WorkspaceIntegration struct {
 }
 
 type IntegrationConversation struct {
-	IntegrationID  string
-	ChatID         string
-	ThreadKey      string
-	ConversationID string
-	ActiveTaskID   *string
-	ProjectID      *string
+	ModelOverride   *string
+	ReasoningEffort *string
+	IntegrationID   string
+	ChatID          string
+	ThreadKey       string
+	ConversationID  string
+	ActiveTaskID    *string
+	ProjectID       *string
 }
 
 type IntegrationEvent struct {
@@ -159,7 +161,7 @@ func (s *Store) CreateIntegrationEvent(ctx context.Context, event IntegrationEve
 
 func (s *Store) IntegrationConversation(ctx context.Context, integrationID, chatID, threadKey string) (IntegrationConversation, error) {
 	var item IntegrationConversation
-	err := s.pool.QueryRow(ctx, `SELECT integration_id,chat_id,thread_key,conversation_id,active_task_id,project_id FROM integration_conversations WHERE integration_id=$1 AND chat_id=$2 AND thread_key=$3`, integrationID, chatID, threadKey).Scan(&item.IntegrationID, &item.ChatID, &item.ThreadKey, &item.ConversationID, &item.ActiveTaskID, &item.ProjectID)
+	err := s.pool.QueryRow(ctx, `SELECT integration_id,chat_id,thread_key,conversation_id,active_task_id,project_id,model_override,reasoning_effort FROM integration_conversations WHERE integration_id=$1 AND chat_id=$2 AND thread_key=$3`, integrationID, chatID, threadKey).Scan(&item.IntegrationID, &item.ChatID, &item.ThreadKey, &item.ConversationID, &item.ActiveTaskID, &item.ProjectID, &item.ModelOverride, &item.ReasoningEffort)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return IntegrationConversation{}, ErrNotFound
 	}
@@ -181,7 +183,7 @@ func (s *Store) SaveIntegrationConversation(ctx context.Context, item Integratio
 }
 
 func (s *Store) ResetIntegrationConversation(ctx context.Context, integrationID, chatID, threadKey string) error {
-	_, err := s.pool.Exec(ctx, `UPDATE integration_conversations SET conversation_id='',active_task_id=NULL,updated_at=now() WHERE integration_id=$1 AND chat_id=$2 AND thread_key=$3`, integrationID, chatID, threadKey)
+	_, err := s.pool.Exec(ctx, `UPDATE integration_conversations SET conversation_id='',active_task_id=NULL,model_override=NULL,reasoning_effort=NULL,updated_at=now() WHERE integration_id=$1 AND chat_id=$2 AND thread_key=$3`, integrationID, chatID, threadKey)
 	return err
 }
 
@@ -196,7 +198,7 @@ func (s *Store) SetIntegrationChatProject(ctx context.Context, integrationID, ch
 		return err
 	}
 	defer tx.Rollback(ctx)
-	query := `INSERT INTO integration_conversations(integration_id,chat_id,thread_key,conversation_id,active_task_id,project_id) VALUES($1,$2,$3,'',NULL,$4) ON CONFLICT(integration_id,chat_id,thread_key) DO UPDATE SET conversation_id='',active_task_id=NULL,project_id=EXCLUDED.project_id,updated_at=now()`
+	query := `INSERT INTO integration_conversations(integration_id,chat_id,thread_key,conversation_id,active_task_id,project_id) VALUES($1,$2,$3,'',NULL,$4) ON CONFLICT(integration_id,chat_id,thread_key) DO UPDATE SET conversation_id='',active_task_id=NULL,project_id=EXCLUDED.project_id,model_override=NULL,reasoning_effort=NULL,updated_at=now()`
 	if _, err := tx.Exec(ctx, query, integrationID, chatID, defaultThreadKey, projectID); err != nil {
 		return err
 	}

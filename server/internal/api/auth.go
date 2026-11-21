@@ -515,6 +515,15 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/codebase/webhooks/") {
+			workspace := strings.TrimPrefix(r.URL.Path, "/api/v1/codebase/webhooks/")
+			if workspace != "" && !strings.Contains(workspace, "/") {
+				// This route authenticates the delivery using its workspace-specific
+				// callback credential, independently of browser login cookies.
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
 		if r.URL.Path == "/health" || r.URL.Path == "/api/v1/auth/register" || r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/relay-node-enrollments/claim" || (r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/shares/")) {
 			next.ServeHTTP(w, r)
 			return

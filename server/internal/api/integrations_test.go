@@ -66,6 +66,50 @@ func TestFeishuParentMessageContext(t *testing.T) {
 	}
 }
 
+func TestFeishuReplyContextOnlyForNewSession(t *testing.T) {
+	parentID := "parent-message"
+	msg := &channeltypes.NormalizedMessage{RawEvent: &larkim.P2MessageReceiveV1{Event: &larkim.P2MessageReceiveV1Data{Message: &larkim.EventMessage{ParentId: &parentID}}}}
+	for _, test := range []struct {
+		name         string
+		conversation store.IntegrationConversation
+		want         string
+	}{
+		{name: "first reply imports context", want: parentID},
+		{name: "same session skips context", conversation: store.IntegrationConversation{ConversationID: "existing-session"}},
+		{name: "reset session imports context", conversation: store.IntegrationConversation{ThreadKey: "thread:root"}, want: parentID},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := feishuReplyContextID(msg, test.conversation); got != test.want {
+				t.Fatalf("reply context ID = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestFeishuMessagePolicy(t *testing.T) {
+	botSender := "app"
+	for _, test := range []struct {
+		name        string
+		msg         channeltypes.NormalizedMessage
+		knownThread bool
+		want        bool
+	}{
+		{name: "direct message", msg: channeltypes.NormalizedMessage{ChatType: "p2p"}, want: true},
+		{name: "new group mention", msg: channeltypes.NormalizedMessage{ChatType: "group", MentionedBot: true}, want: true},
+		{name: "new group without mention", msg: channeltypes.NormalizedMessage{ChatType: "group"}},
+		{name: "known thread without mention", msg: channeltypes.NormalizedMessage{ChatType: "group"}, knownThread: true, want: true},
+		{name: "known thread with mention", msg: channeltypes.NormalizedMessage{ChatType: "group", MentionedBot: true}, knownThread: true, want: true},
+		{name: "mention all ignored", msg: channeltypes.NormalizedMessage{ChatType: "group", MentionAll: true}, knownThread: true},
+		{name: "bot reply ignored", msg: channeltypes.NormalizedMessage{ChatType: "group", RawEvent: &larkim.P2MessageReceiveV1{Event: &larkim.P2MessageReceiveV1Data{Sender: &larkim.EventSender{SenderType: &botSender}}}}, knownThread: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := feishuShouldAcceptMessage(&test.msg, test.knownThread); got != test.want {
+				t.Fatalf("accept message = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestParseFeishuReceivedRichText(t *testing.T) {
 	direct := `{"title":"排查结果","content":[[{"tag":"text","text":"错误来自 "},{"tag":"a","text":"日志","href":"https://example.test/log"}],[{"tag":"img","image_key":"img_v2_test"}]]}`
 	content, resources := parseFeishuMessageContent("post", direct)
@@ -96,26 +140,21 @@ func TestNormalizeFeishuIncomingRichText(t *testing.T) {
 }
 
 func TestFeishuTaskCard(t *testing.T) {
-	card := feishuTaskCard("succeeded", "完成内容")
+	card := feishuExecutionCard("succeeded", nil, "完成内容", "token")
 	var payload map[string]any
 	if err := json.Unmarshal([]byte(card), &payload); err != nil {
 		t.Fatal(err)
 	}
-	header, ok := payload["header"].(map[string]any)
-	if !ok || header["template"] != "green" {
-		t.Fatalf("unexpected card header: %#v", payload["header"])
+	if payload["schema"] != "2.0" || !strings.Contains(card, "完成内容") || !strings.Contains(card, "已完成") {
+		t.Fatalf("unexpected completed card: %s", card)
 	}
-	long := strings.Repeat("中", maxFeishuCardContentBytes)
-	truncated := truncateFeishuCardContent(long)
-	if !strings.Contains(truncated, "已截断") || !strings.Contains(feishuTaskCard("running", long), "已截断") {
-		t.Fatal("expected oversized card content to be truncated")
+	long := strings.Repeat("中", 24<<10)
+	card = feishuExecutionCard("running", nil, long, "token")
+	if !strings.Contains(card, "已截断") || len(card) > 30<<10 || !json.Valid([]byte(card)) {
+		t.Fatal("oversized card was not safely bounded")
 	}
-	if !strings.Contains(feishuTaskCard("running", "检查中"), "collapsible_panel") {
-		t.Fatal("status card should expose progress in a collapsible panel")
-	}
-	runningCard := feishuTaskCard("running", "检查中")
-	if !strings.Contains(runningCard, "任务执行中") || strings.Contains(runningCard, "任务状态") || strings.Contains(runningCard, "可收起") {
-		t.Fatalf("unexpected running status card: %s", runningCard)
+	if !strings.Contains(card, "collapsible_panel") || !strings.Contains(card, `"expanded":false`) {
+		t.Fatal("process should default to collapsed")
 	}
 }
 

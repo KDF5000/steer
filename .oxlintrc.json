@@ -29,6 +29,7 @@
     "dist/**",
     "coverage/**",
     "components/ui/**",
+    "docs/prototypes/**",
     "hooks/use-mobile.ts",
     "next-env.d.ts",
     "website/**"

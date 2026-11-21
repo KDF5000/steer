@@ -126,6 +126,27 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/integrations/{id}", s.updateIntegration)
 	mux.HandleFunc("DELETE /api/v1/integrations/{id}", s.deleteIntegration)
 	mux.HandleFunc("POST /api/v1/integrations/{id}/reconnect", s.reconnectIntegration)
+	mux.HandleFunc("GET /api/v1/codebase/connection", s.codebaseConnection)
+	mux.HandleFunc("PUT /api/v1/codebase/connection", s.saveCodebaseConnection)
+	mux.HandleFunc("DELETE /api/v1/codebase/connection", s.deleteCodebaseConnection)
+	mux.HandleFunc("GET /api/v1/codebase/repository", s.codebaseRepository)
+	mux.HandleFunc("GET /api/v1/codebase/repositories", s.codebaseRepositories)
+	mux.HandleFunc("POST /api/v1/codebase/repositories", s.addCodebaseRepository)
+	mux.HandleFunc("DELETE /api/v1/codebase/repositories/{repoId}", s.deleteCodebaseRepository)
+	mux.HandleFunc("GET /api/v1/codebase/merge-requests", s.codebaseMergeRequests)
+	mux.HandleFunc("POST /api/v1/codebase/merge-requests/sync", s.codebaseSyncMergeRequests)
+	mux.HandleFunc("GET /api/v1/codebase/merge-requests/{project}/{iid}", s.codebaseMergeRequest)
+	mux.HandleFunc("GET /api/v1/codebase/webhook", s.codebaseWebhook)
+	mux.HandleFunc("PUT /api/v1/codebase/webhook", s.saveCodebaseWebhook)
+	mux.HandleFunc("POST /api/v1/codebase/webhooks/{workspace}", s.receiveCodebaseWebhook)
+	mux.HandleFunc("GET /api/v1/codebase/webhook-events", s.codebaseWebhookStream)
+	mux.HandleFunc("GET /api/v1/codebase/workflows", s.listCodebaseWorkflows)
+	mux.HandleFunc("POST /api/v1/codebase/workflows", s.createCodebaseWorkflow)
+	mux.HandleFunc("PUT /api/v1/codebase/workflows/{id}", s.updateCodebaseWorkflow)
+	mux.HandleFunc("DELETE /api/v1/codebase/workflows/{id}", s.deleteCodebaseWorkflow)
+	mux.HandleFunc("POST /api/v1/codebase/workflows/{id}/runs", s.createCodebaseRun)
+	mux.HandleFunc("GET /api/v1/codebase/runs", s.listCodebaseRuns)
+	mux.HandleFunc("POST /api/v1/codebase/runs/{id}/sync", s.syncCodebaseRun)
 	mux.HandleFunc("POST /api/v1/relay-node-enrollments", s.createRelayNodeEnrollment)
 	mux.HandleFunc("GET /api/v1/relay-nodes", s.listOwnedRelayNodes)
 	mux.HandleFunc("DELETE /api/v1/relay-nodes/{id}", s.deleteOwnedRelayNode)
@@ -144,7 +165,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/skills", s.listSkills)
 	mux.HandleFunc("POST /api/v1/skills", s.createSkill)
 	mux.HandleFunc("POST /api/v1/skills/import", s.importSkill)
+	mux.HandleFunc("GET /api/v1/skills/agentbuddy/search", s.searchAgentBuddySkills)
+	mux.HandleFunc("GET /api/v1/skills/{id}", s.getSkill)
 	mux.HandleFunc("PUT /api/v1/skills/{id}", s.updateSkill)
+	mux.HandleFunc("PUT /api/v1/skills/{id}/files", s.updateSkillFiles)
 	mux.HandleFunc("DELETE /api/v1/skills/{id}", s.deleteSkill)
 	mux.HandleFunc("GET /api/v1/documents", s.listDocuments)
 	mux.HandleFunc("POST /api/v1/documents", s.createDocument)
@@ -657,18 +681,20 @@ func (s *Server) artifactContent(w http.ResponseWriter, r *http.Request) {
 }
 
 type chatRequest struct {
-	ReasoningEffort     *string         `json:"reasoningEffort"`
-	Model               *string         `json:"model"`
-	TargetAgentID       string          `json:"targetAgentId"`
-	ReferencedMessageID string          `json:"referencedMessageId"`
-	ReferenceMode       string          `json:"referenceMode"`
-	Prompt              string          `json:"prompt"`
-	AgentID             string          `json:"agentId"`
-	SessionID           *string         `json:"sessionId"`
-	ConversationID      *string         `json:"conversationId"`
-	ProjectID           *string         `json:"projectId"`
-	IdempotencyKey      string          `json:"idempotencyKey"`
-	Metadata            json.RawMessage `json:"metadata"`
+	ReasoningEffort     *string `json:"reasoningEffort"`
+	Model               *string `json:"model"`
+	TargetAgentID       string  `json:"targetAgentId"`
+	ReferencedMessageID string  `json:"referencedMessageId"`
+	ReferenceMode       string  `json:"referenceMode"`
+	// SkillIDs adds Skills for this run only, on top of the Agent's Skills.
+	SkillIDs       []string        `json:"skillIds"`
+	Prompt         string          `json:"prompt"`
+	AgentID        string          `json:"agentId"`
+	SessionID      *string         `json:"sessionId"`
+	ConversationID *string         `json:"conversationId"`
+	ProjectID      *string         `json:"projectId"`
+	IdempotencyKey string          `json:"idempotencyKey"`
+	Metadata       json.RawMessage `json:"metadata"`
 }
 
 const (
@@ -1249,7 +1275,7 @@ func writeError(w http.ResponseWriter, err error) {
 		status = http.StatusConflict
 	} else if errors.Is(err, store.ErrRelayNodeOnline) || errors.Is(err, store.ErrRelayNodeInUse) || errors.Is(err, store.ErrRelayNodeReferenced) {
 		status = http.StatusConflict
-	} else if errors.Is(err, store.ErrAgentInUse) {
+	} else if errors.Is(err, store.ErrAgentInUse) || errors.Is(err, store.ErrCodebaseRepoInUse) {
 		status = http.StatusConflict
 	} else if errors.Is(err, errSystemAgentNotConfigured) {
 		status = http.StatusConflict

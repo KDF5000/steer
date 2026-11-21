@@ -18,6 +18,63 @@ const storageKey = 'steer.interface-language';
 const languageEvent = 'steer:interface-language';
 
 const zhCN: Record<string, string> = {
+  'Codebase configured': 'Codebase 已配置',
+  'Review could not start. Open the run record for details.':
+    '审查未能启动，请打开运行记录查看详情。',
+  'Enable this workflow before starting a review.':
+    '请先启用此流程，再发起审查。',
+  'Connection settings': '连接设置',
+  'Codebase connected': 'Codebase 已连接',
+  'Configure reviews, track merge requests, and inspect run results.':
+    '配置审查流程，跟踪 MR 并查看运行结果。',
+  'Search workflows': '搜索流程',
+  'Workflow, repository, or agent': '流程、仓库或智能体',
+  Paused: '已暂停',
+  '{count} workflows': '{count} 个流程',
+  'No matching workflows': '没有匹配的流程',
+  'Clear filters': '清除筛选',
+  'Webhook + manual': 'Webhook / 手动',
+  'Manual only': '仅手动',
+  'MR writeback on': '回写 MR',
+  'Steer results only': '仅保留 Steer 结果',
+  '{count} Skills': '{count} 个 Skill',
+  'Enable workflow {name}': '启用流程 {name}',
+  'Delete workflow': '删除流程',
+  'Workflow enabled.': '流程已启用。',
+  'Workflow paused.': '流程已暂停。',
+  'View workflows': '查看流程',
+  'Remove associated workflows before removing this repository.':
+    '请先删除关联流程，再移除此仓库。',
+  'Review workflow': '审查流程',
+  'Choose when starting': '发起时选择',
+  'This workflow will review the merge request you select.':
+    '使用所选流程审查你发起的 MR。',
+  'Review submitted.': '审查任务已提交。',
+  'Review could not start.': '审查任务未能启动。',
+  'View run': '查看运行记录',
+  'Run status': '运行状态',
+  'All results': '全部结果',
+  'In progress': '进行中',
+  'Review succeeded': '审查成功',
+  'Review failed': '审查失败',
+  '{matched} of {count} loaded runs': '已加载 {count} 条，匹配 {matched} 条',
+  'Newest first': '最新在前',
+  'Live updates while running': '执行中自动更新',
+  Duration: '耗时',
+  '{minutes}m {seconds}s': '{minutes}分 {seconds}秒',
+  '{seconds}s': '{seconds}秒',
+  'No matching runs': '没有匹配的运行记录',
+  'Clear status filter': '清除状态筛选',
+  'Load more records': '加载更多记录',
+  'Showing the latest 500 runs. Select a repository or workflow to narrow the history.':
+    '当前展示最近 500 条记录，可按仓库或流程缩小范围。',
+  'Execution and output': '执行与输出',
+  'Requires a configured Codebase webhook. Turn off for manual reviews only.':
+    '需先配置 Codebase Webhook；关闭后仅支持手动发起审查。',
+  'Workflow enabled': '启用流程',
+  'Paused workflows cannot start new reviews. Running reviews continue.':
+    '暂停后不再接受新审查，已启动的任务继续执行。',
+
   'Preparing Git workspace': '正在准备 Git 工作区',
   'Preparing the workspace': '正在准备工作目录',
   'Starting Runtime': '正在启动 Runtime',
@@ -247,6 +304,35 @@ const zhCN: Record<string, string> = {
   'Create Project': '创建项目',
   'Create workspace': '创建工作区',
   'Create skill': '创建 Skill',
+  'Browse and edit every file in this Skill.':
+    '浏览并编辑这个 Skill 的全部文件。',
+  Files: '文件',
+  files: '个文件',
+  'Add file': '添加文件',
+  'Loading files…': '正在加载文件…',
+  binary: '二进制',
+  'Delete file': '删除文件',
+  'No files yet.': '还没有文件。',
+  'Binary file': '二进制文件',
+  'Binary files are stored as-is and cannot be edited here.':
+    '二进制文件按原样保存，无法在此编辑。',
+  'Select a file': '选择一个文件',
+  'Choose a file to view its contents.': '选择文件以查看内容。',
+  'You have unsaved file changes.': '有未保存的文件修改。',
+  'SKILL.md is the entry point used by Agents.':
+    'SKILL.md 是智能体使用的入口文件。',
+  'Instructions are stored as SKILL.md. Use the Files tab to edit other files.':
+    '指令内容保存为 SKILL.md，其他文件请在“文件”中编辑。',
+  'Save files': '保存文件',
+  'Skill files saved.': 'Skill 文件已保存。',
+  'Could not load Skill files.': '无法加载 Skill 文件。',
+  'Could not save Skill files.': '无法保存 Skill 文件。',
+  'Back to Assets': '返回资产',
+  Skill: 'Skill',
+  'Created in Steer': '在 Steer 中创建',
+  Imported: '已导入',
+  'Reusable Agent instructions.': '可复用的智能体指令。',
+  'Skill not found.': '未找到 Skill。',
   'Daily records': '每日记录',
   Delete: '删除',
   Edit: '修改',
@@ -295,6 +381,319 @@ const zhCN: Record<string, string> = {
   'Select project': '选择项目',
   'Send message': '发送消息',
   Settings: '设置',
+  Labs: '实验室',
+  Automation: '自动化',
+  Experimental: '实验',
+  'Experimental features': '实验功能',
+  'Enable experimental features to try them in this workspace.':
+    '开启实验功能，在当前工作区中体验。',
+  'Preferences are saved for this account and workspace in this browser.':
+    '开关按当前账号和工作区保存在此浏览器中。',
+  'Automated code review': '自动化审查',
+  'Connect Codebase and fetch merge requests.':
+    '连接 Codebase，获取 Merge Requests。',
+  'Agent review is not enabled in this stage.': '当前阶段不执行 Agent Review。',
+  'Merge requests are synced; reviews run on demand.':
+    'Merge Requests 会同步到本地，可按需发起审查。',
+  'Open automation': '进入自动化',
+  'Could not save the experiment preference.':
+    '无法保存实验开关，请检查浏览器存储权限。',
+  'Connect Codebase and fetch merge requests. Agent review is not enabled yet.':
+    '连接 Codebase，获取 MR。当前阶段不执行 Agent Review。',
+  Workflows: '流程',
+  'Review rules': '审查规则',
+  'Run records': '运行记录',
+  'No review workflows': '尚未配置审查流程',
+  'No review rules': '尚未配置审查规则',
+  'No review runs': '暂无审查记录',
+  Details: '详情',
+  'Run details': '运行详情',
+  'Failure details': '失败详情',
+  'Run summary': '运行结果',
+  'Copy log': '复制日志',
+  'Copy failed.': '复制失败。',
+  Trigger: '触发方式',
+  Started: '开始时间',
+  Finished: '结束时间',
+  'Reasoning effort': '推理强度',
+  'No output was recorded for this run.': '本次运行没有记录输出。',
+  'This stage only fetches merge requests. It does not create Agent review tasks.':
+    '当前阶段仅获取 MR，不创建 Agent Review 任务。',
+  'Open Codebase connection': '打开 Codebase 连接',
+  'No Codebase connection configured.': '尚未配置 Codebase 连接。',
+  'Connection verified': '连接已验证',
+  'Connect Codebase': '连接 Codebase',
+  'Edit connection': '编辑连接',
+  Disconnect: '断开连接',
+  'Merge requests': 'Merge Requests',
+  'Merge request': 'Merge Request',
+  Repository: '仓库',
+  'e.g. org/repository': '例如 org/repository',
+  Verify: '验证',
+  'Repository verified': '仓库已验证',
+  'Namespace/project or project ID (optional)':
+    '组织/仓库路径或项目 ID（选填）',
+  'MR title (optional)': 'MR 标题（选填）',
+  Open: '待合并',
+  Merged: '已合并',
+  Closed: '已关闭',
+  All: '全部',
+  Draft: '草稿',
+  'Fetching…': '正在获取…',
+  'Fetch MRs': '获取 MR',
+  'Fetching merge requests': '正在获取 Merge Requests',
+  Page: '第',
+  'merge requests on this page': '条 MR（本页）',
+  Previous: '上一页',
+  Next: '下一页',
+  'No matching merge requests': '没有匹配的 MR',
+  'No merge requests fetched': '尚未获取 MR',
+  'Fetch MRs to read the current Codebase data.':
+    '点击“获取 MR”读取 Codebase 中的最新数据。',
+  'Configure the connection before fetching merge requests.':
+    '配置连接后即可获取 MR。',
+  'Edit Codebase connection': '编辑 Codebase 连接',
+  'Use a Codebase App to connect. The server verifies the credential and stores it encrypted.':
+    '使用 Codebase App 进行连接，后端验证凭据并加密保存。',
+  'Codebase API address': 'Codebase API 地址',
+  'Codebase OpenAPI endpoint. Usually the default address works.':
+    'Codebase OpenAPI 服务地址，通常使用默认地址即可。',
+  'App ID': 'App ID',
+  'Create a Codebase App and install it to target repositories to get the App ID.':
+    '创建 Codebase App 并安装到目标仓库后，即可获得 App ID。',
+  'App Secret': 'App Secret',
+  'Leave blank to keep the saved App Secret. Changing the address or App ID requires a new secret.':
+    '留空保留已保存的 App Secret。更换地址或 App ID 时需要重新填写。',
+  'App Secret is paired with the App ID. Grant repository and merge request read permissions.':
+    '与 App ID 配套使用，请授予仓库和 Merge Request 读取权限。',
+  'Codebase connection': 'Codebase 连接',
+  'Configure Webhook': '配置 Webhook',
+  'Edit Webhook': '编辑 Webhook',
+  'Enable Webhook': '启用 Webhook',
+  'Generate a callback URL to enable receiving events.':
+    '生成回调地址后，即可启用事件接收。',
+  'Automation workflows will appear here.': '自动化流程将显示在这里。',
+  'Published review Skills will appear here.':
+    '已发布的审查 Skills 将显示在这里。',
+  'Execution records will appear here when workflows run.':
+    '流程执行后，可在这里查看运行记录。',
+  'Configure a callback to receive Codebase events.':
+    '配置回调地址，接收 Codebase 事件。',
+  'Callback server address': '回调服务地址',
+  'Callback URL': '回调地址',
+  Enabled: '已启用',
+  'Use a Steer address that Codebase can reach. Localhost only works on this machine.':
+    '填写 Codebase 服务能够访问的 Steer 地址。localhost 只能在当前机器使用。',
+  'Enter an HTTP(S) server address without a path or credentials.':
+    '请填写 HTTP(S) 服务地址，不包含路径或账号密码。',
+  'Copy callback URL': '复制回调地址',
+  'Replace callback URL': '更换回调地址',
+  'Generate callback URL': '生成回调地址',
+  'Paste this URL into Codebase Webhook settings and select the MR events you want to receive.':
+    '将此地址填入 Codebase 的 Webhook 设置，并选择需要接收的 MR 事件。',
+  'Webhook deliveries are saved. Automatic MR updates are not connected yet.':
+    '当前回调事件会保存到服务端，MR 列表自动更新尚未接通。',
+  'Replace callback URL?': '更换回调地址？',
+  'The old callback URL will stop working. Update the URL in Codebase after replacing it.':
+    '旧回调地址将立即失效。更换后，请同步更新 Codebase 中的地址。',
+  'Webhook settings could not be loaded. Update the server and try again.':
+    '无法加载 Webhook 设置，请更新后端服务后重试。',
+  'Manage Codebase connections and merge requests.':
+    '管理 Codebase 连接与 Merge Requests。',
+  'Manage integrations and automation workflows.': '管理外部集成与自动化流程。',
+  'Connection unavailable': '连接信息暂不可用',
+  'Access token': '访问令牌',
+  'Leave blank to keep the saved token. Changing the address requires a new token.':
+    '留空保留已保存的令牌。更换地址时需要重新填写令牌。',
+  'Use a token with read access to the repositories and merge requests.':
+    '使用具有仓库和 MR 读取权限的令牌。',
+  Authentication: '认证方式',
+  'API configuration': 'API 配置',
+  'API prefix': 'API 路径前缀',
+  'Currently supports GitLab-compatible REST APIs. Confirm the API prefix with Codebase documentation.':
+    '当前支持 GitLab 兼容 REST API，请根据 Codebase 文档确认路径前缀。',
+  'Verifying…': '正在验证…',
+  'Verify and save': '验证并保存',
+  'Disconnect Codebase?': '断开 Codebase 连接？',
+  'Remove the saved connection and App credential from this workspace. The Codebase App itself is not deleted.':
+    '移除当前工作区保存的连接和 App 凭据，不会删除 Codebase 上的 App。',
+  Project: '项目',
+  Webhook: 'Webhook',
+  'Loading…': '加载中…',
+  Workflow: '流程',
+  'Workflow name': '流程名称',
+  'New workflow': '新建流程',
+  'Edit workflow': '编辑流程',
+  'Delete workflow?': '删除流程？',
+  'Workflow created.': '流程已创建。',
+  'Workflow updated.': '流程已更新。',
+  'Workflow deleted.': '流程已删除。',
+  'All workflows': '全部流程',
+  'Select a workflow': '选择流程',
+  Reviewer: '审查者',
+  'Reviewer agent': '审查智能体',
+  'Not assigned': '未分配',
+  'Select an agent': '选择智能体',
+  'Select a reviewer agent.': '请选择审查智能体。',
+  'Create an agent in this workspace first.': '请先在此工作区创建智能体。',
+  'Review instruction': '审查指令',
+  'Optional guidance for the reviewer, e.g. focus on error handling and tests.':
+    '给审查者的可选指引，例如重点关注错误处理和测试。',
+  'Trigger review from webhook': '通过 Webhook 触发审查',
+  'Verify the repository before saving.': '保存前请先验证仓库。',
+  'e.g. Frontend review': '例如 前端审查',
+  'Run review': '发起审查',
+  'Review started.': '审查已开始。',
+  'View MRs': '查看 MR',
+  Manual: '手动',
+  Queued: '排队中',
+  Running: '运行中',
+  Succeeded: '成功',
+  Failed: '失败',
+  Skipped: '已跳过',
+  'Connect Codebase first': '请先连接 Codebase',
+  'Configure the Codebase connection, then create a workflow to choose a repository.':
+    '先配置 Codebase 连接，再创建流程以选择仓库。',
+  'Create a workflow to bind a repository, then its merge requests appear here.':
+    '创建流程并绑定仓库后，该仓库的 MR 会显示在这里。',
+  'No merge requests match the current filters.': '没有符合当前筛选条件的 MR。',
+  'Select a workflow to load its merge requests.': '选择一个流程以加载其 MR。',
+  'Bind a repository to a reviewer agent. Merge requests are loaded per workflow, and webhook triggers are configured here.':
+    '将仓库绑定到审查智能体。MR 按流程加载，Webhook 触发也在此配置。',
+  'Bind a repository to a reviewer agent. The repository is verified against the Codebase connection.':
+    '将仓库绑定到审查智能体。保存前会通过 Codebase 连接验证仓库。',
+  'Create a workflow to bind a repository and reviewer agent.':
+    '创建流程，绑定仓库和审查智能体。',
+  'Connect Codebase before creating a workflow.':
+    '创建流程前请先连接 Codebase。',
+  'Run a review from the Merge requests tab to create a record.':
+    '在 Merge Requests 页签发起审查后，这里会生成运行记录。',
+  'No repositories yet': '尚未绑定仓库',
+  'Create a workflow to bind a repository. Merge requests are shared by every workflow that reviews it.':
+    '创建流程并绑定仓库。同一仓库的 MR 会被所有审查该仓库的流程共享。',
+  'Configure the Codebase connection, then create a workflow to bind a repository.':
+    '先配置 Codebase 连接，再创建流程并绑定仓库。',
+  'Select a repository': '选择仓库',
+  open: '开启中',
+  total: '总计',
+  'MR title': 'MR 标题',
+  Sync: '同步',
+  'Syncing…': '正在同步…',
+  'Fetch new updates from Codebase. Known merge requests are not re-imported.':
+    '从 Codebase 获取新增更新，已入库的 MR 不会重复导入。',
+  'Last synced': '上次同步',
+  'Not synced yet': '尚未同步',
+  'No enabled workflow reviews this repository. Create one to start reviews from this list.':
+    '当前没有启用中的流程审查此仓库。请先创建流程后再发起审查。',
+  'Create an enabled workflow for this repository first.':
+    '请先为此仓库创建并启用一个流程。',
+  'Loading merge requests': '正在加载 MR',
+  'No merge requests match the current filters. Sync to check for updates.':
+    '没有符合当前筛选条件的 MR。可点击同步检查更新。',
+  'Sync this repository to import its merge requests.': '同步此仓库以导入 MR。',
+  'merge requests': '条 MR',
+  'A workflow binds a repository to a reviewer agent. Several workflows can review the same repository with different agents.':
+    '流程将仓库绑定到审查智能体。同一仓库可以配置多个流程，由不同智能体审查。',
+  'workflows share this repository': '个流程共享此仓库',
+  'All repositories': '全部仓库',
+  'Synced {created} new and {updated} updated merge requests.':
+    '同步完成：新增 {created} 条，更新 {updated} 条 MR。',
+  'Merge requests are up to date.': 'MR 已是最新。',
+  'Review started with {agent}.': '已由 {agent} 发起审查。',
+  'Choose a reviewer': '选择审查流程',
+  'Several workflows review this repository. Choose which one should review this merge request.':
+    '此仓库有多个审查流程，请选择由哪个流程审查该 MR。',
+  'Remove this workflow and its run records. Merge requests are kept while another workflow still reviews the repository.':
+    '删除此流程及其运行记录。若仍有其他流程审查同一仓库，已同步的 MR 会保留。',
+  'Disconnecting…': '正在断开…',
+  'Open in Codebase': '在 Codebase 查看',
+  'Reported to merge request': '已回写到 MR',
+  'Reporting to merge request…': '正在回写 MR…',
+  'Report failed': '回写 MR 失败',
+  'Report skipped': '未回写 MR',
+  'Write back to MR': '回写 MR',
+  'When disabled, results stay in Steer and no MR comment is posted or updated.':
+    '关闭后，结果仅保留在 Steer，不会创建或更新 MR 评论。',
+  'Selected Skills are added to this review only, alongside the Agent instructions.':
+    '所选 Skill 仅用于本流程的审查任务，与智能体自身指令一起生效。',
+  'Runs on the Runtime that owns the reviewer Agent.':
+    '任务在审查智能体所属的运行环境上执行。',
+  'Describe the review focus, checklist, and output format. Long instructions are supported.':
+    '说明审查重点、检查清单和输出格式，支持较长指令。',
+  'Add Skills to the workspace library before selecting them here.':
+    '请先在工作区的 Skill 库添加 Skill，再在此选择。',
+  'You can select up to {count} Skills.': '最多选择 {count} 个 Skill。',
+  'Show more Skills': '显示更多 Skill',
+  'Import from AgentBuddy': '从 AgentBuddy 导入',
+  'Close import': '收起导入',
+  'Search AgentBuddy Skills': '搜索 AgentBuddy Skill',
+  'Importing…': '正在导入…',
+  'No Skills in this workspace yet. Import one from AgentBuddy.':
+    '当前工作区还没有 Skill，可从 AgentBuddy 导入。',
+  'No MR description.': '暂无 MR 描述。',
+  Author: '作者',
+  Updated: '更新时间',
+  Labels: '标签',
+  Repositories: '仓库',
+  'Add repository': '添加仓库',
+  'Add another repository': '添加其他仓库',
+  'Remove repository': '移除仓库',
+  'Remove repository?': '移除仓库？',
+  'Repository path': '仓库路径',
+  'Repository added.': '仓库已添加。',
+  'Repository removed.': '仓库已移除。',
+  'Removing…': '正在移除…',
+  Remove: '移除',
+  'No workflow': '未关联流程',
+  workflows: '个流程',
+  'Connect Codebase before adding a repository.':
+    '请先连接 Codebase 再添加仓库。',
+  'Configure the Codebase connection before adding repositories.':
+    '请先配置 Codebase 连接，再添加仓库。',
+  'Add a repository to sync its merge requests and bind it to review workflows.':
+    '添加仓库后可同步其 MR，并绑定审查流程。',
+  'Add a repository to sync its merge requests. Every workflow that reviews it shares the same synced list.':
+    '添加仓库后可同步其 MR。所有审查该仓库的流程共享同一份已同步列表。',
+  'Enter a Codebase repository path. It is verified against the saved connection before it is added.':
+    '填写 Codebase 仓库路径，系统会通过已保存的连接验证后再添加。',
+  'Use the namespace/project path shown in Codebase.':
+    '请使用 Codebase 中显示的组织/仓库路径。',
+  'This removes the repository and its synced merge requests from Steer. Workflows that review it must be deleted first.':
+    '这会从 Steer 移除该仓库及其已同步的 MR。审查该仓库的流程需要先删除。',
+  'This repository is used by a review workflow. Delete that workflow first.':
+    '此仓库仍被审查流程使用，请先删除对应流程。',
+  'Pick a managed repository and a reviewer agent. Repositories are added to the workspace once and shared by every workflow.':
+    '选择已添加的仓库和审查智能体。仓库只需添加一次，可被多个流程共享。',
+  'Add or select a repository before saving.': '保存前请先添加或选择仓库。',
+  'Remove this workflow and its run records. The repository and its synced merge requests are kept.':
+    '删除此流程及其运行记录，仓库和已同步的 MR 会保留。',
+  'Request failed.': '请求失败。',
+  'Invalid Codebase connection input.': 'Codebase 连接参数无效，请检查输入。',
+  'Codebase token is invalid or expired.': 'Codebase 令牌无效或已过期。',
+  'Codebase token does not have permission to read this resource.':
+    'Codebase 令牌没有读取此资源的权限。',
+  'Could not reach Codebase. Check the server address and network connection.':
+    '无法连接 Codebase，请检查地址和服务器网络。',
+  'Codebase API or repository was not found. Check the API path and repository permissions.':
+    '未找到 Codebase API 或仓库，请检查 API 路径和仓库权限。',
+  'Codebase rate limit exceeded. Try again later.':
+    'Codebase 请求过于频繁，请稍后重试。',
+  'Codebase redirected the API request. Check the API address and token authentication.':
+    'Codebase 重定向了 API 请求，请检查 API 地址和令牌认证方式。',
+  'Codebase returned an error. Try again later.':
+    'Codebase 返回错误，请稍后重试。',
+  'Codebase did not return a compatible JSON response. Check the API configuration.':
+    'Codebase 未返回兼容的 JSON 数据，请检查 API 配置。',
+  'Codebase did not return a compatible user response. Check the API configuration.':
+    'Codebase 未返回兼容的用户信息，请检查 API 配置。',
+  'Codebase did not return compatible merge requests. Check the API configuration.':
+    'Codebase 未返回兼容的 MR 数据，请检查 API 配置。',
+  'Enter a new token when changing the Codebase address or authentication settings.':
+    '更换 Codebase 地址或认证配置时，请重新填写令牌。',
+  'Connect Codebase before fetching merge requests.':
+    '请先连接 Codebase，再获取 MR。',
+  'Repository must be a project ID or a namespace/project path.':
+    '仓库必须填写项目 ID 或组织/仓库路径。',
   'Settings updated.': '设置已更新。',
   'API access': 'API 访问',
   'Use API keys to submit Agent tasks from other tools.':
@@ -391,6 +790,14 @@ const zhCN: Record<string, string> = {
   'Sign out': '退出登录',
   'Simplified Chinese': '简体中文',
   Skills: 'Skills',
+  'Add Skill': '添加 Skill',
+  'Search Skills': '搜索 Skill',
+  'No matching Skills': '没有匹配的 Skill',
+  'All Skills added': '全部 Skill 已添加',
+  'None selected': '未选择',
+  '{count} selected': '已选 {count}',
+  'Relay installs selected instructions into this Agent’s remote workspace for every run.':
+    'Relay 会在每次运行时把选中的指令安装到该智能体的远程工作区。',
   System: '系统',
   'Switch workspace': '切换工作区',
   'System default': '跟随系统',

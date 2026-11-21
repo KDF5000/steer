@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/KDF5000/relay"
 	"github.com/KDF5000/relay/controlplane"
@@ -113,7 +112,10 @@ func (m *integrationManager) start(parent context.Context, id string) {
 
 	apiClient := lark.NewClient(item.ExternalAppID, secret, lark.WithLogLevel(larkcore.LogLevelWarn))
 	wsClient := newFeishuWSClient(item.ExternalAppID, secret)
-	bot := channel.NewChannel(apiClient, wsClient)
+	// Steer enforces mentions for new group conversations, while allowing
+	// unmentioned replies in threads that are already bound to a conversation.
+	requireMention := false
+	bot := channel.NewChannel(apiClient, wsClient, channeltypes.WithPolicyConfig(channeltypes.PolicyConfig{RequireMention: &requireMention}))
 	ctx, cancel := context.WithCancel(parent)
 	running := &runningIntegration{cancel: cancel, channel: bot}
 	m.mu.Lock()
@@ -141,6 +143,19 @@ func (m *integrationManager) start(parent context.Context, id string) {
 		if err := m.acceptMessage(ctx, item, apiClient, bot, msg); err != nil {
 			m.setError(id, err)
 		}
+		return nil
+	})
+	bot.OnCardAction(func(_ context.Context, event *channeltypes.CardActionEvent) error {
+		// Acknowledge the callback promptly; network/catalog lookups and updates
+		// run outside Feishu's three-second callback deadline.
+		go func() {
+			actionCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+			if err := m.handleFeishuCardAction(actionCtx, item, apiClient, event); err != nil {
+				slog.Warn("Feishu card action failed", "integration_id", item.ID, "error", err)
+				_, _ = bot.Send(actionCtx, &channeltypes.SendInput{ChatID: event.ChatID, ReplyMessageID: event.MessageID, Text: "卡片操作未完成：" + err.Error()})
+			}
+		}()
 		return nil
 	})
 
@@ -187,6 +202,18 @@ func (m *integrationManager) acceptMessage(ctx context.Context, integration stor
 	if msg == nil || msg.MessageID == "" || msg.ChatID == "" {
 		return nil
 	}
+	if !feishuShouldAcceptMessage(msg, false) {
+		if msg.ChatType != "group" || feishuThreadKey(msg) == "thread:"+msg.MessageID {
+			return nil
+		}
+		_, err := m.server.store.IntegrationConversation(ctx, integration.ID, msg.ChatID, feishuThreadKey(msg))
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			return err
+		}
+		if !feishuShouldAcceptMessage(msg, err == nil) {
+			return nil
+		}
+	}
 	normalized := normalizeFeishuIncomingMessage(msg)
 	msg = &normalized
 	prompt := feishuPrompt(msg)
@@ -205,6 +232,15 @@ func (m *integrationManager) acceptMessage(ctx context.Context, integration stor
 	copy := *msg
 	m.startWorker(ctx, integration, apiClient, bot, &copy, eventID, threadKey, prompt)
 	return nil
+}
+
+func feishuShouldAcceptMessage(msg *channeltypes.NormalizedMessage, knownThread bool) bool {
+	if event, ok := msg.RawEvent.(*larkim.P2MessageReceiveV1); ok && event.Event != nil && event.Event.Sender != nil {
+		if senderType := event.Event.Sender.SenderType; senderType != nil && *senderType != "user" {
+			return false
+		}
+	}
+	return msg.ChatType == "p2p" || (msg.ChatType == "group" && !msg.MentionAll && (msg.MentionedBot || knownThread))
 }
 
 func feishuPrompt(msg *channeltypes.NormalizedMessage) string {
@@ -345,6 +381,15 @@ func feishuParentMessageID(msg *channeltypes.NormalizedMessage) string {
 	return strings.TrimSpace(*event.Event.Message.ParentId)
 }
 
+func feishuReplyContextID(msg *channeltypes.NormalizedMessage, conversation store.IntegrationConversation) string {
+	// The reused runtime session already holds the previous exchange, including
+	// its attachments. Only a new session needs the replied-to message imported.
+	if conversation.ConversationID != "" {
+		return ""
+	}
+	return feishuParentMessageID(msg)
+}
+
 type feishuMessageContext struct {
 	MessageID  string
 	SenderName string
@@ -446,8 +491,6 @@ func downloadFeishuImages(ctx context.Context, client *lark.Client, sources []fe
 	return attachments, nil
 }
 
-const maxFeishuCardContentBytes = 24 << 10
-
 const feishuChatProjectThreadKey = "__chat_project_default__"
 
 func feishuEffectiveProjectID(conversation store.IntegrationConversation, conversationErr error, chatDefault store.IntegrationConversation, chatDefaultErr error, defaultProjectID *string) *string {
@@ -460,59 +503,6 @@ func feishuEffectiveProjectID(conversation store.IntegrationConversation, conver
 		return chatDefault.ProjectID
 	}
 	return defaultProjectID
-}
-
-func truncateFeishuCardContent(content string) string {
-	if len(content) <= maxFeishuCardContentBytes {
-		return content
-	}
-	content = content[:maxFeishuCardContentBytes]
-	for !utf8.ValidString(content) {
-		content = content[:len(content)-1]
-	}
-	return content + "\n\n…（内容较长，已截断）"
-}
-
-func feishuTaskCard(status, content string) string {
-	title := "任务执行中"
-	template := "blue"
-	if status == "queued" || status == "pending" {
-		title = "任务等待执行"
-		template = "orange"
-	} else if status == "succeeded" {
-		title = "任务已完成"
-		template = "green"
-	} else if status == "failed" {
-		title = "任务处理失败"
-		template = "red"
-	} else if status == "cancelled" {
-		title = "任务已取消"
-		template = "grey"
-	}
-	content = strings.TrimSpace(content)
-	if content == "" {
-		content = "Agent 正在执行，暂时还没有可展示的过程输出。"
-	}
-	card := map[string]any{
-		"schema": "2.0",
-		"config": map[string]any{"update_multi": true},
-		"header": map[string]any{
-			"title":    map[string]any{"tag": "plain_text", "content": title},
-			"template": template,
-		},
-		"body": map[string]any{"elements": []map[string]any{
-			{
-				"tag":      "collapsible_panel",
-				"expanded": true,
-				"header": map[string]any{
-					"title": map[string]any{"tag": "plain_text", "content": "执行过程"},
-				},
-				"elements": []map[string]any{{"tag": "markdown", "content": truncateFeishuCardContent(content)}},
-			},
-		}},
-	}
-	encoded, _ := json.Marshal(card)
-	return string(encoded)
 }
 
 type feishuAgentItem struct {
@@ -583,36 +573,32 @@ func feishuProgressContent(events []relay.Event) string {
 	return feishuAgentMessages(events, func(phase string) bool { return phase == "commentary" })
 }
 
-func (m *integrationManager) streamFeishuTaskStatus(ctx context.Context, integration store.WorkspaceIntegration, bot channeltypes.Channel, msg *channeltypes.NormalizedMessage, task store.Task) error {
+func (m *integrationManager) streamFeishuTaskStatus(ctx context.Context, integration store.WorkspaceIntegration, apiClient *lark.Client, bot channeltypes.Channel, msg *channeltypes.NormalizedMessage, task store.Task) error {
 	projection, err := m.server.syncRelayRun(ctx, integration.WorkspaceID, task.RelayRunID)
 	if err != nil {
 		return err
 	}
-	content := feishuProgressContent(projection.Events)
-	status := string(projection.Run.Status)
-	if terminal(projection.Run.Status) && content == "" {
-		content = strings.TrimSpace(projection.Content)
-	}
-	stream, err := bot.Stream(ctx, &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Card: feishuTaskCard(status, content)})
+	reply, err := m.startFeishuTaskCard(ctx, integration, bot, msg, task, feishuThreadKey(msg), projection)
 	if err != nil {
-		_, sendErr := bot.Send(ctx, &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Text: "当前任务状态：" + status})
-		if sendErr != nil {
-			return errors.Join(err, sendErr)
-		}
-		return nil
+		return err
 	}
-	defer func() {
-		closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = stream.Close(closeCtx)
-	}()
-	if terminal(projection.Run.Status) {
-		return stream.Close(ctx)
-	}
-	lastContent := content
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
+		answer := ""
+		if terminal(projection.Run.Status) {
+			answer = feishuTaskAnswer(projection)
+		}
+		content := feishuExecutionCard(string(projection.Run.Status), projection.Events, answer, reply.Token)
+		if content != reply.Content {
+			if err := patchFeishuCard(ctx, apiClient, reply.MessageID, content); err != nil {
+				return err
+			}
+			reply.Content = content
+		}
+		if terminal(projection.Run.Status) {
+			return nil
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -622,45 +608,16 @@ func (m *integrationManager) streamFeishuTaskStatus(ctx context.Context, integra
 		if err != nil {
 			return err
 		}
-		content = feishuProgressContent(projection.Events)
-		if terminal(projection.Run.Status) && content == "" {
-			content = strings.TrimSpace(projection.Content)
-		}
-		status = string(projection.Run.Status)
-		if content != lastContent || terminal(projection.Run.Status) {
-			if err := stream.UpdateCard(ctx, feishuTaskCard(status, content)); err != nil {
-				return err
-			}
-			lastContent = content
-		}
-		if terminal(projection.Run.Status) {
-			return stream.Close(ctx)
-		}
 	}
 }
 
 func (m *integrationManager) processMessage(ctx context.Context, integration store.WorkspaceIntegration, apiClient *lark.Client, bot channeltypes.Channel, msg *channeltypes.NormalizedMessage, eventID, threadKey, prompt string) {
-	var finalStream channeltypes.StreamController
-	defer func() {
-		if finalStream == nil {
-			return
-		}
-		closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = finalStream.Close(closeCtx)
-	}()
 	fail := func(err error) {
 		if ctx.Err() != nil {
 			return
 		}
 		message := err.Error()
 		_ = m.server.store.UpdateIntegrationEvent(context.Background(), integration.ID, eventID, "failed", nil, &message)
-		if finalStream != nil {
-			closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			_ = finalStream.Close(closeCtx)
-			cancel()
-			finalStream = nil
-		}
 		_, _ = bot.Send(context.Background(), &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Text: "任务处理失败：" + message})
 	}
 	if msg.RawContentType != "text" && msg.RawContentType != "post" && msg.RawContentType != "image" {
@@ -699,40 +656,23 @@ func (m *integrationManager) processMessage(ctx context.Context, integration sto
 	}
 	if command == "/help" {
 		_ = m.server.store.UpdateIntegrationEvent(context.Background(), integration.ID, eventID, "succeeded", nil, nil)
-		_, _ = bot.Send(context.Background(), &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Text: "直接发送消息即可创建任务。\n/projects 查看可用 Project\n/project 查看当前 Project\n/project <项目名称> 切换 Project\n/project none 解除 Project 绑定\n/new 开启新会话\n/status 用可折叠卡片实时查看执行过程\n/cancel 取消当前任务"})
+		_, _ = bot.Send(context.Background(), &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Text: "直接发送消息即可创建任务。\n/projects 打开项目选择卡片\n/project 打开项目选择卡片\n/model 选择模型和 effort\n/project <项目名称> 切换 Project\n/project none 解除 Project 绑定\n/new 开启新会话\n/status 用可折叠卡片实时查看执行过程\n/cancel 取消当前任务"})
 		return
 	}
-	if command == "/projects" {
-		projects, err := m.server.store.Projects(ctx, integration.WorkspaceID)
-		if err != nil {
+	if command == "/projects" || command == "/project" || command == "/model" {
+		kind := "project"
+		if command == "/model" {
+			kind = "model"
+		}
+		if err := m.sendFeishuSelection(ctx, integration, bot, msg, threadKey, kind); err != nil {
 			fail(err)
 			return
 		}
-		response := "当前 Workspace 暂无可用 Project。"
-		if len(projects) > 0 {
-			var lines []string
-			for _, project := range projects {
-				lines = append(lines, "- "+project.Name)
-			}
-			response = "可用 Project：\n" + strings.Join(lines, "\n") + "\n\n使用 /project <项目名称> 进行绑定。"
-		}
 		_ = m.server.store.UpdateIntegrationEvent(context.Background(), integration.ID, eventID, "succeeded", nil, nil)
-		_, _ = bot.Send(context.Background(), &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Text: response})
 		return
 	}
 	projectQuery, projectCommand := feishuProjectCommand(prompt)
 	if projectCommand {
-		if projectQuery == "" {
-			response := "当前未绑定 Project。使用 /projects 查看可用项目。"
-			if projectID := feishuEffectiveProjectID(conversation, conversationErr, chatDefault, chatDefaultErr, integration.ProjectID); projectID != nil {
-				if project, err := m.server.store.Project(ctx, integration.WorkspaceID, *projectID); err == nil && project.DeletedAt == nil {
-					response = "当前 Project：" + project.Name
-				}
-			}
-			_ = m.server.store.UpdateIntegrationEvent(context.Background(), integration.ID, eventID, "succeeded", nil, nil)
-			_, _ = bot.Send(context.Background(), &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Text: response})
-			return
-		}
 		if conversationErr == nil && conversation.ActiveTaskID != nil {
 			task, taskErr := m.server.store.Task(ctx, integration.WorkspaceID, *conversation.ActiveTaskID)
 			if taskErr == nil {
@@ -803,7 +743,7 @@ func (m *integrationManager) processMessage(ctx context.Context, integration sto
 		}
 		if command == "/status" && !terminal(relay.RunStatus(task.Status)) {
 			_ = m.server.store.UpdateIntegrationEvent(context.Background(), integration.ID, eventID, "running", taskConversation.ActiveTaskID, nil)
-			if err := m.streamFeishuTaskStatus(ctx, integration, bot, msg, task); err != nil {
+			if err := m.streamFeishuTaskStatus(ctx, integration, apiClient, bot, msg, task); err != nil {
 				fail(err)
 				return
 			}
@@ -820,7 +760,7 @@ func (m *integrationManager) processMessage(ctx context.Context, integration sto
 		return
 	}
 	var parentContext *feishuMessageContext
-	if parentID := feishuParentMessageID(msg); parentID != "" {
+	if parentID := feishuReplyContextID(msg, conversation); parentID != "" {
 		parent, err := fetchFeishuMessageContext(ctx, apiClient, parentID)
 		if err != nil {
 			fail(fmt.Errorf("读取被回复的飞书消息失败：%w", err))
@@ -880,7 +820,7 @@ func (m *integrationManager) processMessage(ctx context.Context, integration sto
 			return
 		}
 	}
-	request := chatRequest{AgentID: integration.AgentID, Prompt: prompt, ProjectID: selectedProjectID, IdempotencyKey: "feishu:" + eventID}
+	request := chatRequest{AgentID: integration.AgentID, Prompt: prompt, ProjectID: selectedProjectID, Model: conversation.ModelOverride, ReasoningEffort: conversation.ReasoningEffort, IdempotencyKey: "feishu:" + eventID}
 	if conversationErr == nil && conversation.ConversationID != "" {
 		request.SessionID = &conversation.ConversationID
 	}
@@ -894,81 +834,8 @@ func (m *integrationManager) processMessage(ctx context.Context, integration sto
 	_ = m.server.store.UpdateIntegrationEvent(context.Background(), integration.ID, eventID, "running", &taskID, nil)
 	_ = m.server.store.SaveIntegrationConversation(context.Background(), store.IntegrationConversation{IntegrationID: integration.ID, ChatID: msg.ChatID, ThreadKey: threadKey, ConversationID: result.Task.ConversationID, ActiveTaskID: &taskID, ProjectID: selectedProjectID})
 
-	lastFinalContent := ""
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		projection, syncErr := m.server.syncRelayRun(ctx, integration.WorkspaceID, result.Task.RelayRunID)
-		if syncErr != nil {
-			fail(syncErr)
-			return
-		}
-		if terminal(projection.Run.Status) {
-			status := "succeeded"
-			response := strings.TrimSpace(projection.Content)
-			if projection.Run.Status != relay.RunSucceeded {
-				status = "failed"
-				response = "任务" + feishuStatusText(string(projection.Run.Status))
-				if projection.Error != nil {
-					response += "：" + *projection.Error
-				}
-			}
-			if response == "" {
-				response = "任务已完成。"
-			}
-			_ = m.server.store.UpdateIntegrationEvent(context.Background(), integration.ID, eventID, status, &taskID, projection.Error)
-			_ = m.server.store.SaveIntegrationConversation(context.Background(), store.IntegrationConversation{IntegrationID: integration.ID, ChatID: msg.ChatID, ThreadKey: threadKey, ConversationID: result.Task.ConversationID, ProjectID: selectedProjectID})
-			if projection.Run.Status == relay.RunSucceeded && finalStream != nil {
-				if strings.HasPrefix(response, lastFinalContent) && len(response) > len(lastFinalContent) {
-					if appendErr := finalStream.Append(ctx, response[len(lastFinalContent):]); appendErr != nil {
-						slog.Warn("Could not append final Feishu response", "integration_id", integration.ID, "message_id", msg.MessageID, "error", appendErr)
-					}
-				}
-				closeErr := finalStream.Close(ctx)
-				finalStream = nil
-				if closeErr != nil {
-					m.setError(integration.ID, closeErr)
-					_, _ = bot.Send(context.Background(), &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Markdown: response})
-				}
-			} else {
-				if finalStream != nil {
-					closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					_ = finalStream.Close(closeCtx)
-					cancel()
-					finalStream = nil
-				}
-				_, sendErr := bot.Send(context.Background(), &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Markdown: response})
-				if sendErr != nil {
-					m.setError(integration.ID, sendErr)
-				}
-			}
-			return
-		}
-		if integration.StreamReplies {
-			content := strings.TrimSpace(feishuFinalContent(projection.Events))
-			if content != "" && finalStream == nil {
-				stream, streamErr := bot.Stream(ctx, &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Markdown: content})
-				if streamErr != nil {
-					slog.Warn("Could not create Feishu final response stream", "integration_id", integration.ID, "message_id", msg.MessageID, "error", streamErr)
-				} else {
-					finalStream = stream
-					lastFinalContent = content
-					removeTyping()
-				}
-			} else if finalStream != nil && strings.HasPrefix(content, lastFinalContent) && len(content) > len(lastFinalContent) {
-				if appendErr := finalStream.Append(ctx, content[len(lastFinalContent):]); appendErr != nil {
-					slog.Warn("Could not stream final Feishu response", "integration_id", integration.ID, "message_id", msg.MessageID, "error", appendErr)
-				} else {
-					lastFinalContent = content
-				}
-			}
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
+	if err := m.watchFeishuTask(ctx, integration, apiClient, bot, msg, result.Task, eventID, threadKey); err != nil {
+		fail(err)
 	}
 }
 
@@ -1016,6 +883,8 @@ func removeFeishuReaction(ctx context.Context, client *lark.Client, messageID, r
 
 func feishuStatusText(status string) string {
 	switch status {
+	case "succeeded":
+		return "已完成"
 	case "cancelled":
 		return "已取消"
 	case "failed":

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex"><meta name="description" content="Steer Codebase 自动代码审查的三套可交互原型。">
+  <title>Steer · Codebase 自动审查 · 三方案对比</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">跳转到内容</a>
+  <header class="prototype-bar"><div class="prototype-left"><span class="brandmark">S</span><strong>Steer</strong><span class="tag purple">设计预览</span></div><span class="caption-5 muted">模拟数据与操作 · 不连接真实 Codebase</span></header>
+  <main class="gallery" id="main">
+    <p class="eyebrow">Codebase × Steer</p>
+    <h1>让审查自动运行，<br>让讨论留在 Codebase。</h1>
+    <p class="gallery-intro">三套完整的交互方式，覆盖接入、Review Skill 维护、任务执行与报告回写。比较的是如何组织工作，而不是同一套产品的三个页面。</p>
+    <div class="gallery-grid">
+      <article class="concept-card"><a href="a.html" aria-label="进入 A 项目工作台"><img src="previews/a-home.png" alt="A 项目工作台：在项目内查看报告与审查配置"></a><article><span class="tag purple">A · 项目入口</span><h2>项目工作台</h2><p>进入项目，配置自动审查。报告与规范都在项目上下文中，适合按仓库管理研发流程。</p><a href="a.html" class="btn primary full">体验 A 方案</a><a href="flow.html?concept=a" class="btn ghost full">查看完整流程图</a></article></article>
+      <article class="concept-card"><a href="b.html" aria-label="进入 B 审查收件箱"><img src="previews/b-home.png" alt="B 审查收件箱：集中浏览多个项目的 MR 和问题证据"></a><article><span class="tag">B · 集中处理</span><h2>审查收件箱</h2><p>多个仓库的 MR 汇聚成队列。点击即可查看问题、证据与回写状态，适合日常跟进大量审查。</p><a href="b.html" class="btn primary full">体验 B 方案</a><a href="flow.html?concept=b" class="btn ghost full">查看完整流程图</a></article></article>
+      <article class="concept-card"><a href="c.html" aria-label="进入 C 自动化流程"><img src="previews/c-home.png" alt="C 自动化流程：按连接、范围、规则和回写四步配置"></a><article><span class="tag">C · 当前优化方案</span><h2>自动化流程</h2><p>首页维护流程与规则，支持草稿、发布和暂停。任务由事件自动触发，运行记录只用于按需核实。</p><a href="c.html" class="btn primary full">体验 C 方案</a><a href="flow.html?concept=c" class="btn ghost full">查看完整流程图</a></article></article>
+    </div>
+    <h2>每套方案都可以走完整流程</h2>
+    <div class="comparison"><div><h3>接入与规则</h3><p>验证 Codebase 连接，选择 Reviewer，编辑 Skill 草稿并发布。可切换仓库同步的只读规范。</p></div><div><h3>执行与报告</h3><p>输入演示 MR，查看审查进度、代码证据与检查结果，再预览 Codebase 汇总评论。</p></div><div><h3>异常与复审</h3><p>点击“模拟事件”，体验新提交使报告过期、证据不足、回写失败与重复事件。</p></div></div>
+    <footer><span>原型范围：自动审查与汇总回写。批准、讨论处理和合并留在 Codebase。</span><span>高清预览图可在各方案图片上右键打开。</span></footer>
+  </main>
+</body>
+</html>

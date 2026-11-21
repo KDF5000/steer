@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sort"
 	"time"
@@ -10,24 +11,62 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// SkillFile is one file inside a Skill. Encoding is "text" (default) or
+// "base64" for binary assets that the detail page shows read-only.
+type SkillFile struct {
+	Path     string `json:"path"`
+	Content  string `json:"content"`
+	Encoding string `json:"encoding,omitempty"`
+	Size     int    `json:"size,omitempty"`
+}
+
 type Skill struct {
-	ID          string    `json:"id"`
-	WorkspaceID string    `json:"workspaceId"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Content     string    `json:"content"`
-	SourceKind  string    `json:"sourceKind"`
-	SourceURL   *string   `json:"sourceUrl"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID          string  `json:"id"`
+	WorkspaceID string  `json:"workspaceId"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Content     string  `json:"content"`
+	SourceKind  string  `json:"sourceKind"`
+	SourceURL   *string `json:"sourceUrl"`
+	// Files is populated by the detail query only, so listing Skills stays
+	// small even when a package contains many files.
+	Files     []SkillFile `json:"files,omitempty"`
+	CreatedAt time.Time   `json:"createdAt"`
+	UpdatedAt time.Time   `json:"updatedAt"`
 }
 
 const skillColumns = `id,workspace_id,name,description,content,source_kind,source_url,created_at,updated_at`
+const skillDetailColumns = skillColumns + `,files`
 
 func scanSkill(row pgx.Row) (Skill, error) {
 	var skill Skill
 	err := row.Scan(&skill.ID, &skill.WorkspaceID, &skill.Name, &skill.Description, &skill.Content, &skill.SourceKind, &skill.SourceURL, &skill.CreatedAt, &skill.UpdatedAt)
 	return skill, err
+}
+
+func scanSkillDetail(row pgx.Row) (Skill, error) {
+	var skill Skill
+	var raw []byte
+	err := row.Scan(&skill.ID, &skill.WorkspaceID, &skill.Name, &skill.Description, &skill.Content, &skill.SourceKind, &skill.SourceURL, &skill.CreatedAt, &skill.UpdatedAt, &raw)
+	if err != nil {
+		return skill, err
+	}
+	if len(raw) > 0 {
+		if err = json.Unmarshal(raw, &skill.Files); err != nil {
+			return skill, err
+		}
+	}
+	if skill.Files == nil {
+		skill.Files = []SkillFile{}
+	}
+	return skill, nil
+}
+
+func skillFilesJSON(files []SkillFile) ([]byte, error) {
+	if files == nil {
+		return []byte("[]"), nil
+	}
+	return json.Marshal(files)
 }
 
 func (s *Store) Skills(ctx context.Context, workspaceID string) ([]Skill, error) {
@@ -48,23 +87,65 @@ func (s *Store) Skills(ctx context.Context, workspaceID string) ([]Skill, error)
 }
 
 func (s *Store) Skill(ctx context.Context, workspaceID, id string) (Skill, error) {
-	skill, err := scanSkill(s.pool.QueryRow(ctx, `SELECT `+skillColumns+` FROM skills WHERE workspace_id=$1 AND id=$2`, workspaceID, id))
+	skill, err := scanSkillDetail(s.pool.QueryRow(ctx, `SELECT `+skillDetailColumns+` FROM skills WHERE workspace_id=$1 AND id=$2`, workspaceID, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Skill{}, ErrNotFound
 	}
 	return skill, err
 }
 
+// SkillsByIDs loads a specific set of Skills, for example the Skills pinned to
+// a review workflow. Unknown IDs are ignored so a deleted Skill cannot block a
+// run that was already queued.
+func (s *Store) SkillsByIDs(ctx context.Context, workspaceID string, ids []string) ([]Skill, error) {
+	if len(ids) == 0 {
+		return []Skill{}, nil
+	}
+	rows, err := s.pool.Query(ctx, `SELECT `+skillColumns+` FROM skills WHERE workspace_id=$1 AND id = ANY($2) ORDER BY updated_at DESC`, workspaceID, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Skill{}
+	for rows.Next() {
+		skill, scanErr := scanSkill(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		items = append(items, skill)
+	}
+	return items, rows.Err()
+}
+
 func (s *Store) CreateSkill(ctx context.Context, workspaceID string, skill Skill) (Skill, error) {
 	skill.ID = uuid.NewString()
 	skill.WorkspaceID = workspaceID
-	return scanSkill(s.pool.QueryRow(ctx, `INSERT INTO skills(id,workspace_id,name,description,content,source_kind,source_url) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING `+skillColumns,
-		skill.ID, workspaceID, skill.Name, skill.Description, skill.Content, skill.SourceKind, skill.SourceURL))
+	files, err := skillFilesJSON(skill.Files)
+	if err != nil {
+		return Skill{}, err
+	}
+	return scanSkillDetail(s.pool.QueryRow(ctx, `INSERT INTO skills(id,workspace_id,name,description,content,source_kind,source_url,files) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb) RETURNING `+skillDetailColumns,
+		skill.ID, workspaceID, skill.Name, skill.Description, skill.Content, skill.SourceKind, skill.SourceURL, files))
 }
 
 func (s *Store) UpdateSkill(ctx context.Context, workspaceID, id string, skill Skill) (Skill, error) {
-	updated, err := scanSkill(s.pool.QueryRow(ctx, `UPDATE skills SET name=$3,description=$4,content=$5,source_kind=$6,source_url=$7,updated_at=now() WHERE workspace_id=$1 AND id=$2 RETURNING `+skillColumns,
+	updated, err := scanSkillDetail(s.pool.QueryRow(ctx, `UPDATE skills SET name=$3,description=$4,content=$5,source_kind=$6,source_url=$7,updated_at=now() WHERE workspace_id=$1 AND id=$2 RETURNING `+skillDetailColumns,
 		workspaceID, id, skill.Name, skill.Description, skill.Content, skill.SourceKind, skill.SourceURL))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Skill{}, ErrNotFound
+	}
+	return updated, err
+}
+
+// UpdateSkillFiles replaces the file set and keeps content (the SKILL.md entry
+// point) in sync with it.
+func (s *Store) UpdateSkillFiles(ctx context.Context, workspaceID, id string, files []SkillFile, content string) (Skill, error) {
+	raw, err := skillFilesJSON(files)
+	if err != nil {
+		return Skill{}, err
+	}
+	updated, err := scanSkillDetail(s.pool.QueryRow(ctx, `UPDATE skills SET files=$3::jsonb,content=$4,updated_at=now() WHERE workspace_id=$1 AND id=$2 RETURNING `+skillDetailColumns,
+		workspaceID, id, raw, content))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Skill{}, ErrNotFound
 	}

@@ -51,6 +51,8 @@ func main() {
 	defer stopWatchNotifications()
 	stopUsageSync := apiServer.StartUsageSync(ctx)
 	defer stopUsageSync()
+	stopCodebaseWorkers := apiServer.StartCodebaseWorkers(ctx)
+	defer stopCodebaseWorkers()
 	handler := apiServer.Handler()
 	server := &http.Server{Addr: env("STEER_ADDR", ":8080"), Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	go func() {

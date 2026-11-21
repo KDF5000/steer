@@ -1,0 +1,1118 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent Skill 选择 · 3 种交互方案</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;650&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --accent: #5556cf;
+        --accent-soft: #eeeefb;
+        --text: #24262b;
+        --text-secondary: #6b6d76;
+        --text-tertiary: #9a9ca5;
+        --border: #e5e6ea;
+        --border-strong: #dcdde1;
+        --surface: #fff;
+        --surface-subtle: #f7f7f9;
+        --radius: 8px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #eef0f4;
+        color: var(--text);
+        font-family:
+          Geist, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+        color: inherit;
+      }
+
+      /* ---- Faux workbench behind the dialog ---- */
+      .app-shell {
+        display: flex;
+        height: 100vh;
+        filter: blur(2.5px);
+        opacity: 0.75;
+      }
+
+      .app-sidebar {
+        width: 248px;
+        flex: none;
+        border-right: 1px solid #e8e9ed;
+        background: #f7f7f9;
+        padding: 18px 14px;
+      }
+
+      .app-brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 26px;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      .app-brand i {
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        background: #24262b;
+      }
+
+      .app-nav {
+        display: grid;
+        gap: 7px;
+      }
+
+      .app-nav span {
+        height: 26px;
+        border-radius: 7px;
+        background: #ececf0;
+      }
+
+      .app-nav span:nth-child(2) {
+        background: #e2e2f6;
+      }
+
+      .app-main {
+        flex: 1;
+        padding: 26px 40px;
+      }
+
+      .app-main h1 {
+        width: 180px;
+        height: 20px;
+        margin: 0 0 26px;
+        border-radius: 6px;
+        background: #e3e4e8;
+      }
+
+      .app-card {
+        height: 150px;
+        margin-bottom: 16px;
+        border-radius: 14px;
+        background: #f9f9fb;
+      }
+
+      .backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgb(24 25 36 / 22%);
+      }
+
+      /* ---- Concept switcher ---- */
+      .switcher {
+        position: fixed;
+        top: 18px;
+        left: 50%;
+        z-index: 50;
+        display: flex;
+        gap: 3px;
+        padding: 4px;
+        transform: translateX(-50%);
+        border: 1px solid rgb(255 255 255 / 55%);
+        border-radius: 999px;
+        background: rgb(255 255 255 / 78%);
+        box-shadow: 0 10px 30px rgb(24 25 36 / 14%);
+        backdrop-filter: blur(12px);
+      }
+
+      .switcher button {
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        padding: 7px 14px;
+        color: #5c5d66;
+        font-size: 12px;
+        font-weight: 550;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .switcher button:hover {
+        color: var(--text);
+      }
+
+      .switcher button[aria-selected='true'] {
+        background: #24262b;
+        color: #fff;
+      }
+
+      /* ---- Dialog ---- */
+      .dialog {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        z-index: 10;
+        display: flex;
+        width: min(540px, calc(100vw - 32px));
+        max-height: calc(100vh - 72px);
+        flex-direction: column;
+        transform: translate(-50%, -50%);
+        border-radius: 15px;
+        background: #fff;
+        box-shadow: 0 24px 90px rgb(24 25 36 / 28%);
+      }
+
+      .dialog-scroll {
+        overflow-y: auto;
+        padding: 26px 26px 0;
+        scrollbar-width: none;
+      }
+
+      .dialog-scroll::-webkit-scrollbar {
+        display: none;
+      }
+
+      .dialog-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .dialog h2 {
+        margin: 0;
+        font-size: 21px;
+        font-weight: 650;
+        letter-spacing: -0.03em;
+      }
+
+      .dialog-close {
+        display: grid;
+        width: 26px;
+        height: 26px;
+        flex: none;
+        place-items: center;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: #85878f;
+        cursor: pointer;
+      }
+
+      .dialog-close:hover {
+        background: #f2f2f5;
+        color: var(--text);
+      }
+
+      .dialog-desc {
+        margin: 8px 0 0;
+        color: var(--text-secondary);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .dialog form {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        margin-top: 22px;
+      }
+
+      .field {
+        display: grid;
+        min-width: 0;
+        align-content: start;
+        gap: 7px;
+        color: #56575e;
+        font-size: 12px;
+        font-weight: 570;
+      }
+
+      .field.wide {
+        grid-column: 1 / -1;
+      }
+
+      .field input,
+      .field textarea,
+      .field .select {
+        width: 100%;
+        min-height: 41px;
+        padding: 9px 11px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        background: #fff;
+        font-size: 13px;
+        font-weight: 400;
+      }
+
+      .field textarea {
+        min-height: 118px;
+        resize: vertical;
+        line-height: 1.55;
+      }
+
+      .field input:focus,
+      .field textarea:focus,
+      .skill-search:focus-within {
+        border-color: #9697dd;
+        outline: 0;
+        box-shadow: 0 0 0 3px var(--accent-soft);
+      }
+
+      .select {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--text);
+      }
+
+      .select svg {
+        color: #8b8d96;
+      }
+
+      /* ---- Shared Skills block ---- */
+      .skills {
+        grid-column: 1 / -1;
+        display: grid;
+        gap: 9px;
+        margin-top: 2px;
+      }
+
+      .skills-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .skills-title {
+        color: #3b3c43;
+        font-size: 12.5px;
+        font-weight: 620;
+      }
+
+      .skills-count {
+        color: var(--text-tertiary);
+        font-size: 11px;
+        font-weight: 500;
+      }
+
+      .skills-hint {
+        margin: -3px 0 1px;
+        color: var(--text-tertiary);
+        font-size: 11px;
+        line-height: 1.45;
+      }
+
+      .tag {
+        display: inline-flex;
+        max-width: 100%;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: #fff;
+        padding: 5px 9px;
+        color: #4b4c54;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.35;
+        cursor: pointer;
+      }
+
+      .tag span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tag svg {
+        flex: none;
+        width: 12px;
+        height: 12px;
+      }
+
+      .tag:hover {
+        border-color: #c9cad2;
+        background: #fafafb;
+      }
+
+      .tag.selected {
+        border-color: transparent;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .tag.selected:hover {
+        background: #e5e5fa;
+      }
+
+      .tag .remove {
+        display: grid;
+        width: 14px;
+        height: 14px;
+        place-items: center;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        padding: 0;
+        color: currentColor;
+        cursor: pointer;
+        opacity: 0.65;
+      }
+
+      .tag .remove:hover {
+        background: rgb(85 86 207 / 14%);
+        opacity: 1;
+      }
+
+      .chip-cloud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border: 1px solid var(--border-strong);
+        border-radius: 999px;
+        background: #fff;
+        padding: 6px 11px;
+        color: #4b4c54;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition:
+          background 120ms ease,
+          border-color 120ms ease,
+          color 120ms ease;
+      }
+
+      .chip:hover {
+        border-color: #bfc0c9;
+        background: #fafafb;
+      }
+
+      .chip[aria-pressed='true'] {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .chip[aria-pressed='true']:hover {
+        background: #4a4bc0;
+      }
+
+      .chip svg {
+        width: 12px;
+        height: 12px;
+      }
+
+      /* ---- Concept A: tag cloud + search picker ---- */
+      .tag-cloud {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .tag-add {
+        border-style: dashed;
+        border-color: #d4d5dc;
+        background: transparent;
+        color: #8b8d96;
+        font-weight: 500;
+      }
+
+      .tag-add:hover {
+        border-color: var(--accent);
+        border-style: dashed;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .tag-add[aria-expanded='true'] {
+        border-color: var(--accent);
+        border-style: dashed;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .tag-add svg {
+        width: 11px;
+        height: 11px;
+      }
+
+      .floating-picker {
+        position: fixed;
+        z-index: 40;
+        width: min(300px, calc(100vw - 24px));
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: #fff;
+        padding: 6px;
+        box-shadow: 0 18px 50px rgb(24 25 36 / 20%);
+        animation: picker-in 120ms ease-out;
+      }
+
+      .floating-picker[hidden] {
+        display: none;
+      }
+
+      .picker-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 35;
+        background: rgb(24 25 36 / 14%);
+        backdrop-filter: blur(3px);
+        -webkit-backdrop-filter: blur(3px);
+        animation: backdrop-in 140ms ease-out;
+      }
+
+      .picker-backdrop[hidden] {
+        display: none;
+      }
+
+      @keyframes backdrop-in {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      @keyframes picker-in {
+        from {
+          opacity: 0;
+          transform: translateY(-4px) scale(0.985);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .floating-picker .skill-search {
+        margin: 2px 2px 6px;
+      }
+
+      .floating-picker .picker-list {
+        max-height: 220px;
+      }
+
+      .skill-search {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        border: 1px solid var(--border-strong);
+        border-radius: 7px;
+        margin: 8px;
+        padding: 6px 8px;
+        background: #fff;
+      }
+
+      .skill-search svg {
+        flex: none;
+        width: 13px;
+        height: 13px;
+        color: var(--text-tertiary);
+      }
+
+      .skill-search input {
+        min-width: 0;
+        flex: 1;
+        border: 0;
+        outline: 0;
+        padding: 0;
+        background: transparent;
+        font-size: 12px;
+      }
+
+      .picker-list {
+        display: grid;
+        max-height: 190px;
+        gap: 2px;
+        overflow-y: auto;
+        padding: 0 6px 7px;
+      }
+
+      .picker-list button {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        padding: 7px 8px;
+        color: #4b4c54;
+        font-size: 12px;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .picker-list button:hover {
+        background: var(--surface-subtle);
+      }
+
+      .picker-list button svg {
+        flex: none;
+        width: 13px;
+        height: 13px;
+        color: var(--accent);
+      }
+
+      .picker-empty {
+        padding: 10px;
+        color: var(--text-tertiary);
+        font-size: 11px;
+        text-align: center;
+      }
+
+      /* ---- Concept C: grouped ---- */
+      .group {
+        display: grid;
+        gap: 7px;
+        margin-top: 2px;
+      }
+
+      .group-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--text-tertiary);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .group-label em {
+        color: #b4b6be;
+        font-style: normal;
+        font-weight: 500;
+      }
+
+      .group-empty {
+        color: var(--text-tertiary);
+        font-size: 11px;
+      }
+
+      /* ---- Footer ---- */
+      .dialog-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 22px;
+        border-top: 1px solid #f0f0f2;
+        padding: 16px 26px 20px;
+      }
+
+      .btn {
+        border-radius: 8px;
+        padding: 9px 16px;
+        font-size: 12.5px;
+        font-weight: 550;
+        cursor: pointer;
+      }
+
+      .btn-ghost {
+        border: 1px solid var(--border-strong);
+        background: #fff;
+        color: #3f4047;
+      }
+
+      .btn-ghost:hover {
+        background: #f7f7f9;
+      }
+
+      .btn-primary {
+        border: 1px solid #24262b;
+        background: #24262b;
+        color: #fff;
+      }
+
+      .btn-primary:hover {
+        background: #000;
+      }
+
+      .concept-note {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        z-index: 20;
+        max-width: min(620px, calc(100vw - 32px));
+        transform: translateX(-50%);
+        border-radius: 10px;
+        background: rgb(24 25 36 / 82%);
+        padding: 9px 14px;
+        color: #f2f2f5;
+        font-size: 11.5px;
+        line-height: 1.5;
+        text-align: center;
+        backdrop-filter: blur(8px);
+      }
+
+      .concept-note strong {
+        color: #fff;
+        font-weight: 600;
+      }
+
+      @media (max-width: 640px) {
+        .app-sidebar {
+          display: none;
+        }
+
+        .app-main {
+          padding: 18px;
+        }
+
+        .dialog {
+          width: calc(100vw - 20px);
+          max-height: calc(100vh - 84px);
+        }
+
+        .dialog-scroll {
+          padding: 20px 18px 0;
+        }
+
+        .dialog-footer {
+          padding: 14px 18px 18px;
+        }
+
+        .dialog form {
+          grid-template-columns: 1fr;
+          gap: 15px;
+        }
+
+        .switcher {
+          top: 10px;
+        }
+
+        .switcher button {
+          padding: 7px 10px;
+          font-size: 11px;
+        }
+
+        .concept-note {
+          bottom: 8px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell" aria-hidden="true">
+      <aside class="app-sidebar">
+        <div class="app-brand"><i></i> Steer</div>
+        <nav class="app-nav">
+          <span></span><span></span><span></span><span></span><span></span>
+        </nav>
+      </aside>
+      <main class="app-main">
+        <h1></h1>
+        <div class="app-card"></div>
+        <div class="app-card"></div>
+      </main>
+    </div>
+    <div class="backdrop"></div>
+
+    <div class="switcher" role="tablist" aria-label="交互方案">
+      <button type="button" role="tab" data-concept="a">A · 标签云 + 搜索</button>
+      <button type="button" role="tab" data-concept="b">B · 标签云</button>
+      <button type="button" role="tab" data-concept="c">C · 搜索分组</button>
+    </div>
+
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="agent-title">
+      <div class="dialog-scroll">
+        <div class="dialog-head">
+          <div>
+            <h2 id="agent-title">编辑智能体</h2>
+            <p class="dialog-desc">
+              Update this Agent’s behavior and execution Runtime.
+            </p>
+          </div>
+          <button type="button" class="dialog-close" aria-label="关闭">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <form onsubmit="return false">
+          <label class="field">
+            Name
+            <input value="Trae-Local" />
+          </label>
+          <label class="field">
+            Role
+            <input value="General execution" />
+          </label>
+          <label class="field">
+            Runtime
+            <span class="select">
+              MTYX3244WT / trae
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </span>
+          </label>
+          <label class="field">
+            Model
+            <span class="select">
+              GPT-6.1-Sol
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </span>
+          </label>
+          <label class="field wide">
+            Instructions
+            <textarea placeholder="Role, constraints, and output preferences…"></textarea>
+          </label>
+
+          <div class="skills" id="skills"></div>
+        </form>
+      </div>
+
+      <div class="dialog-footer">
+        <button type="button" class="btn btn-ghost">Cancel</button>
+        <button type="button" class="btn btn-primary">保存修改</button>
+      </div>
+    </div>
+
+    <div class="picker-backdrop" id="picker-backdrop" hidden></div>
+    <div class="floating-picker" id="floating-picker" hidden></div>
+
+    <div class="concept-note" id="note"></div>
+
+    <script>
+      const SKILLS = [
+        { id: 'meta-code-review', name: 'meta-code-review' },
+        { id: 'codebase-mr-review', name: 'codebase-mr-review' },
+        { id: 'frontend-design', name: 'frontend-design' },
+        { id: 'pdf', name: 'pdf' },
+        { id: 'docs-writer', name: 'docs-writer' },
+        { id: 'test-runner', name: 'test-runner' },
+        { id: 'release-notes', name: 'release-notes' },
+        { id: 'data-analysis', name: 'data-analysis' },
+      ];
+
+      const NOTES = {
+        a: '<strong>方案 A · 标签云 + 搜索添加</strong>　已选 Skill 以标签云展示，末尾的虚线标签就是添加入口；点击后弹出搜索框选择，可连续添加。标签使用站点主题色，适合 Skill 数量多、希望保持弹窗简洁的场景。',
+        b: '<strong>方案 B · 标签云</strong>　所有 Skill 直接平铺成可点击标签，选中后填充主题色。一眼可见、操作最快，适合 Skill 数量较少的团队。',
+        c: '<strong>方案 C · 搜索分组</strong>　已选与全部 Skill 分组展示，支持搜索过滤。已选始终可见，适合 Skill 库持续增长的情况，推荐这个方案。',
+      };
+
+      const ICONS = {
+        plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+        check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>',
+        x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+        search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+      };
+
+      const state = {
+        concept: 'a',
+        selected: new Set(['meta-code-review', 'codebase-mr-review']),
+        pickerOpen: false,
+        pickerQuery: '',
+        query: '',
+      };
+
+      const skillsEl = document.getElementById('skills');
+      const noteEl = document.getElementById('note');
+      const floatingEl = document.getElementById('floating-picker');
+      const backdropEl = document.getElementById('picker-backdrop');
+
+      function escapeHTML(value) {
+        return value.replace(/[&<>"']/g, (char) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        })[char]);
+      }
+
+      function selectedSkills() {
+        return SKILLS.filter((skill) => state.selected.has(skill.id));
+      }
+
+      function skillByName(name) {
+        return SKILLS.find((skill) => skill.name === name);
+      }
+
+      function countLabel() {
+        return state.selected.size ? `已选 ${state.selected.size}` : '未选择';
+      }
+
+      function renderA() {
+        const selected = selectedSkills();
+        return `
+          <div class="skills-head">
+            <span class="skills-title">Skills</span>
+            <span class="skills-count">${countLabel()}</span>
+          </div>
+          <div class="tag-cloud">
+            ${selected.map((skill) => `
+              <span class="tag selected">
+                <span>${escapeHTML(skill.name)}</span>
+                <button type="button" class="remove" data-remove="${skill.id}" aria-label="移除 ${escapeHTML(skill.name)}">${ICONS.x}</button>
+              </span>`).join('')}
+            <button
+              type="button"
+              class="tag tag-add"
+              id="open-picker"
+              aria-expanded="${state.pickerOpen}"
+              aria-haspopup="listbox"
+            >${ICONS.plus} 添加 Skill</button>
+          </div>
+          <p class="skills-hint">点击标签上的 × 移除；点“添加 Skill”搜索更多。标签只显示名称。</p>
+        `;
+      }
+
+      function renderB() {
+        return `
+          <div class="skills-head">
+            <span class="skills-title">Skills</span>
+            <span class="skills-count">${countLabel()}</span>
+          </div>
+          <div class="chip-cloud">
+            ${SKILLS.map((skill) => {
+              const on = state.selected.has(skill.id);
+              return `<button type="button" class="chip" aria-pressed="${on}" data-toggle="${skill.id}">
+                ${on ? ICONS.check : ''}<span>${escapeHTML(skill.name)}</span>
+              </button>`;
+            }).join('')}
+          </div>
+          <p class="skills-hint">点击标签即可安装或取消安装。</p>
+        `;
+      }
+
+      function renderC() {
+        const query = state.query.trim().toLowerCase();
+        const matches = (skill) => skill.name.toLowerCase().includes(query);
+        const selected = selectedSkills().filter(matches);
+        const available = SKILLS.filter((skill) => !state.selected.has(skill.id)).filter(matches);
+        return `
+          <div class="skills-head">
+            <span class="skills-title">Skills</span>
+            <span class="skills-count">${countLabel()}</span>
+          </div>
+          <label class="skill-search" style="margin:0">
+            ${ICONS.search}
+            <input id="group-query" value="${escapeHTML(state.query)}" placeholder="搜索 Skill" />
+          </label>
+          <div class="group">
+            <span class="group-label">已选 <em>${selected.length}</em></span>
+            ${selected.length
+              ? `<div class="chip-cloud">${selected.map((skill) => `
+                  <button type="button" class="chip" aria-pressed="true" data-toggle="${skill.id}">
+                    ${ICONS.check}<span>${escapeHTML(skill.name)}</span>
+                  </button>`).join('')}</div>`
+              : '<span class="group-empty">还没有选择 Skill</span>'}
+          </div>
+          <div class="group">
+            <span class="group-label">全部 Skill <em>${available.length}</em></span>
+            ${available.length
+              ? `<div class="chip-cloud">${available.map((skill) => `
+                  <button type="button" class="chip" aria-pressed="false" data-toggle="${skill.id}">
+                    <span>${escapeHTML(skill.name)}</span>
+                  </button>`).join('')}</div>`
+              : `<span class="group-empty">${query ? '没有匹配的 Skill' : '全部 Skill 已选择'}</span>`}
+          </div>
+          <p class="skills-hint">已选 Skill 会固定显示在上方，方便快速取消。</p>
+        `;
+      }
+
+      function render() {
+        skillsEl.innerHTML =
+          state.concept === 'a' ? renderA() : state.concept === 'b' ? renderB() : renderC();
+        noteEl.innerHTML = NOTES[state.concept];
+        document.querySelectorAll('.switcher button').forEach((button) => {
+          button.setAttribute('aria-selected', String(button.dataset.concept === state.concept));
+        });
+        bind();
+        renderFloating();
+      }
+
+      // The picker lives outside the dialog so it floats above the page and is
+      // never clipped by the dialog's scroll container.
+      function renderFloating() {
+        if (state.concept !== 'a' || !state.pickerOpen) {
+          floatingEl.hidden = true;
+          floatingEl.innerHTML = '';
+          backdropEl.hidden = true;
+          return;
+        }
+        const query = state.pickerQuery.trim().toLowerCase();
+        const remaining = SKILLS.filter((skill) => !state.selected.has(skill.id))
+          .filter((skill) => skill.name.toLowerCase().includes(query));
+        floatingEl.innerHTML = `
+          <label class="skill-search">
+            ${ICONS.search}
+            <input id="picker-query" value="${escapeHTML(state.pickerQuery)}" placeholder="搜索 Skill" />
+          </label>
+          <div class="picker-list">
+            ${remaining.length
+              ? remaining.map((skill) => `
+                <button type="button" data-add="${skill.id}">
+                  ${ICONS.plus}<span>${escapeHTML(skill.name)}</span>
+                </button>`).join('')
+              : `<div class="picker-empty">${query ? '没有匹配的 Skill' : '全部 Skill 已添加'}</div>`}
+          </div>
+        `;
+        floatingEl.hidden = false;
+        backdropEl.hidden = false;
+        bindFloating();
+        positionFloating();
+      }
+
+      function bindFloating() {
+        floatingEl.querySelectorAll('[data-add]').forEach((button) => {
+          button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            state.selected.add(button.dataset.add);
+            render();
+            const next = floatingEl.querySelector('#picker-query');
+            next?.focus();
+            next?.setSelectionRange(next.value.length, next.value.length);
+          });
+        });
+
+        const query = floatingEl.querySelector('#picker-query');
+        if (query) {
+          query.addEventListener('input', () => {
+            state.pickerQuery = query.value;
+            const caret = query.selectionStart;
+            render();
+            const next = floatingEl.querySelector('#picker-query');
+            next?.focus();
+            next?.setSelectionRange(caret, caret);
+          });
+        }
+      }
+
+      function positionFloating() {
+        const button = skillsEl.querySelector('#open-picker');
+        if (!button || floatingEl.hidden) return;
+        const rect = button.getBoundingClientRect();
+        const width = floatingEl.offsetWidth;
+        const height = floatingEl.offsetHeight;
+        const margin = 12;
+        let left = rect.right - width;
+        left = Math.min(Math.max(left, margin), window.innerWidth - width - margin);
+        let top = rect.bottom + 8;
+        if (top + height > window.innerHeight - margin) {
+          top = rect.top - height - 8;
+        }
+        floatingEl.style.left = `${Math.round(left)}px`;
+        floatingEl.style.top = `${Math.round(Math.max(margin, top))}px`;
+      }
+
+      function bind() {
+        skillsEl.querySelectorAll('[data-toggle]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const id = button.dataset.toggle;
+            if (state.selected.has(id)) state.selected.delete(id);
+            else state.selected.add(id);
+            render();
+          });
+        });
+
+        skillsEl.querySelectorAll('[data-remove]').forEach((button) => {
+          button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            state.selected.delete(button.dataset.remove);
+            render();
+          });
+        });
+
+        const openPicker = skillsEl.querySelector('#open-picker');
+        if (openPicker) {
+          openPicker.addEventListener('click', (event) => {
+            event.stopPropagation();
+            state.pickerOpen = !state.pickerOpen;
+            render();
+            if (state.pickerOpen) {
+              const next = floatingEl.querySelector('#picker-query');
+              next?.focus();
+              next?.setSelectionRange(next.value.length, next.value.length);
+            }
+          });
+        }
+
+        const groupQuery = skillsEl.querySelector('#group-query');
+        if (groupQuery) {
+          groupQuery.addEventListener('input', () => {
+            state.query = groupQuery.value;
+            const caret = groupQuery.selectionStart;
+            render();
+            const next = skillsEl.querySelector('#group-query');
+            next?.focus();
+            next?.setSelectionRange(caret, caret);
+          });
+        }
+      }
+
+      document.querySelectorAll('.switcher button').forEach((button) => {
+        button.addEventListener('click', () => {
+          state.concept = button.dataset.concept;
+          state.pickerOpen = false;
+          state.pickerQuery = '';
+          state.query = '';
+          history.replaceState(null, '', `?concept=${state.concept}`);
+          render();
+        });
+      });
+
+      backdropEl.addEventListener('click', () => {
+        if (!state.pickerOpen) return;
+        state.pickerOpen = false;
+        render();
+      });
+
+      document.addEventListener('click', (event) => {
+        if (state.pickerOpen && !floatingEl.contains(event.target)) {
+          state.pickerOpen = false;
+          render();
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && state.pickerOpen) {
+          state.pickerOpen = false;
+          render();
+        }
+      });
+
+      document.addEventListener(
+        'scroll',
+        () => {
+          if (state.pickerOpen) positionFloating();
+        },
+        true,
+      );
+
+      window.addEventListener('resize', () => {
+        if (state.pickerOpen) positionFloating();
+      });
+
+      const initial = new URLSearchParams(location.search).get('concept');
+      if (initial && ['a', 'b', 'c'].includes(initial)) state.concept = initial;
+      render();
+    </script>
+  </body>
+</html>

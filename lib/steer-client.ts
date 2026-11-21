@@ -92,6 +92,143 @@ export type FeishuIntegrationInput = {
   enabled: boolean;
 };
 
+export type CodebaseConnectionRecord = {
+  workspaceId: string;
+  baseUrl: string;
+  appId: string;
+  appSecretConfigured: boolean;
+  remoteUsername: string;
+  verifiedAt: string;
+  updatedAt: string;
+};
+
+export type CodebaseConnectionInput = {
+  baseUrl: string;
+  appId: string;
+  appSecret?: string;
+};
+
+export type CodebaseMergeRequestRecord = {
+  id: number;
+  iid: number;
+  project_id: number;
+  title: string;
+  description: string;
+  state: string;
+  web_url: string;
+  source_branch: string;
+  target_branch: string;
+  created_at: string;
+  updated_at: string;
+  draft: boolean;
+  labels: string[];
+  author: { name: string; username: string };
+  references: { full: string };
+};
+
+export type CodebaseMergeRequestsRecord = {
+  items: CodebaseMergeRequestRecord[];
+  page: number;
+  nextPage: number | null;
+  total: number;
+  syncedAt: string | null;
+};
+
+// CodebaseRepositoryEntry is the record returned when a repository is added.
+export type CodebaseRepositoryEntry = {
+  repoId: string;
+  repoPath: string;
+  repoName: string;
+  createdAt: string;
+};
+
+// CodebaseRepositoryRecord is a managed repository with its sync state.
+// Merge requests are stored per repository, so several workflows that review
+// the same repository share one synced copy.
+export type CodebaseRepositoryRecord = {
+  repoId: string;
+  repoPath: string;
+  repoName: string;
+  lastSyncedAt: string | null;
+  lastMrUpdatedAt: string | null;
+  lastCreated: number;
+  lastUpdated: number;
+  openCount: number;
+  totalCount: number;
+  lastError: string;
+};
+
+export type CodebaseSyncRecord = {
+  repoId: string;
+  repoPath: string;
+  repoName: string;
+  created: number;
+  updated: number;
+  unchanged: number;
+  fetched: number;
+  pages: number;
+  syncedAt: string;
+  openCount: number;
+  totalCount: number;
+};
+
+export type CodebaseWorkflowRecord = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  repoPath: string;
+  repoId: string;
+  repoName: string;
+  agentId: string;
+  reviewInstruction: string;
+  model: string;
+  reasoningEffort: string;
+  skillIds: string[];
+  triggerWebhook: boolean;
+  reportEnabled: boolean;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CodebaseWorkflowInput = {
+  name: string;
+  repoPath: string;
+  agentId: string;
+  reviewInstruction?: string;
+  model?: string;
+  reasoningEffort?: string;
+  skillIds?: string[];
+  triggerWebhook?: boolean;
+  reportEnabled?: boolean;
+  enabled?: boolean;
+};
+
+export type CodebaseRunRecord = {
+  id: string;
+  workspaceId: string;
+  workflowId: string;
+  repoPath: string;
+  repoId: string;
+  mrIid: number;
+  mrTitle: string;
+  mrUrl: string;
+  trigger: string;
+  status: string;
+  summary: string;
+  error: string;
+  taskId: string;
+  conversationId: string;
+  model: string;
+  reasoningEffort: string;
+  reportStatus: string;
+  reportError: string;
+  reportUrl: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+};
+
 export type RelayNodeEnrollment = {
   nodeToken: string;
   token: string;
@@ -198,16 +335,32 @@ export type WorkspaceGitStatus = {
   detached?: boolean;
 };
 
+export type SkillFileRecord = {
+  path: string;
+  content: string;
+  encoding: 'text' | 'base64';
+  size?: number;
+};
+
 export type SkillRecord = {
   id: string;
   workspaceId: string;
   name: string;
   description: string;
   content: string;
-  sourceKind: 'manual' | 'url';
+  sourceKind: 'manual' | 'url' | 'agentbuddy';
   sourceUrl: string | null;
+  files?: SkillFileRecord[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type AgentBuddySkillRecord = {
+  identifier: string;
+  name: string;
+  namespace: string;
+  description: string;
+  version: string;
 };
 
 export type DocumentRecord = {
@@ -377,6 +530,13 @@ export type SharedConversation = {
     updatedAt?: string;
   }>;
   createdAt: string;
+};
+
+export type CodebaseWebhookRecord = {
+  workspaceId: string;
+  enabled: boolean;
+  callbackPath: string;
+  updatedAt: string;
 };
 
 export type Bootstrap = {
@@ -589,6 +749,143 @@ export const steer = {
       method: 'DELETE',
     }),
   integrations: () => request<WorkspaceIntegrationRecord[]>('/integrations'),
+  codebaseConnection: (signal?: AbortSignal) =>
+    request<CodebaseConnectionRecord | null>('/codebase/connection', {
+      signal,
+    }),
+  codebaseWebhook: (signal?: AbortSignal) =>
+    request<CodebaseWebhookRecord | null>('/codebase/webhook', { signal }),
+  saveCodebaseWebhook: (
+    enabled: boolean,
+    rotateToken: boolean,
+    signal?: AbortSignal,
+  ) =>
+    request<CodebaseWebhookRecord>('/codebase/webhook', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled, rotateToken }),
+      signal,
+    }),
+  saveCodebaseConnection: (
+    input: CodebaseConnectionInput,
+    signal?: AbortSignal,
+  ) =>
+    request<CodebaseConnectionRecord>('/codebase/connection', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+      signal,
+    }),
+  disconnectCodebase: (signal?: AbortSignal) =>
+    request<void>('/codebase/connection', { method: 'DELETE', signal }),
+  codebaseRepository: (path: string, signal?: AbortSignal) =>
+    request<{ id: string; path: string; name: string }>(
+      `/codebase/repository?${new URLSearchParams({ path })}`,
+      { signal },
+    ),
+  codebaseRepositories: (signal?: AbortSignal) =>
+    request<{ items: CodebaseRepositoryRecord[] }>('/codebase/repositories', {
+      signal,
+    }),
+  addCodebaseRepository: (input: { repoPath: string }, signal?: AbortSignal) =>
+    request<CodebaseRepositoryEntry>('/codebase/repositories', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      signal,
+    }),
+  deleteCodebaseRepository: (repoId: string, signal?: AbortSignal) =>
+    request<void>(`/codebase/repositories/${encodeURIComponent(repoId)}`, {
+      method: 'DELETE',
+      signal,
+    }),
+  codebaseMergeRequests: (
+    query: { repoId: string; state: string; search: string; page: number },
+    signal?: AbortSignal,
+  ) =>
+    request<CodebaseMergeRequestsRecord>(
+      `/codebase/merge-requests?${new URLSearchParams({
+        repoId: query.repoId,
+        state: query.state,
+        search: query.search,
+        page: String(query.page),
+      })}`,
+      { signal },
+    ),
+  syncCodebaseMergeRequests: (
+    input: { repoId: string; full?: boolean },
+    signal?: AbortSignal,
+  ) =>
+    request<CodebaseSyncRecord>('/codebase/merge-requests/sync', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      signal,
+    }),
+  codebaseMergeRequest: (
+    projectID: number,
+    iid: number,
+    signal?: AbortSignal,
+  ) =>
+    request<CodebaseMergeRequestRecord>(
+      `/codebase/merge-requests/${projectID}/${iid}`,
+      { signal },
+    ),
+  codebaseWorkflows: (signal?: AbortSignal) =>
+    request<{ items: CodebaseWorkflowRecord[] }>('/codebase/workflows', {
+      signal,
+    }),
+  createCodebaseWorkflow: (
+    input: CodebaseWorkflowInput,
+    signal?: AbortSignal,
+  ) =>
+    request<CodebaseWorkflowRecord>('/codebase/workflows', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      signal,
+    }),
+  updateCodebaseWorkflow: (
+    id: string,
+    input: CodebaseWorkflowInput,
+    signal?: AbortSignal,
+  ) =>
+    request<CodebaseWorkflowRecord>(
+      `/codebase/workflows/${encodeURIComponent(id)}`,
+      { method: 'PUT', body: JSON.stringify(input), signal },
+    ),
+  deleteCodebaseWorkflow: (id: string, signal?: AbortSignal) =>
+    request<void>(`/codebase/workflows/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      signal,
+    }),
+  createCodebaseRun: (
+    workflowId: string,
+    input: { mrIid: number },
+    signal?: AbortSignal,
+  ) =>
+    request<CodebaseRunRecord>(
+      `/codebase/workflows/${encodeURIComponent(workflowId)}/runs`,
+      { method: 'POST', body: JSON.stringify(input), signal },
+    ),
+  codebaseRuns: (
+    query: {
+      workflowId?: string;
+      repoId?: string;
+      limit?: number;
+      sync?: boolean;
+    },
+    signal?: AbortSignal,
+  ) =>
+    request<{ items: CodebaseRunRecord[] }>(
+      `/codebase/runs?${new URLSearchParams({
+        ...(query.workflowId ? { workflowId: query.workflowId } : {}),
+        ...(query.repoId ? { repoId: query.repoId } : {}),
+        ...(query.limit ? { limit: String(query.limit) } : {}),
+        ...(query.sync ? { sync: 'true' } : {}),
+      })}`,
+      { signal },
+    ),
+  syncCodebaseRun: (id: string, signal?: AbortSignal) =>
+    request<CodebaseRunRecord>(
+      `/codebase/runs/${encodeURIComponent(id)}/sync`,
+      { method: 'POST', signal },
+    ),
   createFeishuIntegration: (input: FeishuIntegrationInput) =>
     request<WorkspaceIntegrationRecord>('/integrations/feishu', {
       method: 'POST',
@@ -682,6 +979,8 @@ export const steer = {
       body: JSON.stringify(settings),
     }),
   skills: () => request<SkillRecord[]>('/skills'),
+  skill: (id: string) =>
+    request<SkillRecord>(`/skills/${encodeURIComponent(id)}`),
   createSkill: (input: {
     name: string;
     description: string;
@@ -691,11 +990,16 @@ export const steer = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
-  importSkill: (url: string) =>
+  importSkill: (url: string, identifier?: string) =>
     request<SkillRecord>('/skills/import', {
       method: 'POST',
-      body: JSON.stringify({ url }),
+      body: JSON.stringify(identifier ? { url, identifier } : { url }),
     }),
+  searchAgentBuddySkills: (query: string, signal?: AbortSignal) =>
+    request<{ items: AgentBuddySkillRecord[] }>(
+      `/skills/agentbuddy/search?q=${encodeURIComponent(query)}`,
+      { signal },
+    ),
   updateSkill: (
     id: string,
     input: Pick<SkillRecord, 'name' | 'description' | 'content'>,
@@ -703,6 +1007,11 @@ export const steer = {
     request<SkillRecord>(`/skills/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(input),
+    }),
+  updateSkillFiles: (id: string, files: SkillFileRecord[]) =>
+    request<SkillRecord>(`/skills/${encodeURIComponent(id)}/files`, {
+      method: 'PUT',
+      body: JSON.stringify({ files }),
     }),
   deleteSkill: (id: string) =>
     request<SkillRecord>(`/skills/${encodeURIComponent(id)}`, {
