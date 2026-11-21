@@ -451,8 +451,7 @@ func feishuExecutionCard(status string, events []relay.Event, answer, token stri
 	if terminal(relay.RunStatus(status)) {
 		title = "任务" + feishuStatusText(status)
 	}
-	content := feishuProcessSummary(process)
-	panel := feishuElement{"tag": "collapsible_panel", "element_id": "execution_process", "expanded": false, "header": feishuElement{"title": feishuText(title), "width": "auto_when_fold", "icon": feishuElement{"tag": "standard_icon", "token": "right-small-ccm_outlined", "size": "16px 16px"}, "icon_position": "follow_text", "icon_expanded_angle": 90}, "elements": []feishuElement{feishuMarkdown(feishuLimit(content, 12<<10))}}
+	panel := feishuElement{"tag": "collapsible_panel", "element_id": "execution_process", "expanded": false, "header": feishuElement{"title": feishuText(title), "width": "auto_when_fold", "icon": feishuElement{"tag": "standard_icon", "token": "right-small-ccm_outlined", "size": "16px 16px"}, "icon_position": "follow_text", "icon_expanded_angle": 90}, "elements": feishuProcessTranscript(process)}
 	elements := []feishuElement{panel}
 	if !terminal(relay.RunStatus(status)) && token != "" {
 		cancel := feishuButton("", "cancel_task", token)

@@ -46,7 +46,7 @@ func TestFeishuExecutionProcessAndCancel(t *testing.T) {
 		t.Fatalf("output duplicated or missing: %+v", process.Items[1])
 	}
 	running := feishuExecutionCard("running", events, "", "task-card-token")
-	for _, text := range []string{"先检查测试结果", "go test ./...", `"expanded":false`, "cancel_task", "task-card-token"} {
+	for _, text := range []string{"Working through the next step.", "go test ./...", `"expanded":false`, "cancel_task", "task-card-token"} {
 		if !strings.Contains(running, text) {
 			t.Fatalf("card missing %q: %s", text, running)
 		}
@@ -123,7 +123,7 @@ func TestFeishuStreamJSONToolProjection(t *testing.T) {
 		t.Fatalf("tool count = %d", process.ToolCount)
 	}
 	card := feishuExecutionCard("running", events, "", "token")
-	for _, text := range []string{"检查日志", "pwd", "README.md", "# Project", "失败"} {
+	for _, text := range []string{"Working through the next step.", "pwd", "README.md", "# Project", "失败"} {
 		if !strings.Contains(card, text) {
 			t.Fatalf("missing %q", text)
 		}

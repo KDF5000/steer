@@ -189,26 +189,3 @@ func feishuActivitySummary(activity *feishuActivity) string {
 	}
 	return line
 }
-
-func feishuProcessSummary(process feishuProcess) string {
-	var sections []string
-	for _, item := range process.Items {
-		if summary := feishuActivitySummary(item); summary != "" {
-			sections = append(sections, summary)
-		}
-	}
-	// Keep the feed recent and within the card budget, without placing
-	// truncation/storage instructions in the agent's progress narrative.
-	if len(sections) > 60 {
-		sections = sections[len(sections)-60:]
-	}
-	content := strings.Join(sections, "\n")
-	for len(content) > 12<<10 && len(sections) > 1 {
-		sections = sections[1:]
-		content = strings.Join(sections, "\n")
-	}
-	if content == "" {
-		return "Agent 正在执行，暂时还没有新的操作。"
-	}
-	return content
-}

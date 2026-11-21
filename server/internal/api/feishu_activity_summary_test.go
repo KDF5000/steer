@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -51,7 +52,9 @@ func TestFeishuRecentActivityFeedAvoidsTruncationNarrative(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		process.Items = append(process.Items, &feishuActivity{Tool: true, Type: "commandexecution", Title: fmt.Sprintf("rg pattern-%d server", i), Status: "completed", Output: strings.Repeat("long result\n", 2000)})
 	}
-	summary := feishuProcessSummary(process)
+	elements := feishuProcessTranscript(process)
+	encoded, _ := json.Marshal(elements)
+	summary := string(encoded)
 	if !strings.Contains(summary, "pattern-99") || strings.Contains(summary, "pattern-0 ") || strings.Contains(summary, "已省略") || strings.Contains(summary, "Steer") || strings.Contains(summary, "long result") {
 		t.Fatalf("unexpected activity feed: %s", summary)
 	}
