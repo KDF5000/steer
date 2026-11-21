@@ -47,6 +47,50 @@ func TestCodebaseWebhookPayloadParsing(t *testing.T) {
 	}
 }
 
+func TestCodebaseNativeWebhookPayloadParsing(t *testing.T) {
+	// Actual Codebase deliveries have no event type and use capitalized keys.
+	for _, tc := range []struct {
+		name, action, state, explicitKind string
+		want                              bool
+	}{
+		{"opened", "opened", "open", "", true},
+		{"updated", "updated", "open", "", true},
+		{"closed MR in test delivery", "opened", "closed", "", false},
+		{"merged", "updated", "merged", "", false},
+		{"approval", "approved", "open", "", false},
+		{"explicit unrelated event", "opened", "open", "push", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body, err := json.Marshal(map[string]any{
+				"Action":       tc.action,
+				"Repository":   map[string]any{"Id": "998523", "Path": "bytestore/meta"},
+				"MergeRequest": map[string]any{"Id": "798211675582276", "Number": 365, "Status": tc.state, "Title": "Native event"},
+				"Sender":       map[string]any{"Username": "reviewer"},
+				"EventType":    tc.explicitKind,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			review, ok := parseCodebaseMergeRequestWebhook(body)
+			if ok != tc.want {
+				t.Fatalf("review=%+v ok=%v want=%v", review, ok, tc.want)
+			}
+			if tc.explicitKind == "" && (review.MRIID != 365 || review.RepoID != "998523" || review.RepoPath != "bytestore/meta" || review.Action != tc.action || review.State != tc.state) {
+				t.Fatalf("native payload fields not preserved: %+v", review)
+			}
+		})
+	}
+	for _, invalid := range []string{
+		`{"Action":"opened","Repository":{"Id":"998523"}}`,
+		`{"Action":"opened","MergeRequest":{"Number":365,"Status":"open"}}`,
+		`{"Action":"opened","Repository":{"Id":"998523"},"MergeRequest":{}}`,
+	} {
+		if _, ok := parseCodebaseMergeRequestWebhook(json.RawMessage(invalid)); ok {
+			t.Fatalf("invalid event accepted: %s", invalid)
+		}
+	}
+}
+
 func TestAgentBuddyIdentifierParsing(t *testing.T) {
 	cases := map[string]string{
 		"skills:github.com/mattpocock/skills/review":                                     "skills:github.com/mattpocock/skills/review",
@@ -205,7 +249,7 @@ func TestCodebaseReviewWebhookAndReport(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	payload := json.RawMessage(`{"object_kind":"merge_request","project":{"id":9,"path_with_namespace":"org/repo"},"object_attributes":{"iid":3,"title":"Fix login","url":"https://code.example/org/repo/merge_requests/3","action":"update","state":"opened"}}`)
+	payload := json.RawMessage(`{"Action":"updated","Repository":{"Id":"9","Path":"org/repo"},"MergeRequest":{"Number":3,"Title":"Fix login","URL":"https://code.example/org/repo/merge_requests/3","Status":"open"},"Sender":{"Username":"reviewer"}}`)
 	event, duplicate, err := st.AcceptCodebaseWebhook(ctx, workspace.ID, tokenHash("t"), "payload-1", payload)
 	if err != nil || duplicate {
 		t.Fatalf("accept webhook: %v duplicate=%v", err, duplicate)

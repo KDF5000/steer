@@ -34,6 +34,12 @@ func parseCodebaseMergeRequestWebhook(payload json.RawMessage) (codebaseWebhookR
 		return codebaseWebhookReview{}, false
 	}
 	kind := strings.ToLower(strings.ReplaceAll(webhookString(root, "event_type", "object_kind", "event", "type", "EventType", "ObjectKind"), "-", "_"))
+	// Native Codebase deliveries identify the resource structurally:
+	// {Action, Repository, MergeRequest, Sender}, without an EventType field.
+	// Only infer the kind for this shape; an explicit unrelated kind wins.
+	if kind == "" && firstWebhookMap(root, "MergeRequest") != nil && firstWebhookMap(root, "Repository") != nil {
+		kind = "merge_request"
+	}
 	switch kind {
 	case "merge_request", "merge_request_update", "merge_request_updated", "mr":
 	default:
@@ -49,7 +55,7 @@ func parseCodebaseMergeRequestWebhook(payload json.RawMessage) (codebaseWebhookR
 	}
 	action := strings.ToLower(webhookString(attributes, "action", "Action"))
 	if action == "" {
-		action = strings.ToLower(webhookString(root, "action"))
+		action = strings.ToLower(webhookString(root, "action", "Action"))
 	}
 	state := strings.ToLower(webhookString(attributes, "state", "status", "State", "Status"))
 	mrIID := webhookInt(attributes, "iid", "IID", "number", "Number")
@@ -75,7 +81,7 @@ func parseCodebaseMergeRequestWebhook(payload json.RawMessage) (codebaseWebhookR
 		return codebaseWebhookReview{}, false
 	}
 	if !review.shouldStart() {
-		return codebaseWebhookReview{}, false
+		return review, false
 	}
 	return review, true
 }
@@ -105,6 +111,12 @@ func (s *Server) processCodebaseWebhookEvent(ctx context.Context, event store.Co
 	}
 	review, ok := parseCodebaseMergeRequestWebhook(event.Payload)
 	if !ok {
+		reason := "unsupported or invalid MR event"
+		if review.MRIID > 0 {
+			reason = "MR state or action does not require a review"
+		}
+		slog.Info("codebase webhook skipped", "event_id", event.ID, "reason", reason,
+			"repo_id", review.RepoID, "mr_iid", review.MRIID, "action", review.Action, "state", review.State)
 		_ = s.store.MarkCodebaseWebhookEvent(ctx, event.ID, "", false)
 		return
 	}
@@ -114,6 +126,8 @@ func (s *Server) processCodebaseWebhookEvent(ctx context.Context, event store.Co
 		return
 	}
 	started := 0
+	matched := 0
+	alreadyRunning := 0
 	var failures []string
 	for _, workflow := range workflows {
 		if !workflow.Enabled || !workflow.TriggerWebhook || workflow.AgentID == "" {
@@ -122,9 +136,11 @@ func (s *Server) processCodebaseWebhookEvent(ctx context.Context, event store.Co
 		if !codebaseWorkflowMatchesRepo(workflow, review) {
 			continue
 		}
+		matched++
 		// A review that is still pending or running for this MR already covers
 		// the revision; do not queue a second Agent task for it.
 		if _, err := s.store.CodebaseRunForMergeRequest(ctx, event.WorkspaceID, workflow.ID, review.MRIID); err == nil {
+			alreadyRunning++
 			continue
 		} else if !errors.Is(err, store.ErrNotFound) {
 			failures = append(failures, err.Error())
@@ -158,6 +174,9 @@ func (s *Server) processCodebaseWebhookEvent(ctx context.Context, event store.Co
 		}
 		started++
 	}
+	slog.Info("codebase webhook processed", "event_id", event.ID, "repo_id", review.RepoID,
+		"mr_iid", review.MRIID, "matched_workflows", matched, "created_runs", started,
+		"existing_runs", alreadyRunning, "failed_workflows", len(failures))
 	note := ""
 	if len(failures) > 0 {
 		note = strings.Join(failures, "; ")

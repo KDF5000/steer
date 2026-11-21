@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -98,8 +99,8 @@ func (s *Server) receiveCodebaseWebhook(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "Webhook body exceeds the size limit."})
 		return
 	}
-	// Preserve the protocol payload until the official event schema is available.
-	// Do not interpret unverified field names as MR data or start Agent work.
+	// Store the complete JSON for durable processing. The worker interprets
+	// supported provider event formats after the delivery has been accepted.
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.UseNumber()
 	var payload map[string]any
@@ -126,6 +127,8 @@ func (s *Server) receiveCodebaseWebhook(w http.ResponseWriter, r *http.Request) 
 		writeCodebaseError(w, err)
 		return
 	}
+	slog.Info("codebase webhook received", "workspace_id", item.WorkspaceID,
+		"event_id", event.ID, "duplicate", duplicate)
 	writeJSON(w, http.StatusAccepted, map[string]any{"received": true, "duplicate": duplicate, "eventId": event.ID})
 	// Interpret the event right away so a review starts without waiting for the
 	// background ticker. The worker claim keeps this single-delivery even when

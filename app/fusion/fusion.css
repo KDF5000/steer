@@ -12193,16 +12193,16 @@ button.ws-chat-response-meta:focus-visible {
   color: var(--ws-text-secondary);
 }
 
-/* Compact, left-aligned empty states inside list sections. */
+/* Center empty states inside repository and MR list sections. */
 .ws-automation-repos .ws-automation-empty.is-small,
 .ws-automation-mrs .ws-automation-empty.is-small {
-  justify-items: start;
-  align-content: start;
-  gap: 6px;
-  min-height: 0;
-  padding: 28px 0;
+  justify-items: center;
+  align-content: center;
+  gap: 12px;
+  min-height: 240px;
+  padding: 32px 16px;
   border-top: 0;
-  text-align: left;
+  text-align: center;
 }
 .ws-automation-empty.is-small h2 {
   font-size: 14px;
