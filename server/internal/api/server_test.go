@@ -343,14 +343,43 @@ func TestParseSkillFrontmatter(t *testing.T) {
 	}
 }
 
-func TestSkillInstructionFragments(t *testing.T) {
-	updated := time.Date(2026, 9, 18, 8, 30, 0, 0, time.UTC)
-	fragments := skillInstructionFragments([]store.Skill{{ID: "skill-1", Name: "UI review", Content: "Check spacing.", UpdatedAt: updated}})
-	if len(fragments) != 1 {
-		t.Fatalf("fragments=%d", len(fragments))
+func TestAttachSkillPackages(t *testing.T) {
+	skill := store.Skill{ID: "skill-1", Name: "Review", Content: "Read references/rules.md", Files: []store.SkillFile{
+		{Path: "references/rules.md", Content: "Check consistency.", Encoding: "text"},
+		{Path: "scripts/check", Content: "#!/bin/sh\necho ok\n", Encoding: "text"},
+	}}
+	var request relay.Request
+	if err := attachSkillPackages(&request, []store.Skill{skill, skill}); err != nil {
+		t.Fatal(err)
 	}
-	fragment := fragments[0]
-	if fragment.ID != "steer-skill-skill-1" || fragment.Title != "Assigned skill: UI review" || !strings.Contains(fragment.Content, "Check spacing.") || fragment.Version != updated.Format(time.RFC3339Nano) {
-		t.Fatalf("unexpected fragment: %+v", fragment)
+	if len(request.Skills) != 1 || len(request.Skills[0].Files) != 3 || request.Runtime.Labels[relay.SkillSupportLabel] != relay.SkillSupportVersion {
+		t.Fatalf("request = %+v", request)
+	}
+	original := request.Skills[0].Version
+	skill.UpdatedAt = time.Now()
+	if err := attachSkillPackages(&request, []store.Skill{skill}); err != nil {
+		t.Fatal(err)
+	}
+	if request.Skills[0].Version != original {
+		t.Fatal("timestamp changed content version")
+	}
+	skill.Files[0].Content = "Updated rule"
+	if err := attachSkillPackages(&request, []store.Skill{skill}); err != nil {
+		t.Fatal(err)
+	}
+	if request.Skills[0].Version == original {
+		t.Fatal("reference change did not update version")
+	}
+	if err := relay.ValidateSkills(request.Skills); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, file := range request.Skills[0].Files {
+		if file.Path == "scripts/check" {
+			found = file.Executable
+		}
+	}
+	if !found {
+		t.Fatal("legacy shebang script is not executable")
 	}
 }

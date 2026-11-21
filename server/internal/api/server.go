@@ -950,11 +950,13 @@ func (s *Server) submitSystemAgentRun(ctx context.Context, workspaceID, purpose,
 	if agent.Instructions != "" {
 		request.Instructions.Agent = []relay.InstructionFragment{{ID: agent.ID, Version: "1", Title: agent.Name, Content: agent.Instructions}}
 	}
-	assignedSkills, err := s.store.AgentSkills(ctx, workspaceID, agent.ID)
+	assignedSkills, err := s.store.AgentSkillPackages(ctx, workspaceID, agent.ID)
 	if err != nil {
 		return relay.Run{}, err
 	}
-	request.Instructions.Agent = append(request.Instructions.Agent, skillInstructionFragments(assignedSkills)...)
+	if err := attachSkillPackages(&request, assignedSkills); err != nil {
+		return relay.Run{}, err
+	}
 	run, err := s.submitRelayRun(ctx, request)
 	if err != nil {
 		return relay.Run{}, fmt.Errorf("submit system Agent run: %w", err)

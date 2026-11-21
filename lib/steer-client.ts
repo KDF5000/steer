@@ -340,6 +340,7 @@ export type SkillFileRecord = {
   content: string;
   encoding: 'text' | 'base64';
   size?: number;
+  executable?: boolean;
 };
 
 export type SkillRecord = {

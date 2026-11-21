@@ -349,7 +349,7 @@ func agentBuddyDownloadSkillFiles(ctx context.Context, link string) ([]store.Ski
 		if total > maxSkillTotalSize {
 			return nil, invalidCodebase("AgentBuddy Skill files exceed the 8 MB limit.")
 		}
-		file := store.SkillFile{Path: entry.name, Size: len(content)}
+		file := store.SkillFile{Path: entry.name, Size: len(content), Executable: entry.file.Mode()&0111 != 0}
 		if isTextContent(content) {
 			file.Encoding, file.Content = "text", string(content)
 		} else {

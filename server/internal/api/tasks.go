@@ -412,7 +412,7 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 	if agent.Instructions != "" {
 		request.Instructions.Agent = []relay.InstructionFragment{{ID: agent.ID, Version: "1", Title: agent.Name, Content: agent.Instructions}}
 	}
-	assignedSkills, err := s.store.AgentSkills(ctx, executionWid, agent.ID)
+	assignedSkills, err := s.store.AgentSkillPackages(ctx, executionWid, agent.ID)
 	if err != nil {
 		return submittedTask{}, false, err
 	}
@@ -432,7 +432,9 @@ func (s *Server) submitConversationTask(ctx context.Context, wid string, in chat
 			seenSkills[skill.ID] = true
 		}
 	}
-	request.Instructions.Agent = append(request.Instructions.Agent, skillInstructionFragments(assignedSkills)...)
+	if err := attachSkillPackages(&request, assignedSkills); err != nil {
+		return submittedTask{}, false, err
+	}
 	if session.WorkspaceKind != nil && session.WorkspaceSource != nil {
 		request.Workspace = relay.WorkspaceSpec{Kind: *session.WorkspaceKind, Source: *session.WorkspaceSource, Ref: value(session.WorkspaceRef), Subdir: value(session.WorkspaceSubdir)}
 	} else if project != nil {

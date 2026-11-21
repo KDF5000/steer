@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -155,7 +156,9 @@ func TestConversationWorkflowHTTP(t *testing.T) {
 	if !strings.Contains(dismissedRun.Body.String(), `"run":null`) {
 		t.Fatalf("Acknowledged activity run was still returned: %s", dismissedRun.Body.String())
 	}
-	weekly := call("POST", "/work-log/weekly-summary", `{"periodStart":"2026-09-14","from":"2026-09-14T00:00:00Z","to":"2026-09-21T00:00:00Z"}`, 202)
+	// Include the records created above rather than a fixed historical week.
+	weeklyWindow := fmt.Sprintf(`{"periodStart":"2026-09-14","from":%q,"to":%q}`, time.Now().Add(-24*time.Hour).UTC().Format(time.RFC3339), time.Now().Add(24*time.Hour).UTC().Format(time.RFC3339))
+	weekly := call("POST", "/work-log/weekly-summary", weeklyWindow, 202)
 	if !strings.Contains(weekly.Body.String(), "runId") {
 		t.Fatalf("weekly summary did not start a system run: %s", weekly.Body.String())
 	}
@@ -204,8 +207,26 @@ func TestConversationWorkflowHTTP(t *testing.T) {
 	if !strings.Contains(sent[2].Input.Prompt, "Simplified Chinese") || !strings.Contains(sent[3].Input.Prompt, "Simplified Chinese") {
 		t.Fatalf("system language not propagated to AI tasks: %+v", sent[2:])
 	}
-	if len(sent[1].Instructions.Agent) != 1 || !strings.Contains(sent[1].Instructions.Agent[0].Content, "Always inspect the complete diff.") {
-		t.Fatalf("assigned Skill not propagated: %+v", sent[1].Instructions.Agent)
+	for _, request := range sent[1:] {
+		if len(request.Skills) != 1 || request.Skills[0].ID != skill.ID {
+			t.Fatalf("assigned Skill not propagated: %+v", request.Skills)
+		}
+		if err := relay.ValidateSkills(request.Skills); err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, file := range request.Skills[0].Files {
+			if file.Path == "SKILL.md" {
+				data, err := base64.StdEncoding.DecodeString(file.Content)
+				if err != nil || !strings.Contains(string(data), "Always inspect the complete diff.") {
+					t.Fatalf("entrypoint=%s err=%v", data, err)
+				}
+				found = true
+			}
+		}
+		if !found {
+			t.Fatal("missing SKILL.md")
+		}
 	}
 	call("PUT", "/projects/"+project.ID, `{"name":"Moved repository","workspaceKind":"local","workspaceSource":"/srv/moved","runtimeId":"test-node/test","executionMode":"in_place"}`, 200)
 	call("DELETE", "/projects/"+project.ID, "", 200)
@@ -213,7 +234,7 @@ func TestConversationWorkflowHTTP(t *testing.T) {
 	mu.Lock()
 	sent = append([]relay.Request(nil), requests...)
 	mu.Unlock()
-	if len(sent) != 3 || sent[2].Workspace.Source != "/srv/repository" {
+	if len(sent) != 5 || sent[4].Workspace.Source != "/srv/repository" {
 		t.Fatalf("existing conversation did not retain its Project snapshot: %+v", sent)
 	}
 	var bootstrap struct {
@@ -222,7 +243,7 @@ func TestConversationWorkflowHTTP(t *testing.T) {
 		Projects  []store.Project  `json:"projects"`
 	}
 	json.Unmarshal(call("GET", "/bootstrap", "", 200).Body.Bytes(), &bootstrap)
-	if len(bootstrap.Artifacts) != 1 || len(bootstrap.Sessions) != 1 {
+	if len(bootstrap.Artifacts) != 3 || len(bootstrap.Sessions) != 1 {
 		t.Fatalf("incomplete projection: %+v", bootstrap)
 	}
 	if len(bootstrap.Projects) != 0 {
@@ -242,7 +263,13 @@ func TestConversationWorkflowHTTP(t *testing.T) {
 	call("DELETE", "/sessions/"+started.SessionID, "", 200)
 	call("GET", "/sessions/"+started.SessionID, "", 404)
 	json.Unmarshal(call("GET", "/bootstrap", "", 200).Body.Bytes(), &bootstrap)
-	if len(bootstrap.Sessions) != 0 || len(bootstrap.Artifacts) != 0 {
+	if len(bootstrap.Sessions) != 0 {
 		t.Fatalf("deleted conversation remains projected: %+v", bootstrap)
+	}
+	// System summaries have their own lifecycle and survive deleting a chat.
+	for _, artifact := range bootstrap.Artifacts {
+		if artifact.RelayRunID != weeklyRun.RunID {
+			t.Fatalf("deleted conversation artifact remains projected: %+v", artifact)
+		}
 	}
 }

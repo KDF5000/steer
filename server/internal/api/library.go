@@ -383,7 +383,7 @@ func normalizeSkillFiles(files []store.SkillFile) ([]store.SkillFile, error) {
 		if total > maxSkillTotalSize {
 			return nil, errors.New("Skill files exceed the 8 MB limit")
 		}
-		result = append(result, store.SkillFile{Path: cleaned, Content: file.Content, Encoding: encoding, Size: size})
+		result = append(result, store.SkillFile{Path: cleaned, Content: file.Content, Encoding: encoding, Size: size, Executable: file.Executable})
 	}
 	sortSkillFiles(result)
 	return result, nil
@@ -523,17 +523,52 @@ func parseSkillFrontmatter(content string) (string, string) {
 	return name, description
 }
 
-func skillInstructionFragments(skills []store.Skill) []relay.InstructionFragment {
-	fragments := make([]relay.InstructionFragment, 0, len(skills))
+// attachSkillPackages snapshots the full package for the executing node. All
+// transport files use base64 so JSON escaping cannot inflate text packages.
+func attachSkillPackages(request *relay.Request, skills []store.Skill) error {
+	packages := make([]relay.SkillPackage, 0, len(skills))
+	seen := make(map[string]bool, len(skills))
 	for _, skill := range skills {
-		fragments = append(fragments, relay.InstructionFragment{
-			ID:      "steer-skill-" + skill.ID,
-			Version: skill.UpdatedAt.UTC().Format(time.RFC3339Nano),
-			Title:   "Assigned skill: " + skill.Name,
-			Content: "This skill was selected for this Agent. Apply it whenever it is relevant to the user's request.\n\n" + skill.Content,
-		})
+		if seen[skill.ID] {
+			continue
+		}
+		seen[skill.ID] = true
+		bundle := relay.SkillPackage{ID: skill.ID, Name: skill.Name}
+		for _, file := range syncSkillEntrypoint(skill.Files, skill.Content) {
+			content := file.Content
+			executable := file.Executable
+			if file.Encoding != "base64" {
+				// Older imports did not preserve ZIP modes. A shebang remains a reliable
+				// indication that a text file is intended to be executable.
+				executable = executable || strings.HasPrefix(content, "#!")
+				content = base64.StdEncoding.EncodeToString([]byte(content))
+			}
+			filePath := file.Path
+			if isSkillEntrypoint(filePath) {
+				filePath = skillEntrypoint
+			}
+			bundle.Files = append(bundle.Files, relay.SkillFile{Path: filePath, Content: content, Encoding: "base64", Executable: executable})
+		}
+		version, err := relay.SkillVersion(bundle)
+		if err != nil {
+			return fmt.Errorf("prepare Skill %s: %w", skill.Name, err)
+		}
+		bundle.Version = version
+		packages = append(packages, bundle)
 	}
-	return fragments
+	if err := relay.ValidateSkills(packages); err != nil {
+		return err
+	}
+	request.Skills = packages
+	if len(packages) > 0 {
+		labels := make(map[string]string, len(request.Runtime.Labels)+1)
+		for k, v := range request.Runtime.Labels {
+			labels[k] = v
+		}
+		labels[relay.SkillSupportLabel] = relay.SkillSupportVersion
+		request.Runtime.Labels = labels
+	}
+	return nil
 }
 
 func (s *Server) listDocuments(w http.ResponseWriter, r *http.Request) {

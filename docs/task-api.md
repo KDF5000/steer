@@ -505,7 +505,6 @@ Web 固定按最后一条消息的发送时间倒序排列，置顶优先；仅�
 工具进度更新不会改变顺序。没有消息时使用创建时间。搜索结果点击后定位到匹配消息。
 不再提供排序切换或会话归档；此前归档的会话仍显示在普通列表中，并可搜索和继续使用。
 
-
 ### Conversation Effort
 
 Task requests accept an optional `reasoningEffort` alongside `model` (JSON or
@@ -526,3 +525,26 @@ when unavailable. Compatible Nodes refresh their catalogs in the background ever
 minute without blocking heartbeats. The picker refreshes on open and every 30
 seconds while open, and hides load snapshots older than five minutes. These
 fields and per-task Effort require the matching Relay Server/Node update.
+
+## Agent 与流程 Skill 的完整文件下发
+
+任务执行时，Steer 合并执行 Agent 绑定的 Skill 与流程指定的 `skillIds`，
+按 Skill ID 去重并读取完整文件包。系统 Agent 任务也采用相同方式。
+Steer 将当前 `SKILL.md` 正文和全部引用文件作为固定快照提交给 Relay；
+任务排队之后修改 Skill 不会改变已提交任务的版本。
+
+Relay Node 在启动 Agent 前安装完整包，并提供安装后的绝对 `SKILL.md`
+路径。版本由文件路径、内容和执行权限生成；保存相同内容不改变版本，
+引用规则或脚本发生变化会安装新版本。相同版本复用节点缓存，不重复写入。
+ZIP 的可执行权限会保留；旧包中以 shebang 开头的文本脚本也会标记为可执行。
+这些执行元数据保存在现有 Skill 文件 JSON 中，无需数据库迁移。
+
+需一起升级 Relay Server、执行 Node 和 Steer 后端。新版节点会自动声明
+`relay.skills=1`，旧节点无法领取带 Skill 的任务；如果指定机器尚未升级，
+任务会等待支持该功能的节点。完整文件包仍随提交和领取任务传输，当前版本
+缓存优化的是节点磁盘安装。
+
+联合开发使用仓库根目录的本地 Go workspace（`server` 与 `../relay`）。
+完整 Skill 支持要求 Relay `v0.5.15` 或更新版本。`server/go.mod`、
+`.env.example` 和 Compose/Dockerfile 的默认版本统一使用 `v0.5.15`；
+已有部署若配置了 `RELAY_VERSION`，升级时也需更新该覆盖值。

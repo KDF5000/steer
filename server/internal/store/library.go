@@ -14,10 +14,11 @@ import (
 // SkillFile is one file inside a Skill. Encoding is "text" (default) or
 // "base64" for binary assets that the detail page shows read-only.
 type SkillFile struct {
-	Path     string `json:"path"`
-	Content  string `json:"content"`
-	Encoding string `json:"encoding,omitempty"`
-	Size     int    `json:"size,omitempty"`
+	Path       string `json:"path"`
+	Content    string `json:"content"`
+	Encoding   string `json:"encoding,omitempty"`
+	Size       int    `json:"size,omitempty"`
+	Executable bool   `json:"executable,omitempty"`
 }
 
 type Skill struct {
@@ -101,14 +102,14 @@ func (s *Store) SkillsByIDs(ctx context.Context, workspaceID string, ids []strin
 	if len(ids) == 0 {
 		return []Skill{}, nil
 	}
-	rows, err := s.pool.Query(ctx, `SELECT `+skillColumns+` FROM skills WHERE workspace_id=$1 AND id = ANY($2) ORDER BY updated_at DESC`, workspaceID, ids)
+	rows, err := s.pool.Query(ctx, `SELECT `+skillDetailColumns+` FROM skills WHERE workspace_id=$1 AND id = ANY($2) ORDER BY updated_at DESC`, workspaceID, ids)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	items := []Skill{}
 	for rows.Next() {
-		skill, scanErr := scanSkill(rows)
+		skill, scanErr := scanSkillDetail(rows)
 		if scanErr != nil {
 			return nil, scanErr
 		}
@@ -180,6 +181,24 @@ func (s *Store) AgentSkills(ctx context.Context, workspaceID, agentID string) ([
 	items := []Skill{}
 	for rows.Next() {
 		skill, scanErr := scanSkill(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		items = append(items, skill)
+	}
+	return items, rows.Err()
+}
+
+// AgentSkillPackages loads complete packages for execution; AgentSkills remains lightweight.
+func (s *Store) AgentSkillPackages(ctx context.Context, workspaceID, agentID string) ([]Skill, error) {
+	rows, err := s.pool.Query(ctx, `SELECT s.id,s.workspace_id,s.name,s.description,s.content,s.source_kind,s.source_url,s.created_at,s.updated_at,s.files FROM skills s JOIN agent_skills a ON a.skill_id=s.id AND a.workspace_id=s.workspace_id WHERE a.workspace_id=$1 AND a.agent_id=$2 ORDER BY a.created_at`, workspaceID, agentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Skill{}
+	for rows.Next() {
+		skill, scanErr := scanSkillDetail(rows)
 		if scanErr != nil {
 			return nil, scanErr
 		}
