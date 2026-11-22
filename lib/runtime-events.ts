@@ -12,6 +12,36 @@ function text(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
 
+// Older Antigravity Nodes can publish deferred replay before the current user
+// echo. Keep lifecycle events, but exclude prior-turn runtime and reply events.
+export function currentTurnEvents(events?: RelayEvent[] | null): RelayEvent[] {
+  const source = events || [];
+  if (
+    !source.some(
+      (event) =>
+        event.type === 'run.failed' &&
+        typeof event.data?.error === 'string' &&
+        event.data.error.includes('ACP completed without a final message'),
+    )
+  )
+    return source;
+  let boundary = 0;
+  for (const event of source) {
+    if (
+      event.type === 'runtime.antigravity.session.update' &&
+      record(event.data?.update).sessionUpdate === 'user_message_chunk'
+    )
+      boundary = event.sequence;
+  }
+  if (!boundary) return source;
+  return source.filter(
+    (event) =>
+      event.sequence >= boundary ||
+      (!event.type.startsWith('runtime.antigravity.') &&
+        !event.type.startsWith('assistant.')),
+  );
+}
+
 // Qoder and QwenWork expose the same stream-json tool protocol. Keep the raw
 // events intact and project only confirmed tool calls/results for the UI.
 // Proposed edits, denied tools and thinking blocks must never become changes.
@@ -21,7 +51,7 @@ export function withRuntimeToolEvents(
   const result: RelayEvent[] = [];
   const calls = new Map<string, RecordValue>();
   const completed = new Set<string>();
-  for (const event of events || []) {
+  for (const event of currentTurnEvents(events)) {
     result.push(event);
     const match = /^runtime\.(qoder|qwenwork)\.(assistant|user)$/.exec(
       event.type,

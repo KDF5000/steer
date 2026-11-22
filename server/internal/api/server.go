@@ -1191,16 +1191,35 @@ func assistantContent(events []relay.Event) (string, int) {
 	itemOrder := []string{}
 	itemMessages := map[string]*strings.Builder{}
 	last := 0
+	failedEmptyACP := false
+	for _, event := range events {
+		if event.Type == "run.failed" && strings.Contains(string(event.Data), "ACP completed without a final message") {
+			failedEmptyACP = true
+		}
+	}
 	for _, event := range events {
 		if event.Sequence > last {
 			last = event.Sequence
 		}
 		var data struct {
 			Delta  string `json:"delta"`
+			Update struct {
+				SessionUpdate string `json:"sessionUpdate"`
+			} `json:"update"`
 			Text   string `json:"text"`
 			ItemID string `json:"itemId"`
 		}
 		_ = json.Unmarshal(event.Data, &data)
+		if failedEmptyACP && event.Type == "runtime.antigravity.session.update" && data.Update.SessionUpdate == "user_message_chunk" {
+			// Older Nodes can forward deferred session replay before the new
+			// user echo. None of those messages belongs to the current turn.
+			streamed.Reset()
+			completed = ""
+			final = ""
+			itemOrder = nil
+			itemMessages = map[string]*strings.Builder{}
+			continue
+		}
 		if strings.Contains(event.Type, ".item.agentMessage.delta") && data.ItemID != "" {
 			message := itemMessages[data.ItemID]
 			if message == nil {

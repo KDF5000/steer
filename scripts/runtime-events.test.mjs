@@ -12,9 +12,10 @@ const code = ts.transpileModule(source, {
     module: ts.ModuleKind.ESNext,
   },
 }).outputText;
-const { withRuntimeToolEvents, pendingRunApprovals } = await import(
-  `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
-);
+const { withRuntimeToolEvents, pendingRunApprovals, currentTurnEvents } =
+  await import(
+    `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
+  );
 for (const provider of ['qoder', 'qwenwork']) {
   const call = {
     sequence: 1,
@@ -158,4 +159,50 @@ test('persistent-only grants do not enable Allow once', () => {
   const persistent = structuredClone(approval);
   persistent.data.data.options = [{ kind: 'allow_always', optionId: 'always' }];
   assert.equal(pendingRunApprovals([persistent])[0].allowOnce, false);
+});
+
+test('Antigravity delayed replay is excluded after the current user echo', () => {
+  const events = [
+    { sequence: 1, type: 'workspace.prepared' },
+    {
+      sequence: 2,
+      type: 'runtime.antigravity.item.agentMessage.delta',
+      data: { itemId: 'old', delta: 'old reply' },
+    },
+    {
+      sequence: 3,
+      type: 'assistant.message.completed',
+      data: { text: 'old reply' },
+    },
+    {
+      sequence: 4,
+      type: 'runtime.antigravity.session.update',
+      data: {
+        update: {
+          sessionUpdate: 'user_message_chunk',
+          content: { text: 'new question' },
+        },
+      },
+    },
+    {
+      sequence: 5,
+      type: 'runtime.antigravity.item.agentMessage.delta',
+      data: { itemId: 'new', delta: 'new reply' },
+    },
+    {
+      sequence: 6,
+      type: 'run.failed',
+      data: {
+        error: 'relay antigravity: ACP completed without a final message',
+      },
+    },
+  ];
+  assert.deepEqual(
+    currentTurnEvents(events).map((e) => e.sequence),
+    [1, 4, 5, 6],
+  );
+  assert.deepEqual(
+    withRuntimeToolEvents(events).map((e) => e.sequence),
+    [1, 4, 5, 6],
+  );
 });

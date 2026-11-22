@@ -383,3 +383,19 @@ func TestAttachSkillPackages(t *testing.T) {
 		t.Fatal("legacy shebang script is not executable")
 	}
 }
+
+func TestAntigravityDelayedReplayIsNotCurrentReply(t *testing.T) {
+	events := []relay.Event{
+		{Sequence: 1, Type: "runtime.antigravity.item.agentMessage.delta", Data: json.RawMessage(`{"itemId":"old","delta":"previous answer"}`)},
+		{Sequence: 2, Type: "assistant.message.completed", Data: json.RawMessage(`{"text":"previous answer"}`)},
+		{Sequence: 3, Type: "runtime.antigravity.session.update", Data: json.RawMessage(`{"update":{"sessionUpdate":"user_message_chunk","content":{"text":"new question"}}}`)},
+		{Sequence: 4, Type: "run.failed", Data: json.RawMessage(`{"error":"relay antigravity: ACP completed without a final message"}`)},
+	}
+	if content, seq := visibleAssistantContent(relay.RunFailed, events, nil); content != "" || seq != 4 {
+		t.Fatalf("stale reply: %q seq=%d", content, seq)
+	}
+	events = append(events, relay.Event{Sequence: 5, Type: "assistant.message.completed", Data: json.RawMessage(`{"text":"current answer"}`)})
+	if content, _ := assistantContent(events); content != "current answer" {
+		t.Fatalf("current answer missing: %q", content)
+	}
+}

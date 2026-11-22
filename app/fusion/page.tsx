@@ -79,6 +79,7 @@ import { LabsView, useWorkspaceLabs } from './labs';
 import { AutomationView } from './automation';
 import hljs from 'highlight.js/lib/common';
 import {
+  currentTurnEvents,
   pendingRunApprovals,
   withRuntimeToolEvents,
 } from '@/lib/runtime-events';
@@ -9925,7 +9926,7 @@ function runtimeAgentMessages(events?: RelayEvent[] | null) {
     string,
     { id: string; text: string; startSequence: number; endSequence: number }
   >();
-  for (const event of events || []) {
+  for (const event of currentTurnEvents(events)) {
     if (!event.type.toLowerCase().includes('.item.agentmessage.delta'))
       continue;
     const itemID =
@@ -9960,7 +9961,7 @@ function runtimeReasoningUpdates(events?: RelayEvent[] | null) {
   >();
   const completed = new Set<string>();
 
-  for (const event of events || []) {
+  for (const event of currentTurnEvents(events)) {
     const eventType = event.type.toLowerCase();
     const data = event.data || {};
     const item =
