@@ -545,6 +545,14 @@ func (s *Server) syncRelayRun(ctx context.Context, wid, runID string) (runProjec
 	if err != nil {
 		return runProjection{}, err
 	}
+	if approved, approvalErr := s.autoApproveRun(ctx, wid, run, events); approvalErr != nil {
+		return runProjection{}, approvalErr
+	} else if approved {
+		events, err = s.relay.Events(ctx, runID)
+		if err != nil {
+			return runProjection{}, err
+		}
+	}
 	if err := s.store.SaveRunUsage(ctx, wid, run, events); err != nil {
 		return runProjection{}, fmt.Errorf("sync usage: %w", err)
 	}

@@ -1,0 +1,1 @@
+ALTER TABLE chat_sessions ADD COLUMN auto_approve BOOLEAN NOT NULL DEFAULT FALSE;

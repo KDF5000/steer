@@ -12,7 +12,7 @@ const code = ts.transpileModule(source, {
     module: ts.ModuleKind.ESNext,
   },
 }).outputText;
-const { withRuntimeToolEvents } = await import(
+const { withRuntimeToolEvents, pendingRunApprovals } = await import(
   `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
 );
 for (const provider of ['qoder', 'qwenwork']) {
@@ -99,4 +99,63 @@ test('malformed and unmatched tool results are ignored', () => {
     ]).length,
     1,
   );
+});
+
+const approval = {
+  sequence: 10,
+  type: 'interaction.requested',
+  data: {
+    id: 'permission-1',
+    kind: 'approval',
+    state: 'pending',
+    prompt: 'Allow command',
+    data: {
+      toolCall: { rawInput: { CommandLine: 'git status' } },
+      options: [
+        { kind: 'allow_once', optionId: 'once' },
+        { kind: 'allow_always', optionId: 'always' },
+      ],
+    },
+  },
+};
+test('approval survives replay and disappears after resolution', () => {
+  assert.deepEqual(pendingRunApprovals([approval, approval]), [
+    {
+      id: 'permission-1',
+      prompt: 'Allow command',
+      command: 'git status',
+      allowOnce: true,
+    },
+  ]);
+  assert.deepEqual(
+    pendingRunApprovals([
+      approval,
+      {
+        sequence: 11,
+        type: 'interaction.resolved',
+        data: { interaction_id: 'permission-1' },
+      },
+    ]),
+    [],
+  );
+});
+test('terminal, cancelled, or replaced Attempts cannot retain approvals', () => {
+  for (const type of [
+    'run.succeeded',
+    'run.failed',
+    'run.cancelled',
+    'run.cancel_requested',
+    'attempt.lost',
+    'attempt.leased',
+  ])
+    assert.deepEqual(
+      pendingRunApprovals([approval, { sequence: 11, type }]),
+      [],
+      type,
+    );
+});
+test('persistent-only grants do not enable Allow once', () => {
+  const persistent = structuredClone(approval);
+  persistent.data.data.options = [{ kind: 'allow_always', optionId: 'always' }];
+  assert.equal(pendingRunApprovals([persistent])[0].allowOnce, false);
 });

@@ -18,6 +18,32 @@ const storageKey = 'steer.interface-language';
 const languageEvent = 'steer:interface-language';
 
 const zhCN: Record<string, string> = {
+  'Approving automatically': '正在自动批准',
+  'Automatically approving tool request…': '正在自动批准工具请求…',
+  'Session auto-approval enabled. Resuming…': '已开启本会话自动批准，正在继续…',
+  'Always allow in this conversation': '当前会话始终允许',
+  'Automatically approve tool requests in this conversation, including later turns. Delegated conversations are separate.':
+    '自动批准本会话的工具请求，包括后续追问；委派会话单独授权。',
+  'Auto-approval enabled for this conversation': '本会话自动批准',
+  'Turn off': '关闭',
+  'Updating…': '更新中…',
+  'Approval policy could not be updated. Try again.':
+    '审批设置更新失败，请重试。',
+
+  'Waiting for approval': '等待审批',
+  'Tool approval': '工具审批',
+  'Approve command execution': '批准执行命令',
+  'Approve tool execution': '批准使用工具',
+  'Allow once': '允许一次',
+  Reject: '拒绝',
+  'Submitting…': '提交中…',
+  'Approved once. Resuming…': '已允许一次，正在继续…',
+  'Rejected. Notifying Agent…': '已拒绝，正在通知 Agent…',
+  'A workspace member must handle this approval.': '请由工作区成员处理此审批。',
+  'Approval could not be submitted. Try again.': '审批提交失败，请重试。',
+  'This tool does not offer permission for a single execution.':
+    '此工具不支持仅允许一次执行。',
+
   'Manage experimental features available in this workspace.':
     '管理当前工作区可用的实验功能。',
   'Configure MR review workflows in Automation, with manual or webhook triggers.':

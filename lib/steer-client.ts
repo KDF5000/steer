@@ -9,7 +9,7 @@ let selectedWorkspaceId = '';
 let collaborationScope = '';
 function chatPath(path: string) {
   return collaborationScope &&
-    /^\/(sessions\/[^/]+$|runs\/|tasks\/|conversations\/|messages\/[^/]+\/attachments\/|artifacts\/)/.test(
+    /^\/(sessions\/[^/]+(?:$|\/approval-policy$)|runs\/|tasks\/|conversations\/|messages\/[^/]+\/attachments\/|artifacts\/)/.test(
       path,
     )
     ? `/collaboration-access/${encodeURIComponent(collaborationScope)}${path}`
@@ -273,6 +273,7 @@ export type ArtifactRecord = {
 };
 
 export type ChatSessionRecord = {
+  autoApprove?: boolean;
   modelOverride?: string | null;
   reasoningEffort?: string | null;
   lastMessageAt?: string;
@@ -1366,6 +1367,26 @@ export const steer = {
       after,
       signal,
       onEvent,
+    ),
+  disableSessionAutoApproval: (sessionId: string) =>
+    request<ChatSessionRecord>(
+      `/sessions/${encodeURIComponent(sessionId)}/approval-policy`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ autoApprove: false }),
+      },
+    ),
+  resolveRunApproval: (
+    runId: string,
+    interactionId: string,
+    decision: 'allow_once' | 'allow_session' | 'reject',
+  ) =>
+    request(
+      `/runs/${encodeURIComponent(runId)}/interactions/${encodeURIComponent(interactionId)}/resolve`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ decision }),
+      },
     ),
   cancelRun: (id: string) =>
     request<RelayRun>(`/runs/${id}/cancel`, { method: 'POST' }),

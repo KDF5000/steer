@@ -293,6 +293,9 @@ func (s *Server) collaborationAccess(next http.Handler) http.Handler {
 		if r.Method == "GET" && len(parts) == 2 && parts[0] == "sessions" && parts[1] == g.ResourceID {
 			allowed = true
 		}
+		if r.Method == "PATCH" && len(parts) == 3 && parts[0] == "sessions" && parts[1] == g.ResourceID && parts[2] == "approval-policy" {
+			allowed = true
+		}
 		if r.Method == "POST" && len(parts) == 3 && parts[0] == "conversations" && parts[1] == g.ResourceID && parts[2] == "tasks" {
 			allowed = true
 		}
@@ -308,7 +311,7 @@ func (s *Server) collaborationAccess(next http.Handler) http.Handler {
 			}
 			link, e := s.store.RunLink(r.Context(), g.WorkspaceID, runID)
 			if e == nil && value(link.SessionID) == g.ResourceID {
-				allowed = r.Method == "GET" && (len(parts) == 2 || len(parts) == 4 && parts[2] == "events" && parts[3] == "stream" || parts[0] == "tasks" && len(parts) == 3 && (parts[2] == "artifacts" || parts[2] == "events") || parts[0] == "runs" && len(parts) == 3 && parts[2] == "workspace") || r.Method == "POST" && len(parts) == 3 && parts[2] == "cancel"
+				allowed = r.Method == "GET" && (len(parts) == 2 || len(parts) == 4 && parts[2] == "events" && parts[3] == "stream" || parts[0] == "tasks" && len(parts) == 3 && (parts[2] == "artifacts" || parts[2] == "events") || parts[0] == "runs" && len(parts) == 3 && parts[2] == "workspace") || r.Method == "POST" && (len(parts) == 3 && parts[2] == "cancel" || parts[0] == "runs" && len(parts) == 5 && parts[2] == "interactions" && parts[4] == "resolve")
 			}
 		}
 		if r.Method == "GET" && len(parts) == 4 && parts[0] == "messages" && parts[2] == "attachments" {

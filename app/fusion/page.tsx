@@ -73,11 +73,15 @@ import {
 } from './inline-composer';
 import { SessionSearchDialog } from './session-search';
 import type { TaskMessageOptions } from '@/lib/domain';
+import { RunApprovals, SessionApprovalPolicy } from './run-approvals';
 import { AgentModelPicker } from './agent-model-picker';
 import { LabsView, useWorkspaceLabs } from './labs';
 import { AutomationView } from './automation';
 import hljs from 'highlight.js/lib/common';
-import { withRuntimeToolEvents } from '@/lib/runtime-events';
+import {
+  pendingRunApprovals,
+  withRuntimeToolEvents,
+} from '@/lib/runtime-events';
 import 'highlight.js/styles/github.css';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -543,11 +547,14 @@ const Markdown = memo(function Markdown({
 // composer, file tree, or syntax-highlighted diff.
 const ResponseStatus = memo(function ResponseStatus({
   message,
+  autoApprove = false,
 }: {
   message: ChatMessage;
+  autoApprove?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
   const terminal = isTerminalStatus(message.status);
+  const { t } = useI18n();
   useEffect(() => {
     if (terminal) return;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -555,7 +562,9 @@ const ResponseStatus = memo(function ResponseStatus({
   }, [terminal]);
   return (
     <span aria-live={terminal ? undefined : 'polite'}>
-      {responseStatusLabel(message, now)}
+      {!terminal && message.approvals?.length
+        ? `${t(autoApprove ? 'Approving automatically' : 'Waiting for approval')} · ${formatElapsed(message.createdAt, undefined, now)}`
+        : responseStatusLabel(message, now)}
     </span>
   );
 });
@@ -573,8 +582,9 @@ const DelegationProgress = memo(function DelegationProgress({
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
-  const status =
-    message.status === 'queued'
+  const status = message.approvals?.length
+    ? 'Waiting for approval'
+    : message.status === 'queued'
       ? 'Waiting to start'
       : message.status === 'cancelling'
         ? 'Stopping'
@@ -1472,6 +1482,8 @@ export default function Fusion() {
                       ...message,
                       status: result.run.status,
                       text: terminal ? result.content : '',
+                      activity: runActivity(result.events),
+                      approvals: pendingRunApprovals(result.events),
                       error: result.error || undefined,
                       createdAt: result.run.started_at || message.createdAt,
                       updatedAt:
@@ -1533,6 +1545,7 @@ export default function Fusion() {
                   activeRunContext.current.executionRuntimeID,
                 ),
                 activity: runActivity(result.events),
+                approvals: pendingRunApprovals(result.events),
                 changes: runFileChanges(result.events),
                 activityLog: runActivityLog(
                   result.events,
@@ -1611,6 +1624,7 @@ export default function Fusion() {
                 ...message,
                 text: finalDraft || message.text,
                 activity: runActivity(snapshot),
+                approvals: pendingRunApprovals(snapshot),
                 activityLog: runActivityLog(snapshot, Boolean(finalDraft)),
                 changes: runFileChanges(snapshot),
               }
@@ -1858,6 +1872,7 @@ export default function Fusion() {
                 data.session.executionRuntimeId,
               ),
               activity: runActivity(result.events),
+              approvals: pendingRunApprovals(result.events),
               changes: runFileChanges(result.events),
               activityLog: runActivityLog(
                 result.events,
@@ -3491,9 +3506,11 @@ export default function Fusion() {
                     <Library aria-hidden="true" />
                     <span>{t('Assets')}</span>
                   </SidebarMenuButton>
-                  <SidebarMenuBadge>
-                    {skillList.length + documentList.length}
-                  </SidebarMenuBadge>
+                  {skillList.length + documentList.length > 0 && (
+                    <SidebarMenuBadge>
+                      {skillList.length + documentList.length}
+                    </SidebarMenuBadge>
+                  )}
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
@@ -3512,7 +3529,9 @@ export default function Fusion() {
                     <FileText aria-hidden="true" />
                     <span>{t('Artifacts')}</span>
                   </SidebarMenuButton>
-                  <SidebarMenuBadge>{artifactList.length}</SidebarMenuBadge>
+                  {artifactList.length > 0 && (
+                    <SidebarMenuBadge>{artifactList.length}</SidebarMenuBadge>
+                  )}
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
@@ -3564,7 +3583,9 @@ export default function Fusion() {
                     <Bot aria-hidden="true" />
                     <span>{t('Agents')}</span>
                   </SidebarMenuButton>
-                  <SidebarMenuBadge>{agentList.length}</SidebarMenuBadge>
+                  {agentList.length > 0 && (
+                    <SidebarMenuBadge>{agentList.length}</SidebarMenuBadge>
+                  )}
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
@@ -3577,7 +3598,9 @@ export default function Fusion() {
                     <Server aria-hidden="true" />
                     <span>{t('Runtimes')}</span>
                   </SidebarMenuButton>
-                  <SidebarMenuBadge>{runtimeRows.length}</SidebarMenuBadge>
+                  {runtimeRows.length > 0 && (
+                    <SidebarMenuBadge>{runtimeRows.length}</SidebarMenuBadge>
+                  )}
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
@@ -3761,6 +3784,21 @@ export default function Fusion() {
             project={chatProject}
             artifacts={conversationArtifacts}
             messages={messages}
+            autoApprove={Boolean(activeChatSession?.autoApprove)}
+            onApprovalPolicyChange={(sessionID, enabled) => {
+              setChatSessions((current) =>
+                current.map((item) =>
+                  item.id === sessionID
+                    ? { ...item, autoApprove: enabled }
+                    : item,
+                ),
+              );
+              setCollaborationSession((current) =>
+                current?.id === sessionID
+                  ? { ...current, autoApprove: enabled }
+                  : current,
+              );
+            }}
             sessionTitle={activeChatSession?.title}
             parentConversationId={activeChatSession?.parentConversationId}
             runtimeLabel={
@@ -4516,6 +4554,8 @@ function ChatView({
   project,
   artifacts,
   messages,
+  autoApprove,
+  onApprovalPolicyChange,
   sessionTitle,
   parentConversationId,
   runtimeLabel,
@@ -4564,6 +4604,8 @@ function ChatView({
   project: string;
   artifacts: Artifact[];
   messages: ChatMessage[];
+  autoApprove: boolean;
+  onApprovalPolicyChange: (id: string, enabled: boolean) => void;
   sessionTitle?: string;
   parentConversationId?: string | null;
   runtimeLabel: string;
@@ -5171,6 +5213,12 @@ function ChatView({
                     message.role === 'agent' &&
                     !terminal &&
                     Boolean(message.text);
+                  const awaitingApproval =
+                    !terminal && Boolean(message.approvals?.length);
+                  const automaticallyApproving =
+                    autoApprove &&
+                    awaitingApproval &&
+                    message.approvals!.every((approval) => approval.allowOnce);
                   const processCollapsible = terminal || finalOutputStarted;
                   const activityExpanded =
                     expandedActivity[messageKey] ?? !processCollapsible;
@@ -5238,7 +5286,13 @@ function ChatView({
                                     {message.context.agentName} |
                                   </span>
                                 )}
-                                <ResponseStatus message={message} />
+                                <ResponseStatus
+                                  message={message}
+                                  autoApprove={
+                                    automaticallyApproving &&
+                                    !delegatedElsewhere
+                                  }
+                                />
                                 <ChevronRight aria-hidden="true" />
                               </button>
                             ) : (
@@ -5248,27 +5302,56 @@ function ChatView({
                                     {message.context.agentName} |
                                   </span>
                                 )}
-                                <ResponseStatus message={message} />
+                                <ResponseStatus
+                                  message={message}
+                                  autoApprove={
+                                    automaticallyApproving &&
+                                    !delegatedElsewhere
+                                  }
+                                />
                               </div>
                             )}
                             <div
                               className="ws-chat-response-divider"
                               aria-hidden="true"
                             />
-                            {(activityExpanded || !processCollapsible) && (
-                              <ProcessTranscript
-                                items={visibleProcessItems}
-                                live={!processCollapsible}
-                              />
-                            )}
-                            {!processCollapsible && !hasActiveTool && (
+                            {awaitingApproval && automaticallyApproving && (
                               <div
                                 className="ws-chat-current-status"
                                 aria-live="polite"
                               >
-                                {t(message.activity || 'Thinking')}
+                                {t('Automatically approving tool request…')}
                               </div>
                             )}
+                            {awaitingApproval &&
+                              !automaticallyApproving &&
+                              message.runId && (
+                                <RunApprovals
+                                  runId={message.runId}
+                                  approvals={message.approvals!}
+                                  readOnly={readOnly}
+                                  onSessionAllowed={() =>
+                                    onApprovalPolicyChange(sessionId, true)
+                                  }
+                                />
+                              )}
+                            {!awaitingApproval &&
+                              (activityExpanded || !processCollapsible) && (
+                                <ProcessTranscript
+                                  items={visibleProcessItems}
+                                  live={!processCollapsible}
+                                />
+                              )}
+                            {!awaitingApproval &&
+                              !processCollapsible &&
+                              !hasActiveTool && (
+                                <div
+                                  className="ws-chat-current-status"
+                                  aria-live="polite"
+                                >
+                                  {t(message.activity || 'Thinking')}
+                                </div>
+                              )}
                           </div>
                         )}
                         {message.role === 'agent' &&
@@ -5296,7 +5379,13 @@ function ChatView({
                                 >
                                   |
                                 </span>
-                                <ResponseStatus message={message} />
+                                <ResponseStatus
+                                  message={message}
+                                  autoApprove={
+                                    automaticallyApproving &&
+                                    !delegatedElsewhere
+                                  }
+                                />
                                 <ChevronRight aria-hidden="true" />
                               </button>
                               <div
@@ -5481,7 +5570,20 @@ function ChatView({
                         {message.role === 'agent' &&
                           terminal &&
                           message.text && (
-                            <div className="ws-chat-message-actions">
+                            <div
+                              className={
+                                !messages
+                                  .slice(index + 1)
+                                  .some(
+                                    (next) =>
+                                      next.role === 'agent' &&
+                                      isTerminalStatus(next.status) &&
+                                      Boolean(next.text),
+                                  )
+                                  ? 'ws-chat-message-actions is-latest'
+                                  : 'ws-chat-message-actions'
+                              }
+                            >
                               {(message.status === 'succeeded' ||
                                 message.status === 'complete') &&
                                 message.id && (
@@ -5843,28 +5945,39 @@ function ChatView({
                         </button>
                       )}
                     </div>
-                    <button
-                      className="ws-chat-send"
-                      type={working ? 'button' : 'submit'}
-                      aria-label={
-                        working ? t('Stop generating') : t('Send message')
-                      }
-                      disabled={
-                        readOnly ||
-                        (!working && !draftInput.trim() && images.length === 0)
-                      }
-                      onClick={() => working && onStop()}
-                    >
-                      {working ? (
-                        <Square
-                          aria-hidden="true"
-                          fill="currentColor"
-                          strokeWidth={0}
+                    <div className="ws-chatbox-actions">
+                      {autoApprove && (
+                        <SessionApprovalPolicy
+                          sessionId={sessionId}
+                          readOnly={readOnly}
+                          onDisabled={() =>
+                            onApprovalPolicyChange(sessionId, false)
+                          }
                         />
-                      ) : (
-                        <Send aria-hidden="true" />
                       )}
-                    </button>
+                      <button
+                        className="ws-chat-send"
+                        type={working ? 'button' : 'submit'}
+                        aria-label={
+                          working ? t('Stop generating') : t('Send message')
+                        }
+                        disabled={
+                          readOnly ||
+                          (!working && !draftInput.trim() && images.length === 0)
+                        }
+                        onClick={() => working && onStop()}
+                      >
+                        {working ? (
+                          <Square
+                            aria-hidden="true"
+                            fill="currentColor"
+                            strokeWidth={0}
+                          />
+                        ) : (
+                          <Send aria-hidden="true" />
+                        )}
+                      </button>
+                    </div>
                   </footer>
                 </form>
               )}
@@ -9489,6 +9602,8 @@ function responseStatusLabel(message: ChatMessage, now: number) {
     terminal ? message.updatedAt : undefined,
     now,
   );
+  if (!terminal && message.approvals?.length)
+    return `Waiting for approval · ${elapsed}`;
   if (message.status === 'succeeded') return `Completed in ${elapsed}`;
   if (message.status === 'failed') return `Failed after ${elapsed}`;
   if (message.status === 'cancelled') return `Stopped after ${elapsed}`;
@@ -9496,6 +9611,7 @@ function responseStatusLabel(message: ChatMessage, now: number) {
 }
 
 function runActivity(events?: RelayEvent[] | null) {
+  if (pendingRunApprovals(events).length) return 'Waiting for approval';
   for (const event of withRuntimeToolEvents(events).reverse()) {
     const eventType = event.type.toLowerCase();
     const item = event.data?.item;

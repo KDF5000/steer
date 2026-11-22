@@ -72,6 +72,7 @@ type Project struct {
 }
 
 type Session struct {
+	AutoApprove          bool      `json:"autoApprove"`
 	ReasoningEffort      *string   `json:"reasoningEffort"`
 	ModelOverride        *string   `json:"modelOverride"`
 	LastMessageAt        time.Time `json:"lastMessageAt"`
@@ -558,14 +559,14 @@ func (s *Store) SharedConversationByToken(ctx context.Context, hash string) (Sha
 	return share, err
 }
 
-const sessionColumns = `reasoning_effort,model_override,id,workspace_id,title,agent_id,project_id,execution_runtime_id,workspace_key,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,parent_conversation_id,shared_agent_grant_id,created_at,updated_at,pinned,archived,CASE WHEN shared_agent_grant_id IS NULL THEN NULL ELSE COALESCE((SELECT status FROM resource_shares WHERE id=chat_sessions.shared_agent_grant_id),'unavailable') END,COALESCE((SELECT MAX(m.created_at) FROM messages m WHERE m.workspace_id=chat_sessions.workspace_id AND m.session_id=chat_sessions.id),created_at) AS last_message_at`
+const sessionColumns = `auto_approve,reasoning_effort,model_override,id,workspace_id,title,agent_id,project_id,execution_runtime_id,workspace_key,workspace_kind,workspace_source,workspace_ref,workspace_subdir,execution_mode,parent_conversation_id,shared_agent_grant_id,created_at,updated_at,pinned,archived,CASE WHEN shared_agent_grant_id IS NULL THEN NULL ELSE COALESCE((SELECT status FROM resource_shares WHERE id=chat_sessions.shared_agent_grant_id),'unavailable') END,COALESCE((SELECT MAX(m.created_at) FROM messages m WHERE m.workspace_id=chat_sessions.workspace_id AND m.session_id=chat_sessions.id),created_at) AS last_message_at`
 
 type rowScanner interface {
 	Scan(...any) error
 }
 
 func scanSessionFields(row rowScanner, x *Session) error {
-	return row.Scan(&x.ReasoningEffort, &x.ModelOverride, &x.ID, &x.WorkspaceID, &x.Title, &x.AgentID, &x.ProjectID, &x.ExecutionRuntimeID, &x.WorkspaceKey, &x.WorkspaceKind, &x.WorkspaceSource, &x.WorkspaceRef, &x.WorkspaceSubdir, &x.ExecutionMode, &x.ParentConversationID, &x.SharedAgentGrantID, &x.CreatedAt, &x.UpdatedAt, &x.Pinned, &x.Archived, &x.SharedAgentAccess, &x.LastMessageAt)
+	return row.Scan(&x.AutoApprove, &x.ReasoningEffort, &x.ModelOverride, &x.ID, &x.WorkspaceID, &x.Title, &x.AgentID, &x.ProjectID, &x.ExecutionRuntimeID, &x.WorkspaceKey, &x.WorkspaceKind, &x.WorkspaceSource, &x.WorkspaceRef, &x.WorkspaceSubdir, &x.ExecutionMode, &x.ParentConversationID, &x.SharedAgentGrantID, &x.CreatedAt, &x.UpdatedAt, &x.Pinned, &x.Archived, &x.SharedAgentAccess, &x.LastMessageAt)
 }
 
 func (s *Store) EnsureSession(ctx context.Context, wid, sessionID, title, agentID string, projectID, executionRuntimeID, workspaceKey *string, project *Project) (Session, error) {

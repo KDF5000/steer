@@ -78,6 +78,7 @@ export type ChatMessage = {
   createdAt?: string;
   updatedAt?: string;
   activity?: string;
+  approvals?: RunApproval[];
   activityLog?: ChatActivity[];
   changes?: Array<{
     id: string;
@@ -94,6 +95,13 @@ export type ChatAttachment = {
   contentType: string;
   size: number;
   url: string;
+};
+
+export type RunApproval = {
+  id: string;
+  prompt: string;
+  command?: string;
+  allowOnce: boolean;
 };
 
 export type RelayRunStatus =

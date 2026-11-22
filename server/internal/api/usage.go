@@ -6,7 +6,8 @@ import (
 	"time"
 )
 
-// Keep usage current when the browser closes or the task was started through
+// Keep usage current and process explicitly authorized session approvals
+// when the browser closes or the task was started through
 // Feishu/the Task API. The footprints read itself only queries PostgreSQL.
 // One serial worker limits Relay traffic; snapshot upserts handle replicas.
 func (s *Server) StartUsageSync(ctx context.Context) func() {
@@ -30,7 +31,10 @@ func (s *Server) StartUsageSync(ctx context.Context) func() {
 				if err == nil {
 					events, eventErr := s.relay.Events(taskCtx, item.RunID)
 					if eventErr == nil {
-						err = s.store.SaveRunUsage(taskCtx, item.WorkspaceID, run, events)
+						_, err = s.autoApproveRun(taskCtx, item.WorkspaceID, run, events)
+						if err == nil {
+							err = s.store.SaveRunUsage(taskCtx, item.WorkspaceID, run, events)
+						}
 					} else {
 						err = eventErr
 					}

@@ -1,4 +1,4 @@
-import type { RelayEvent } from './domain';
+import type { RelayEvent, RunApproval } from './domain';
 
 type RecordValue = Record<string, unknown>;
 
@@ -98,4 +98,50 @@ export function withRuntimeToolEvents(
     }
   }
   return result;
+}
+
+// Reconstruct pending approvals from durable events, including after a reload.
+// A new Attempt invalidates requests left over from a previous worker.
+export function pendingRunApprovals(
+  events?: RelayEvent[] | null,
+): RunApproval[] {
+  const pending = new Map<string, RunApproval>();
+  for (const event of events || []) {
+    const data = record(event.data);
+    if (
+      event.type === 'interaction.requested' &&
+      data.kind === 'approval' &&
+      data.state === 'pending'
+    ) {
+      const id = text(data.id);
+      if (!id) continue;
+      const request = record(data.data);
+      const tool = record(request.toolCall);
+      const input = record(tool.rawInput || tool.args);
+      const options = Array.isArray(request.options) ? request.options : [];
+      pending.set(id, {
+        id,
+        prompt: text(data.prompt),
+        command: text(input.CommandLine || input.command) || text(tool.title),
+        allowOnce:
+          !options.length ||
+          options.some((value) => record(value).kind === 'allow_once'),
+      });
+    } else if (event.type === 'interaction.resolved') {
+      pending.delete(text(data.interaction_id || data.id));
+    } else if (
+      [
+        'run.succeeded',
+        'run.failed',
+        'run.cancelled',
+        'run.cancelling',
+        'run.cancel_requested',
+        'attempt.leased',
+        'attempt.lost',
+      ].includes(event.type)
+    ) {
+      pending.clear();
+    }
+  }
+  return [...pending.values()];
 }

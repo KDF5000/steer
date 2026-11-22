@@ -201,6 +201,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/artifacts/{id}/download", s.artifactContent)
 	mux.HandleFunc("GET /api/v1/sessions/{id}", s.chatSession)
 	mux.HandleFunc("PATCH /api/v1/sessions/{id}/navigation", s.updateChatSession)
+	mux.HandleFunc("PATCH /api/v1/sessions/{id}/approval-policy", s.disableSessionAutoApproval)
 	mux.HandleFunc("GET /api/v1/session-search", s.searchSessions)
 	mux.HandleFunc("POST /api/v1/sessions/{id}/share", s.shareSession)
 	mux.HandleFunc("DELETE /api/v1/sessions/{id}", s.deleteChatSession)
@@ -225,6 +226,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/runs/{id}/workspace", s.inspectWorkspace)
 	mux.HandleFunc("GET /api/v1/runs/{id}/events/stream", s.streamRunEvents)
 	mux.HandleFunc("POST /api/v1/runs/{id}/cancel", s.cancelRun)
+	mux.HandleFunc("POST /api/v1/runs/{id}/interactions/{interactionID}/resolve", s.resolveRunApproval)
 	return s.recover(s.cors(s.logRequests(s.authenticate(mux))))
 }
 
@@ -1031,6 +1033,22 @@ func (s *Server) streamRunEventsForID(w http.ResponseWriter, r *http.Request, ru
 			latest, err := s.store.ResourceShare(r.Context(), g.ID)
 			if err != nil || latest.Status == "revoked" {
 				return errors.New("conversation sharing has been revoked")
+			}
+		}
+		// Process an explicitly authorized approval before exposing it as a
+		// pending user action. A later poll must not race the live event stream.
+		if event.Type == "interaction.requested" {
+			run, approvalErr := s.relay.GetRun(r.Context(), runID)
+			if approvalErr == nil {
+				var approved bool
+				approved, approvalErr = s.autoApproveRun(r.Context(), s.workspace(r), run, []relay.Event{event})
+				if approved {
+					return nil
+				}
+			}
+			if approvalErr != nil {
+				// Keep manual approval available if automatic resolution fails.
+				slog.Warn("stream approval deferred", "run_id", runID, "error", approvalErr)
 			}
 		}
 		encoded, err := json.Marshal(event)

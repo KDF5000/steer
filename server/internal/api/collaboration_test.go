@@ -158,10 +158,14 @@ func TestAccountScopedSharing(t *testing.T) {
 	call(guest, gw.ID, "GET", target, "", 200)
 	call(guest, gw.ID, "GET", scope+"/sessions/"+hidden.Task.ConversationID, "", 404)
 	call(guest, gw.ID, "GET", scope+"/runs/"+hidden.Run.ID, "", 404)
+	call(guest, gw.ID, "POST", scope+"/runs/"+hidden.Run.ID+"/interactions/unknown/resolve", `{"decision":"allow_once"}`, 404)
+	call(guest, gw.ID, "POST", scope+"/runs/"+first.Run.ID+"/interactions/unknown/resolve", `{"decision":"allow_once"}`, 403)
 	call(guest, gw.ID, "GET", scope+"/bootstrap", "", 404)
 	taskBody := fmt.Sprintf(`{"agentId":%q,"prompt":"shared follow up"}`, agent.ID)
 	taskPath := scope + "/conversations/" + first.Task.ConversationID + "/tasks"
 	call(guest, gw.ID, "POST", taskPath, taskBody, 403)
+	call(guest, gw.ID, "PATCH", scope+"/sessions/"+first.Task.ConversationID+"/approval-policy", `{"autoApprove":false}`, 403)
+	call(guest, gw.ID, "PATCH", scope+"/sessions/"+hidden.Task.ConversationID+"/approval-policy", `{"autoApprove":false}`, 404)
 	call(owner, ow.ID, "PUT", "/resource-shares/"+grant.ID, `{"permission":"execute"}`, 200)
 	var response struct {
 		Task store.Task
