@@ -142,7 +142,6 @@ import { setInterfaceLanguage, useI18n } from '@/lib/i18n';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type {
   AgentProfile as AgentItem,
-  Artifact,
   ChatMessage,
   RelayEvent,
   RelayNode,
@@ -155,7 +154,6 @@ import {
   SteerHTTPError,
   type AuthUser,
   type AgentRecord,
-  type ArtifactRecord,
   type ChatSessionRecord,
   type DocumentRecord,
   type ProjectRecord,
@@ -187,7 +185,6 @@ import './fusion.css';
 
 type View =
   | 'chat'
-  | 'artifacts'
   | 'agents'
   | 'assets'
   | 'notes'
@@ -282,24 +279,6 @@ function agentFromRecord(agent: AgentRecord): AgentItem {
       `Automatic / ${runtimeProviderName(agent.runtimeProvider)}`,
     model: agent.model || 'Runtime default',
     state: 'Idle',
-  };
-}
-
-function artifactFromRecord(artifact: ArtifactRecord): Artifact {
-  return {
-    id: artifact.id,
-    title: artifact.name,
-    fileName: artifact.name,
-    createdAt: artifact.createdAt,
-    source: 'Conversation run',
-    type: artifact.type.replaceAll('_', ' '),
-    version: '',
-    state: artifact.state === 'ready' ? 'Available' : artifact.state,
-    summary: `Produced by Relay Run ${artifact.relayRunId}.`,
-    update: '',
-    contentType: artifact.contentType,
-    size: artifact.size,
-    relayRunId: artifact.relayRunId,
   };
 }
 
@@ -931,7 +910,6 @@ export default function Fusion() {
   const [projectGitStatuses, setProjectGitStatuses] = useState<
     Record<string, WorkspaceGitStatus>
   >({});
-  const [artifactList, setArtifactList] = useState<Artifact[]>([]);
   const [skillList, setSkillList] = useState<SkillRecord[]>([]);
   const [documentList, setDocumentList] = useState<DocumentRecord[]>([]);
   const [agentSkillAssignments, setAgentSkillAssignments] = useState<
@@ -939,7 +917,6 @@ export default function Fusion() {
   >({});
   const [workspaceSettings, setWorkspaceSettings] =
     useState<WorkspaceSettingsRecord | null>(null);
-  const [selectedArtifact, setSelectedArtifact] = useState(0);
   const [runtimeNodes, setRuntimeNodes] = useState<RelayNode[]>([]);
   const runtimeCapacityPolls = useRef(new Map<string, number>());
   const [relayConnected, setRelayConnected] = useState(false);
@@ -1376,7 +1353,6 @@ export default function Fusion() {
     setAgentList(agents);
     setProjectList(data.projects || []);
     setProjectGitStatuses({});
-    setArtifactList(data.artifacts.map(artifactFromRecord));
     setSkillList(data.skills || []);
     setDocumentList(data.documents || []);
     setAgentSkillAssignments(data.agentSkills || {});
@@ -1564,10 +1540,7 @@ export default function Fusion() {
         ),
       );
       if (['succeeded', 'failed', 'cancelled'].includes(result.run.status)) {
-        const refreshed = await steer.bootstrap().catch(() => null);
         if (!isCurrent()) return;
-        if (refreshed)
-          setArtifactList(refreshed.artifacts.map(artifactFromRecord));
         const projectID = activeRunContext.current.project?.id;
         if (projectID) {
           requestedProjectGitStatuses.current.delete(projectID);
@@ -2049,11 +2022,8 @@ export default function Fusion() {
         setView('agents');
         setAgentTab('agents');
       } else if (section === 'artifacts') {
-        setView('artifacts');
-        if (id) {
-          const index = artifactList.findIndex((item) => item.id === id);
-          setSelectedArtifact(index < 0 ? 0 : index);
-        }
+        setView('chat');
+        window.history.replaceState(null, '', '#chat');
       } else if (
         section === 'assets' ||
         section === 'notes' ||
@@ -2078,7 +2048,6 @@ export default function Fusion() {
     window.addEventListener('hashchange', readRoute);
     return () => window.removeEventListener('hashchange', readRoute);
   }, [
-    artifactList,
     loaded,
     openChatSession,
     resourceShares,
@@ -2098,26 +2067,13 @@ export default function Fusion() {
         : view === 'agents' && agentTab === 'runtimes'
           ? 'runtimes'
           : view;
-    const id =
-      view === 'chat'
-        ? chatSession
-        : view === 'artifacts'
-          ? artifactList[selectedArtifact]?.id
-          : '';
+    const id = view === 'chat' ? chatSession : '';
     const hash =
       view === 'chat' && collaborationShare
         ? `#shared/${collaborationShare.id}`
         : `#${section}${id ? `/${id}` : ''}`;
     if (window.location.hash !== hash) window.history.pushState(null, '', hash);
-  }, [
-    agentTab,
-    artifactList,
-    chatSession,
-    selectedArtifact,
-    view,
-    collaborationShare,
-    automatedReviewEnabled,
-  ]);
+  }, [agentTab, chatSession, view, collaborationShare, automatedReviewEnabled]);
 
   const loadProjectGitStatus = (projectID: string) => {
     if (
@@ -3151,13 +3107,6 @@ export default function Fusion() {
     });
   };
 
-  const conversationRunIDs = new Set(
-    messages.map((message) => message.runId).filter(Boolean),
-  );
-  const conversationArtifacts = artifactList.filter((artifact) =>
-    conversationRunIDs.has(artifact.relayRunId),
-  );
-
   if (!authReady) {
     return <div className="ws-auth-loading">{t('Loading Steer…')}</div>;
   }
@@ -3522,18 +3471,6 @@ export default function Fusion() {
                     <span>{t('Footprints')}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    isActive={view === 'artifacts'}
-                    onClick={() => setView('artifacts')}
-                  >
-                    <FileText aria-hidden="true" />
-                    <span>{t('Artifacts')}</span>
-                  </SidebarMenuButton>
-                  {artifactList.length > 0 && (
-                    <SidebarMenuBadge>{artifactList.length}</SidebarMenuBadge>
-                  )}
-                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -3651,21 +3588,19 @@ export default function Fusion() {
           <header className="ws-topbar">
             <SidebarTrigger aria-label="Toggle sidebar" />
             <span>
-              {view === 'artifacts'
-                ? t('Artifacts')
-                : view === 'assets'
-                  ? t(skillDetailId ? 'Skill' : 'Assets')
-                  : view === 'notes'
-                    ? t('Footprints')
-                    : view === 'settings'
-                      ? t('Settings')
-                      : view === 'labs'
-                        ? t('Labs')
-                        : view === 'automation'
-                          ? t(automatedReviewEnabled ? 'Automation' : 'Labs')
-                          : agentTab !== 'runtimes'
-                            ? t('Agents')
-                            : t('Runtimes')}
+              {view === 'assets'
+                ? t(skillDetailId ? 'Skill' : 'Assets')
+                : view === 'notes'
+                  ? t('Footprints')
+                  : view === 'settings'
+                    ? t('Settings')
+                    : view === 'labs'
+                      ? t('Labs')
+                      : view === 'automation'
+                        ? t(automatedReviewEnabled ? 'Automation' : 'Labs')
+                        : agentTab !== 'runtimes'
+                          ? t('Agents')
+                          : t('Runtimes')}
             </span>
           </header>
         )}
@@ -3783,7 +3718,6 @@ export default function Fusion() {
                 : projectList
             }
             project={chatProject}
-            artifacts={conversationArtifacts}
             messages={messages}
             autoApprove={Boolean(activeChatSession?.autoApprove)}
             onApprovalPolicyChange={(sessionID, enabled) => {
@@ -3894,17 +3828,6 @@ export default function Fusion() {
             onRetry={(prompt, options) => void send(prompt, options)}
             onStop={() => void stop()}
             onNotice={setNotice}
-            onArtifact={(id) => {
-              const index = artifactList.findIndex((item) => item.id === id);
-              setSelectedArtifact(index < 0 ? 0 : index);
-              setView('artifacts');
-            }}
-          />
-        ) : view === 'artifacts' ? (
-          <ArtifactsView
-            artifacts={artifactList}
-            selected={selectedArtifact}
-            onSelect={setSelectedArtifact}
           />
         ) : view === 'assets' && skillDetailId ? (
           <SkillDetailView
@@ -4181,12 +4104,7 @@ export default function Fusion() {
               navigationDisabled: true,
             })),
         ]}
-        artifacts={artifactList}
         onProject={openProject}
-        onArtifact={(index) => {
-          setSelectedArtifact(index);
-          setView('artifacts');
-        }}
         onAgents={(tab) => {
           setAgentTab(tab);
           setView('agents');
@@ -4553,7 +4471,6 @@ function ChatView({
   projectRuntimeChoices,
   projects,
   project,
-  artifacts,
   messages,
   autoApprove,
   onApprovalPolicyChange,
@@ -4578,7 +4495,6 @@ function ChatView({
   onRetry,
   onStop,
   onNotice,
-  onArtifact,
   onToggleSidebar,
 }: {
   collaborationMembers?: ResourceShare[];
@@ -4603,7 +4519,6 @@ function ChatView({
   projectRuntimeChoices?: RuntimeChoice[];
   projects: ProjectRecord[];
   project: string;
-  artifacts: Artifact[];
   messages: ChatMessage[];
   autoApprove: boolean;
   onApprovalPolicyChange: (id: string, enabled: boolean) => void;
@@ -4628,7 +4543,6 @@ function ChatView({
   onRetry: (prompt: string, options?: TaskMessageOptions) => void;
   onStop: () => void;
   onNotice: (message: string) => void;
-  onArtifact: (id: string) => void;
   onToggleSidebar: () => void;
 }) {
   const { t } = useI18n();
@@ -4643,17 +4557,14 @@ function ChatView({
     return Number.isFinite(saved) ? Math.max(320, saved) : 520;
   });
   const [reviewResizing, setReviewResizing] = useState(false);
-  const [previewID, setPreviewID] = useState('');
-  const [preview, setPreview] = useState('');
-  const [previewError, setPreviewError] = useState('');
-  const [reviewTab, setReviewTab] = useState<
-    'home' | 'changes' | 'documents' | 'files'
-  >('home');
+  const [reviewTab, setReviewTab] = useState<'home' | 'changes' | 'files'>(
+    'home',
+  );
   const [reviewRunID, setReviewRunID] = useState('');
   const [workspaceTabs, setWorkspaceTabs] = useState<
     Array<{
       id: string;
-      kind: 'changes' | 'documents' | 'files';
+      kind: 'changes' | 'files';
       runId: string;
       path: string;
       title: string;
@@ -4662,7 +4573,6 @@ function ChatView({
   >([]);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('');
   const [selectedChange, setSelectedChange] = useState('');
-  const [previewSource, setPreviewSource] = useState(false);
   const reviewRounds = useMemo(
     () =>
       messages.filter((message) => message.role === 'agent' && message.runId),
@@ -4829,12 +4739,7 @@ function ChatView({
     return prompts;
   }, [messages]);
   const openWorkspaceTab = useCallback(
-    (
-      kind: 'changes' | 'documents' | 'files',
-      runId = '',
-      path = '',
-      snapshot?: string,
-    ) => {
+    (kind: 'changes' | 'files', runId = '', path = '', snapshot?: string) => {
       const resolvedRunId = runId || reviewRounds.at(-1)?.runId || '';
       const id =
         kind === 'changes'
@@ -4845,9 +4750,7 @@ function ChatView({
       const title =
         kind === 'changes'
           ? `Review · Turn ${reviewRounds.findIndex((message) => message.runId === resolvedRunId) + 1}`
-          : kind === 'files'
-            ? path.split(/[\\/]/).filter(Boolean).at(-1) || 'Files'
-            : 'Documents';
+          : path.split(/[\\/]/).filter(Boolean).at(-1) || 'Files';
       setWorkspaceTabs((tabs) =>
         tabs.some((tab) => tab.id === id)
           ? tabs.map((tab) =>
@@ -4894,14 +4797,7 @@ function ChatView({
       }
     }
   };
-  const selectPreview = (id: string) => {
-    openWorkspaceTab('documents');
-    setPreviewSource(false);
-    if (id === previewID) return;
-    setPreviewID(id);
-    setPreview('');
-    setPreviewError('');
-  };
+
   const preparePublicShare = async () => {
     if (!sessionId || !publicShareAllowed || sharing) return;
     setPublicShareDialog(true);
@@ -5000,24 +4896,6 @@ function ChatView({
     });
     return () => cancelAnimationFrame(frame);
   }, [messageFocus, sessionLoading, hasMessages]);
-  useEffect(() => {
-    if (!reviewOpen || !previewID) return;
-    let cancelled = false;
-    steer
-      .artifactContent(previewID)
-      .then((result) => {
-        if (!cancelled) setPreview(result.content);
-      })
-      .catch((error: unknown) => {
-        if (!cancelled)
-          setPreviewError(
-            error instanceof Error ? error.message : 'Preview unavailable.',
-          );
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [previewID, reviewOpen]);
   if (!agent)
     return (
       <section className="ws-chat-page is-empty">
@@ -5964,7 +5842,9 @@ function ChatView({
                         }
                         disabled={
                           readOnly ||
-                          (!working && !draftInput.trim() && images.length === 0)
+                          (!working &&
+                            !draftInput.trim() &&
+                            images.length === 0)
                         }
                         onClick={() => working && onStop()}
                       >
@@ -6074,17 +5954,6 @@ function ChatView({
                   </span>
                   <ChevronRight aria-hidden="true" />
                 </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => openWorkspaceTab('documents')}
-                >
-                  <Folder aria-hidden="true" />
-                  <span>
-                    Documents
-                    <small>Preview outputs attached to this conversation</small>
-                  </span>
-                  <ChevronRight aria-hidden="true" />
-                </Button>
               </div>
             ) : reviewTab === 'files' ? (
               <WorkspaceFiles
@@ -6107,7 +5976,7 @@ function ChatView({
                   )
                 }
               />
-            ) : reviewTab === 'changes' ? (
+            ) : (
               <CodeReview
                 key={reviewMessage?.runId}
                 runId={reviewMessage?.runId || ''}
@@ -6126,74 +5995,6 @@ function ChatView({
                   );
                 }}
               />
-            ) : (
-              <>
-                <div className="ws-chat-review-list">
-                  {artifacts.map((artifact) => (
-                    <button
-                      key={artifact.id}
-                      className={previewID === artifact.id ? 'selected' : ''}
-                      onClick={() => selectPreview(artifact.id)}
-                    >
-                      <FileText aria-hidden="true" />
-                      <span>
-                        <strong>{artifact.title}</strong>
-                        <small>
-                          {artifact.type}
-                          {artifact.size
-                            ? ` · ${formatSize(artifact.size)}`
-                            : ''}
-                        </small>
-                      </span>
-                      <ChevronRight aria-hidden="true" />
-                    </button>
-                  ))}
-                </div>
-                {!artifacts.length && (
-                  <p className="ws-review-empty">
-                    Documents and durable outputs will appear here.
-                  </p>
-                )}
-                {previewID && (
-                  <div className="ws-chat-artifact-preview">
-                    <div className="ws-review-document-actions">
-                      <Button
-                        variant="ghost"
-                        aria-pressed={!previewSource}
-                        onClick={() => setPreviewSource(false)}
-                      >
-                        Preview
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        aria-pressed={previewSource}
-                        onClick={() => setPreviewSource(true)}
-                      >
-                        Source
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Open full document review"
-                        onClick={() => onArtifact(previewID)}
-                      >
-                        <ExternalLink aria-hidden="true" />
-                      </Button>
-                    </div>
-                    {previewError ? (
-                      <p role="alert">{previewError}</p>
-                    ) : preview ? (
-                      previewSource ? (
-                        <pre className="ws-review-source">{preview}</pre>
-                      ) : (
-                        <Markdown>{preview}</Markdown>
-                      )
-                    ) : (
-                      <output>Loading preview…</output>
-                    )}
-                  </div>
-                )}
-              </>
             )}
           </div>
         </aside>
@@ -7204,152 +7005,6 @@ function escapeHTML(value: string) {
         '"': '&quot;',
         "'": '&#039;',
       })[character]!,
-  );
-}
-
-function ArtifactsView({
-  artifacts,
-  selected,
-  onSelect,
-}: {
-  artifacts: Artifact[];
-  selected: number;
-  onSelect: (value: number) => void;
-}) {
-  const [preview, setPreview] = useState({ id: '', content: '', error: '' });
-  const artifact = artifacts[selected];
-  useEffect(() => {
-    if (!artifact) return;
-    let cancelled = false;
-    steer
-      .artifactContent(artifact.id)
-      .then((result) => {
-        if (!cancelled)
-          setPreview({ id: artifact.id, content: result.content, error: '' });
-      })
-      .catch((error: unknown) => {
-        if (!cancelled)
-          setPreview({
-            id: artifact.id,
-            content: '',
-            error:
-              error instanceof Error
-                ? error.message
-                : 'Could not load this file.',
-          });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [artifact]);
-  if (!artifacts.length)
-    return (
-      <div className="ws-page ws-artifacts-empty-page">
-        <PageIntro
-          eyebrow="WORKSPACE"
-          title="Artifacts"
-          description="Review durable outputs created by conversation runs. Agent replies stay in their original conversation."
-          action={<span className="ws-artifact-count">0 artifacts</span>}
-        />
-        <div className="ws-artifacts-empty-panel">
-          <Empty
-            icon={<FileText aria-hidden="true" />}
-            title="No artifacts yet"
-            text="Documents, code changes, and exports will appear here when an Agent produces a durable output."
-          />
-        </div>
-      </div>
-    );
-  return (
-    <div className="ws-artifact-layout">
-      <section className="ws-artifact-list">
-        <div className="ws-list-header">
-          <div>
-            <h1>Artifacts</h1>
-            <span>{artifacts.length} durable outputs</span>
-          </div>
-          <FileText aria-hidden="true" />
-        </div>
-        {artifacts.length
-          ? artifacts.map((item, index) => (
-              <button
-                type="button"
-                className={selected === index ? 'selected' : ''}
-                key={item.id}
-                onClick={() => onSelect(index)}
-              >
-                <FileText aria-hidden="true" />
-                <span>
-                  <strong>{item.title}</strong>
-                  <small>
-                    {item.type} · {formatDate(item.createdAt)}
-                  </small>
-                </span>
-                <span>
-                  <small>{item.state}</small>
-                </span>
-              </button>
-            ))
-          : null}
-      </section>
-      <article className="ws-document">
-        {artifact ? (
-          <>
-            <header>
-              <span>Conversation artifact</span>
-              <span className="ws-grow" />
-              <a
-                className="ws-download"
-                href={steer.artifactDownloadURL(artifact.id)}
-                download={artifact.fileName}
-              >
-                <Download aria-hidden="true" />
-                Download
-              </a>
-            </header>
-            <div className="ws-document-body">
-              <span className="ws-eyebrow">{artifact.type}</span>
-              <h1>{artifact.title}</h1>
-              <p className="ws-file-meta">
-                <FileText aria-hidden="true" />
-                {artifact.fileName}
-                <span>·</span>
-                {formatDate(artifact.createdAt)}
-              </p>
-              <div className="ws-artifact-content">
-                {preview.id !== artifact.id ? (
-                  <output>Loading file…</output>
-                ) : preview.error ? (
-                  <p role="alert">{preview.error}</p>
-                ) : artifact.contentType?.includes('markdown') ||
-                  artifact.fileName?.endsWith('.md') ? (
-                  <Markdown>{preview.content}</Markdown>
-                ) : (
-                  <pre className="ws-plain-file">{preview.content}</pre>
-                )}
-              </div>
-              <details className="ws-file-provenance">
-                <summary>File details</summary>
-                <dl>
-                  <dt>Source</dt>
-                  <dd>{artifact.source}</dd>
-                  <dt>Run</dt>
-                  <dd>{artifact.relayRunId}</dd>
-                </dl>
-              </details>
-            </div>
-          </>
-        ) : (
-          <div className="ws-document-empty">
-            <Empty
-              icon={<FileText />}
-              title="Select an artifact"
-              text="Choose a durable output to preview and download it."
-            />
-          </div>
-        )}
-      </article>
-    </div>
   );
 }
 
@@ -9571,10 +9226,6 @@ function formatMessageTime(value?: string) {
         hour: '2-digit',
         minute: '2-digit',
       }).format(date);
-}
-
-function formatSize(value: number) {
-  return value < 1024 ? `${value} B` : `${(value / 1024).toFixed(1)} KB`;
 }
 
 function isTerminalStatus(status?: string) {

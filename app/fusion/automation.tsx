@@ -26,13 +26,16 @@ import {
   Play,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   Trash2,
   User,
   Workflow,
+  X,
   XCircle,
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { CodebaseWebhookSettings } from './codebase-webhook';
 import { AgentSkillPicker } from './agent-skill-picker';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -119,6 +122,14 @@ const isLiveRun = (run: CodebaseRunRecord) =>
   ['pending', 'running'].includes(run.status) ||
   run.reportStatus === 'sending' ||
   (run.status === 'succeeded' && !run.reportStatus);
+
+const markdownComponents: Components = {
+  table: ({ children, ...props }) => (
+    <div className="ws-md-table-wrap">
+      <table {...props}>{children}</table>
+    </div>
+  ),
+};
 
 function AutomationFilter({
   label,
@@ -246,7 +257,12 @@ export function AutomationView({
   const [wfTriggerWebhook, setWfTriggerWebhook] = useState(true);
   const [flowSearch, setFlowSearch] = useState('');
   const [flowState, setFlowState] = useState('all');
-  const [togglingWorkflow, setTogglingWorkflow] = useState('');
+  const [togglingWorkflows, setTogglingWorkflows] = useState<
+    Record<string, boolean>
+  >({});
+  const [recentlyCreatedWorkflow, setRecentlyCreatedWorkflow] =
+    useState<CodebaseWorkflowRecord | null>(null);
+  const [webhookEnabled, setWebhookEnabled] = useState<boolean | null>(null);
   const [wfNewRepoOpen, setWfNewRepoOpen] = useState(false);
   const [wfNewRepoPath, setWfNewRepoPath] = useState('');
   const [wfAddingRepo, setWfAddingRepo] = useState(false);
@@ -268,6 +284,11 @@ export function AutomationView({
   const [lastStartedRun, setLastStartedRun] =
     useState<CodebaseRunRecord | null>(null);
   const [submittingRun, setSubmittingRun] = useState<number | null>(null);
+  const [rerunningId, setRerunningId] = useState('');
+  const [repoLatestRuns, setRepoLatestRuns] = useState<
+    Record<number, CodebaseRunRecord>
+  >({});
+  const mrSearchSkipRef = useRef(true);
   const [detailRunSnapshot, setDetailRun] = useState<CodebaseRunRecord | null>(
     null,
   );
@@ -510,6 +531,16 @@ export function AutomationView({
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
+    steer
+      .codebaseWebhook(controller.signal)
+      .then((value) => {
+        if (!controller.signal.aborted) {
+          setWebhookEnabled(Boolean(value?.enabled));
+        }
+      })
+      .catch(() => {
+        // Ignore webhook probe errors here; CodebaseWebhookSettings surfaces them.
+      });
     return () => {
       controller.abort();
       mrController.current?.abort();
@@ -524,8 +555,47 @@ export function AutomationView({
     void Promise.resolve().then(() => {
       void loadWorkflows();
       void loadRepositories();
+      void loadRuns(false, true);
     });
-  }, [loadWorkflows, loadRepositories]);
+  }, [loadWorkflows, loadRepositories, loadRuns]);
+
+  // Quietly load recent runs for the selected repository on the MR tab so each
+  // MR row can display its latest review status without switching tabs.
+  useEffect(() => {
+    if (tab !== 'mrs' || !selectedRepoId) return;
+    const controller = new AbortController();
+    steer
+      .codebaseRuns({ repoId: selectedRepoId, limit: 100 }, controller.signal)
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        const latest: Record<number, CodebaseRunRecord> = {};
+        for (const item of data.items) {
+          if (!latest[item.mrIid]) latest[item.mrIid] = item;
+        }
+        setRepoLatestRuns(latest);
+      })
+      .catch(() => {
+        // Non-blocking enrichment for MR rows.
+      });
+    return () => controller.abort();
+  }, [tab, selectedRepoId]);
+
+  // Debounce MR search so typing filters automatically like the workflows tab.
+  useEffect(() => {
+    if (tab !== 'mrs' || !selectedRepoId) return;
+    if (mrSearchSkipRef.current) {
+      mrSearchSkipRef.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void loadMRs(selectedRepoId, {
+        state: mrState,
+        search: search.trim(),
+        page: 1,
+      });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [tab, selectedRepoId, search, mrState, loadMRs]);
 
   useEffect(() => {
     if (tab === 'runs') void Promise.resolve().then(() => loadRuns(true));
@@ -827,8 +897,7 @@ export function AutomationView({
       );
       setWorkflowOpen(false);
       if (!editingWorkflow) {
-        setTab('mrs');
-        setSelectedRepoId(saved.repoId);
+        setRecentlyCreatedWorkflow(saved);
       }
       void loadRepositories(undefined, true);
       notice(editingWorkflow ? 'Workflow updated.' : 'Workflow created.');
@@ -874,10 +943,10 @@ export function AutomationView({
     workflow: CodebaseWorkflowRecord,
     enabled: boolean,
   ) => {
-    if (togglingWorkflow) return;
+    if (togglingWorkflows[workflow.id]) return;
     const controller = new AbortController();
     workflowToggleController.current = controller;
-    setTogglingWorkflow(workflow.id);
+    setTogglingWorkflows((prev) => ({ ...prev, [workflow.id]: true }));
     try {
       const saved = await steer.updateCodebaseWorkflow(
         workflow.id,
@@ -906,7 +975,13 @@ export function AutomationView({
     } catch (error) {
       if (!controller.signal.aborted) notice(errorText(error));
     } finally {
-      if (!controller.signal.aborted) setTogglingWorkflow('');
+      if (!controller.signal.aborted) {
+        setTogglingWorkflows((prev) => {
+          const next = { ...prev };
+          delete next[workflow.id];
+          return next;
+        });
+      }
     }
   };
 
@@ -929,7 +1004,9 @@ export function AutomationView({
     setPreferredWorkflowId('');
     mrController.current?.abort();
     syncController.current?.abort();
+    mrSearchSkipRef.current = true;
     setSelectedRepoId(repoId);
+    setRepoLatestRuns({});
     setResult(null);
     setMRError('');
     setSearch('');
@@ -1013,6 +1090,7 @@ export function AutomationView({
         );
       }
       setRuns((prev) => [run, ...prev]);
+      setRepoLatestRuns((prev) => ({ ...prev, [run.mrIid]: run }));
       setLastStartedRun(run);
       setRunClock(Date.parse(run.startedAt || run.createdAt));
       setRunTarget(null);
@@ -1020,6 +1098,48 @@ export function AutomationView({
       if (!controller.signal.aborted) notice(errorText(error));
     } finally {
       if (!controller.signal.aborted) setSubmittingRun(null);
+    }
+  };
+
+  const rerunReview = async (run: CodebaseRunRecord) => {
+    if (rerunningId || !run.workflowId) return;
+    const workflow = workflows.find((item) => item.id === run.workflowId);
+    if (!workflow || !workflow.enabled) {
+      notice('Create an enabled workflow for this repository first.');
+      return;
+    }
+    const controller = new AbortController();
+    runController.current?.abort();
+    runController.current = controller;
+    setRerunningId(run.id);
+    try {
+      const nextRun = await steer.createCodebaseRun(
+        workflow.id,
+        { mrIid: run.mrIid },
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+      const agent = agents.find((item) => item.id === workflow.agentId);
+      if (nextRun.status === 'failed') {
+        notice('Review could not start. Open the run record for details.');
+      } else {
+        notice(
+          t('Review started with {agent}.', {
+            agent: agent?.name || workflow.name,
+          }),
+        );
+      }
+      setRuns((prev) => [nextRun, ...prev]);
+      setRepoLatestRuns((prev) => ({ ...prev, [nextRun.mrIid]: nextRun }));
+      setRunClock(Date.parse(nextRun.startedAt || nextRun.createdAt));
+      if (detailRunSnapshot?.id === run.id) {
+        setDetailCopied(false);
+        setDetailRun(nextRun);
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) notice(errorText(error));
+    } finally {
+      if (!controller.signal.aborted) setRerunningId('');
     }
   };
 
@@ -1106,6 +1226,7 @@ export function AutomationView({
   const detailLog = detailRun?.error ? cleanRunLog(detailRun.error) : '';
   const conversationURL = (conversationId: string) =>
     `${window.location.origin}${window.location.pathname}#chat/${conversationId}`;
+  const activeRunCount = runs.filter(isLiveRun).length;
   const repoWorkflows = (repoId: string) =>
     workflows.filter((item) => item.repoId === repoId);
 
@@ -1148,6 +1269,11 @@ export function AutomationView({
               className="ws-primary-button"
               onClick={() => openWorkflowDialog()}
               disabled={!connection || workflowsLoading}
+              title={
+                !connection
+                  ? t('Connect Codebase before creating a workflow.')
+                  : undefined
+              }
             >
               <Plus aria-hidden="true" />
               {t('New workflow')}
@@ -1167,6 +1293,17 @@ export function AutomationView({
           {automationTabs.map(({ value, label }) => (
             <TabsTrigger key={value} value={value}>
               {t(label)}
+              {value === 'runs' && activeRunCount > 0 && (
+                <span className="ws-automation-tab-pill">{activeRunCount}</span>
+              )}
+              {value === 'codebase' &&
+                !loading &&
+                (!connection || webhookEnabled === false) && (
+                  <span
+                    className="ws-automation-tab-dot"
+                    aria-label={t('Needs setup')}
+                  />
+                )}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -1211,6 +1348,7 @@ export function AutomationView({
               {!loading && (
                 <div className="ws-automation-actions">
                   <button
+                    type="button"
                     className="ws-automation-button"
                     onClick={openConnection}
                   >
@@ -1218,7 +1356,8 @@ export function AutomationView({
                   </button>
                   {connection && (
                     <button
-                      className="ws-automation-button"
+                      type="button"
+                      className="ws-automation-button is-danger-outline"
                       onClick={() => {
                         setConnectionError('');
                         setDisconnectOpen(true);
@@ -1236,7 +1375,7 @@ export function AutomationView({
                 {t(connectionError)}
               </p>
             )}
-            <CodebaseWebhookSettings />
+            <CodebaseWebhookSettings onStatusChange={setWebhookEnabled} />
           </div>
         </TabsContent>
 
@@ -1252,6 +1391,13 @@ export function AutomationView({
                     'Configure the Codebase connection before adding repositories.',
                   )}
                 </p>
+                <button
+                  type="button"
+                  className="ws-primary-button"
+                  onClick={() => setTab('codebase')}
+                >
+                  {t('Go to connection settings')}
+                </button>
               </div>
             ) : reposLoading ? (
               <output
@@ -1410,6 +1556,13 @@ export function AutomationView({
                     'Configure the Codebase connection, then create a workflow to bind a repository.',
                   )}
                 </p>
+                <button
+                  type="button"
+                  className="ws-primary-button"
+                  onClick={() => setTab('codebase')}
+                >
+                  {t('Go to connection settings')}
+                </button>
               </div>
             ) : reposLoading ? (
               <output
@@ -1476,6 +1629,7 @@ export function AutomationView({
                   <label className="ws-automation-mr-search">
                     <span>{t('Search')}</span>
                     <div className="ws-automation-search-input">
+                      <Search aria-hidden="true" />
                       <input
                         type="search"
                         aria-label={t('MR title')}
@@ -1494,14 +1648,16 @@ export function AutomationView({
                         placeholder={t('MR title')}
                         disabled={!selectedRepoId}
                       />
-                      <button
-                        type="button"
-                        aria-label={t('Search')}
-                        onClick={() => applyFilters()}
-                        disabled={!selectedRepoId}
-                      >
-                        <Search aria-hidden="true" />
-                      </button>
+                      {search && (
+                        <button
+                          type="button"
+                          aria-label={t('Clear search')}
+                          onClick={() => applyFilters({ search: '' })}
+                          disabled={!selectedRepoId}
+                        >
+                          <X aria-hidden="true" />
+                        </button>
+                      )}
                     </div>
                   </label>
                   {runCandidates.length > 1 && (
@@ -1669,71 +1825,107 @@ export function AutomationView({
                   </output>
                 ) : result?.items.length ? (
                   <div className="ws-automation-mr-list">
-                    {result.items.map((mr) => (
-                      <div key={mr.id} className="ws-automation-mr-row">
-                        <GitBranch aria-hidden="true" />
-                        <div className="ws-automation-mr-copy">
-                          <button onClick={() => setSelectedMR(mr)}>
-                            {mr.draft && (
-                              <span className="ws-automation-state">
-                                {t('Draft')}
+                    {result.items.map((mr) => {
+                      const latestRun = repoLatestRuns[mr.iid];
+                      return (
+                        <div key={mr.id} className="ws-automation-mr-row">
+                          <GitBranch aria-hidden="true" />
+                          <div className="ws-automation-mr-copy">
+                            <div className="ws-automation-mr-title-line">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedMR(mr)}
+                              >
+                                {mr.draft && (
+                                  <span className="ws-automation-state">
+                                    {t('Draft')}
+                                  </span>
+                                )}
+                                <span className="ws-automation-mono">
+                                  !{mr.iid}
+                                </span>{' '}
+                                · {mr.title}
+                              </button>
+                              {latestRun && (
+                                <button
+                                  type="button"
+                                  className={`ws-automation-run-status is-${latestRun.status} is-clickable`}
+                                  onClick={() => {
+                                    setDetailCopied(false);
+                                    setDetailRun(latestRun);
+                                  }}
+                                  title={t('Latest review: {status}', {
+                                    status: runStatusLabel(latestRun.status),
+                                  })}
+                                >
+                                  {runStatusIcon(latestRun.status)}
+                                  {t('Latest review: {status}', {
+                                    status: runStatusLabel(latestRun.status),
+                                  })}
+                                </button>
+                              )}
+                            </div>
+                            <p>
+                              {mr.references.full ||
+                                `${t('Project')} ${mr.project_id}`}{' '}
+                              ·{' '}
+                              <span className="ws-automation-mono">
+                                {mr.source_branch} → {mr.target_branch}
                               </span>
-                            )}
-                            !{mr.iid} · {mr.title}
-                          </button>
-                          <p>
-                            {mr.references.full ||
-                              `${t('Project')} ${mr.project_id}`}{' '}
-                            · {mr.source_branch} → {mr.target_branch}
-                          </p>
-                          <small>
-                            {mr.author.name || mr.author.username} ·{' '}
-                            {date(mr.updated_at)}
-                          </small>
-                        </div>
-                        <span className={`ws-automation-state is-${mr.state}`}>
-                          {stateName(mr.state)}
-                        </span>
-                        <div className="ws-automation-mr-actions">
-                          <button
-                            type="button"
-                            className="ws-automation-button is-compact"
-                            onClick={() => requestRun(mr)}
-                            disabled={
-                              submittingRun !== null ||
-                              runCandidates.length === 0
-                            }
-                            title={
-                              runCandidates.length === 0
-                                ? t(
-                                    'Create an enabled workflow for this repository first.',
-                                  )
-                                : t('Run review')
-                            }
+                            </p>
+                            <small>
+                              {mr.author.name || mr.author.username} ·{' '}
+                              {date(mr.updated_at)}
+                            </small>
+                          </div>
+                          <span
+                            className={`ws-automation-state is-${mr.state}`}
                           >
-                            {submittingRun === mr.iid ? (
-                              <Loader2
-                                aria-hidden="true"
-                                className="is-spinning"
-                              />
-                            ) : (
-                              <Play aria-hidden="true" />
-                            )}
-                            {t('Run review')}
-                          </button>
-                          {mr.web_url && (
-                            <a
-                              href={mr.web_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              aria-label={t('Open in Codebase')}
+                            {stateName(mr.state)}
+                          </span>
+                          <div className="ws-automation-mr-actions">
+                            <button
+                              type="button"
+                              className="ws-automation-button is-compact"
+                              onClick={() => requestRun(mr)}
+                              disabled={
+                                submittingRun !== null ||
+                                runCandidates.length === 0
+                              }
+                              title={
+                                runCandidates.length === 0
+                                  ? t(
+                                      'Create an enabled workflow for this repository first.',
+                                    )
+                                  : t('Run review')
+                              }
                             >
-                              <ExternalLink aria-hidden="true" />
-                            </a>
-                          )}
+                              {submittingRun === mr.iid ? (
+                                <Loader2
+                                  aria-hidden="true"
+                                  className="is-spinning"
+                                />
+                              ) : (
+                                <Play aria-hidden="true" />
+                              )}
+                              {t('Run review')}
+                            </button>
+                            {mr.web_url && (
+                              <a
+                                className="ws-automation-icon-action"
+                                href={mr.web_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={t('Open in Codebase')}
+                                aria-label={t('Open in Codebase')}
+                              >
+                                <ExternalLink aria-hidden="true" />
+                              </a>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   !mrError &&
@@ -1762,6 +1954,7 @@ export function AutomationView({
                     </span>
                     <div className="ws-automation-actions">
                       <button
+                        type="button"
                         className="ws-automation-button"
                         disabled={result.page <= 1}
                         onClick={() =>
@@ -1775,6 +1968,7 @@ export function AutomationView({
                         {t('Previous')}
                       </button>
                       <button
+                        type="button"
                         className="ws-automation-button"
                         disabled={!result.nextPage}
                         onClick={() =>
@@ -1797,6 +1991,40 @@ export function AutomationView({
 
         {/* Workflows are the daily entry point; connection setup is separate. */}
         <TabsContent value="flows" hidden={tab !== 'flows'}>
+          {recentlyCreatedWorkflow && (
+            <output className="ws-automation-created-banner">
+              <CheckCircle2 aria-hidden="true" />
+              <span>
+                {t('Workflow "{name}" created.', {
+                  name: recentlyCreatedWorkflow.name,
+                })}
+              </span>
+              <div className="ws-automation-created-actions">
+                <button
+                  type="button"
+                  className="ws-automation-text-action"
+                  onClick={() => {
+                    const wf = recentlyCreatedWorkflow;
+                    setRecentlyCreatedWorkflow(null);
+                    setTab('mrs');
+                    selectRepo(wf.repoId);
+                    setPreferredWorkflowId(wf.id);
+                  }}
+                >
+                  {t('Go to merge requests to run')}
+                  <ArrowRight aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="ws-automation-icon-action"
+                  onClick={() => setRecentlyCreatedWorkflow(null)}
+                  aria-label={t('Dismiss')}
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </div>
+            </output>
+          )}
           {workflows.length > 0 && (
             <div className="ws-automation-filterbar">
               <label className="ws-automation-filter ws-automation-filter-search">
@@ -1811,6 +2039,15 @@ export function AutomationView({
                     placeholder={t('Workflow, repository, or agent')}
                     aria-label={t('Search workflows')}
                   />
+                  {flowSearch && (
+                    <button
+                      type="button"
+                      aria-label={t('Clear search')}
+                      onClick={() => setFlowSearch('')}
+                    >
+                      <X aria-hidden="true" />
+                    </button>
+                  )}
                 </search>
               </label>
               <AutomationFilter
@@ -1890,6 +2127,7 @@ export function AutomationView({
             <div className="ws-automation-workflow-list">
               {visibleWorkflows.map((wf) => {
                 const agent = agents.find((a) => a.id === wf.agentId);
+                const isToggling = Boolean(togglingWorkflows[wf.id]);
                 return (
                   <div
                     key={wf.id}
@@ -1901,7 +2139,7 @@ export function AutomationView({
                           type="button"
                           className="ws-automation-title-button"
                           onClick={() => openWorkflowDialog(wf)}
-                          disabled={togglingWorkflow === wf.id}
+                          disabled={isToggling}
                         >
                           {wf.name}
                         </button>
@@ -1948,7 +2186,7 @@ export function AutomationView({
                     <div className="ws-automation-workflow-actions">
                       <Switch
                         checked={wf.enabled}
-                        disabled={!!togglingWorkflow}
+                        disabled={isToggling}
                         onCheckedChange={(enabled) =>
                           void toggleWorkflow(wf, enabled)
                         }
@@ -1981,7 +2219,7 @@ export function AutomationView({
                         type="button"
                         className="ws-automation-icon-action"
                         onClick={() => openWorkflowDialog(wf)}
-                        disabled={togglingWorkflow === wf.id}
+                        disabled={isToggling}
                         title={t('Edit')}
                         aria-label={t('Edit')}
                       >
@@ -1991,7 +2229,7 @@ export function AutomationView({
                         type="button"
                         className="ws-automation-icon-action is-danger"
                         onClick={() => setDeleteTarget(wf)}
-                        disabled={togglingWorkflow === wf.id}
+                        disabled={isToggling}
                         title={t('Delete workflow')}
                         aria-label={t('Delete workflow')}
                       >
@@ -2124,6 +2362,7 @@ export function AutomationView({
             <div className="ws-automation-run-table">
               {visibleRuns.map((run) => {
                 const wf = workflows.find((w) => w.id === run.workflowId);
+                const canRerun = Boolean(wf && wf.enabled && !isLiveRun(run));
                 return (
                   <div key={run.id} className="ws-automation-run-row">
                     <div className="ws-automation-run-main">
@@ -2157,7 +2396,10 @@ export function AutomationView({
                             setDetailRun(run);
                           }}
                         >
-                          !{run.mrIid} · {run.mrTitle || t('Merge request')}
+                          <span className="ws-automation-mono">
+                            !{run.mrIid}
+                          </span>{' '}
+                          · {run.mrTitle || t('Merge request')}
                         </button>
                         {run.status === 'succeeded' && run.reportStatus && (
                           <span
@@ -2175,12 +2417,17 @@ export function AutomationView({
                         )}
                       </div>
                       <p>
-                        {wf ? wf.name : t('Workflow')} · {run.repoPath} ·{' '}
-                        {t(run.trigger === 'webhook' ? 'Webhook' : 'Manual')}
+                        {wf ? wf.name : t('Workflow')} ·{' '}
+                        <span className="ws-automation-mono">
+                          {run.repoPath}
+                        </span>{' '}
+                        · {t(run.trigger === 'webhook' ? 'Webhook' : 'Manual')}
                       </p>
                       <small>
                         {date(run.createdAt)} · {t('Duration')}:{' '}
-                        {runDuration(run)}
+                        <span className="ws-automation-mono">
+                          {runDuration(run)}
+                        </span>
                         {run.model ? ` · ${run.model}` : ''}
                       </small>
                       {run.error && (
@@ -2193,20 +2440,41 @@ export function AutomationView({
                       )}
                     </div>
                     <div className="ws-automation-run-actions">
-                      <button
-                        type="button"
-                        className="ws-automation-button"
-                        onClick={() => {
-                          setDetailCopied(false);
-                          setDetailRun(run);
-                        }}
-                      >
-                        <FileText aria-hidden="true" />
-                        {t('Details')}
-                      </button>
+                      {canRerun ? (
+                        <button
+                          type="button"
+                          className="ws-automation-button is-compact"
+                          onClick={() => void rerunReview(run)}
+                          disabled={Boolean(rerunningId)}
+                        >
+                          {rerunningId === run.id ? (
+                            <Loader2
+                              aria-hidden="true"
+                              className="is-spinning"
+                            />
+                          ) : (
+                            <RotateCcw aria-hidden="true" />
+                          )}
+                          {t(
+                            rerunningId === run.id ? 'Re-running…' : 'Re-run',
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="ws-automation-button is-compact"
+                          onClick={() => {
+                            setDetailCopied(false);
+                            setDetailRun(run);
+                          }}
+                        >
+                          <FileText aria-hidden="true" />
+                          {t('Details')}
+                        </button>
+                      )}
                       {run.conversationId && (
                         <a
-                          className="ws-automation-button"
+                          className="ws-automation-button is-compact"
                           href={conversationURL(run.conversationId)}
                         >
                           {t('Open conversation')}
@@ -2215,9 +2483,11 @@ export function AutomationView({
                       )}
                       {run.mrUrl && (
                         <a
+                          className="ws-automation-icon-action"
                           href={run.mrUrl}
                           target="_blank"
                           rel="noopener noreferrer"
+                          title={t('Open in Codebase')}
                           aria-label={t('Open in Codebase')}
                         >
                           <ExternalLink aria-hidden="true" />
@@ -2372,12 +2642,18 @@ export function AutomationView({
           )}
           <div className="ws-form-actions">
             <button
+              type="button"
               onClick={() => setDisconnectOpen(false)}
               disabled={disconnecting}
             >
               {t('Cancel')}
             </button>
-            <button onClick={() => void disconnect()} disabled={disconnecting}>
+            <button
+              type="button"
+              className="ws-danger-button"
+              onClick={() => void disconnect()}
+              disabled={disconnecting}
+            >
               {t(disconnecting ? 'Disconnecting…' : 'Disconnect')}
             </button>
           </div>
@@ -2392,303 +2668,352 @@ export function AutomationView({
         }}
       >
         <DialogContent className="ws-workspace-dialog ws-codebase-dialog ws-codebase-dialog-wide">
-          <DialogTitle>
-            {t(editingWorkflow ? 'Edit workflow' : 'New workflow')}
-          </DialogTitle>
-          <DialogDescription>
-            {t(
-              'Pick a managed repository and a reviewer agent. Repositories are added to the workspace once and shared by every workflow.',
-            )}
-          </DialogDescription>
           <form
             onSubmit={(event) => void saveWorkflow(event)}
-            className="ws-codebase-form"
+            className="ws-workflow-dialog-form"
           >
-            <label>
-              {t('Workflow name')}
-              <input
-                type="text"
-                required
-                maxLength={120}
-                value={wfName}
-                onChange={(event) => setWfName(event.target.value)}
-                disabled={wfSaving}
-                placeholder={t('e.g. Frontend review')}
-              />
-            </label>
-            <div className="ws-automation-repo-field">
+            <header className="ws-workflow-dialog-head">
+              <DialogTitle>
+                {t(editingWorkflow ? 'Edit workflow' : 'New workflow')}
+              </DialogTitle>
+              <DialogDescription>
+                {t(
+                  'Pick a managed repository and a reviewer agent. Repositories are added to the workspace once and shared by every workflow.',
+                )}
+              </DialogDescription>
+            </header>
+            <div className="ws-workflow-dialog-body ws-codebase-form">
               <label>
-                {t('Repository')}
-                <Select
-                  value={wfRepo?.id || ''}
-                  onValueChange={(value) => {
-                    const repo = repositories.find(
-                      (item) => item.repoId === String(value),
-                    );
-                    setWfRepo(
-                      repo
-                        ? {
-                            id: repo.repoId,
-                            path: repo.repoPath,
-                            name: repo.repoName,
-                          }
-                        : null,
-                    );
-                    setWfError('');
-                  }}
-                  disabled={wfSaving || repositories.length === 0}
-                >
-                  <SelectTrigger>
-                    <span>{wfRepo?.path || t('Select a repository')}</span>
-                  </SelectTrigger>
-                  <SelectContent className="ws-select-popup">
-                    {repositories.map((repo) => (
-                      <SelectItem key={repo.repoId} value={repo.repoId}>
-                        {repo.repoPath}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {t('Workflow name')}
+                <input
+                  type="text"
+                  required
+                  maxLength={120}
+                  value={wfName}
+                  onChange={(event) => setWfName(event.target.value)}
+                  disabled={wfSaving}
+                  placeholder={t('e.g. Frontend review')}
+                />
               </label>
-              {wfNewRepoOpen ? (
-                <div className="ws-automation-repo-input">
-                  <input
-                    maxLength={300}
-                    value={wfNewRepoPath}
-                    onChange={(event) => {
-                      setWfNewRepoPath(event.target.value);
+              <div className="ws-automation-repo-field">
+                <label>
+                  {t('Repository')}
+                  <Select
+                    value={wfRepo?.id || ''}
+                    onValueChange={(value) => {
+                      const repo = repositories.find(
+                        (item) => item.repoId === String(value),
+                      );
+                      setWfRepo(
+                        repo
+                          ? {
+                              id: repo.repoId,
+                              path: repo.repoPath,
+                              name: repo.repoName,
+                            }
+                          : null,
+                      );
                       setWfError('');
                     }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        void addRepository(wfNewRepoPath, {
-                          selectForWorkflow: true,
-                        });
-                      }
-                    }}
-                    placeholder={t('e.g. org/repository')}
-                    disabled={!connection || wfAddingRepo || wfSaving}
-                  />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void addRepository(wfNewRepoPath, {
-                        selectForWorkflow: true,
-                      })
-                    }
-                    disabled={
-                      !connection ||
-                      wfAddingRepo ||
-                      !wfNewRepoPath.trim() ||
-                      wfSaving
-                    }
-                  >
-                    {t(wfAddingRepo ? 'Adding…' : 'Add')}
-                  </button>
-                  {repositories.length > 0 && (
-                    <button
-                      type="button"
-                      className="is-quiet"
-                      onClick={() => {
-                        setWfNewRepoOpen(false);
-                        setWfNewRepoPath('');
-                      }}
-                      disabled={wfAddingRepo}
-                    >
-                      {t('Cancel')}
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="ws-automation-repo-add-link"
-                  onClick={() => setWfNewRepoOpen(true)}
-                  disabled={!connection || wfSaving}
-                >
-                  <Plus aria-hidden="true" />
-                  {t('Add another repository')}
-                </button>
-              )}
-              {wfError && (
-                <small className="ws-automation-error">{wfError}</small>
-              )}
-            </div>
-            <label>
-              {t('Reviewer agent')}
-              <Select
-                value={wfAgentId}
-                onValueChange={(value) => {
-                  setWfAgentId(String(value));
-                  // Model and effort belong to the previous Agent's Runtime.
-                  setWfModel('');
-                  setWfEffort('');
-                }}
-                disabled={
-                  wfSaving || agents.filter((a) => !a.shared).length === 0
-                }
-              >
-                <SelectTrigger>
-                  <span>
-                    {agents.find((a) => a.id === wfAgentId)?.name ||
-                      t('Select an agent')}
-                  </span>
-                </SelectTrigger>
-                <SelectContent className="ws-select-popup">
-                  {agents
-                    .filter((a) => !a.shared)
-                    .map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              {agents.filter((a) => !a.shared).length === 0 && (
-                <small className="ws-automation-error">
-                  {t('Create an agent in this workspace first.')}
-                </small>
-              )}
-            </label>
-            <div className="ws-workflow-run-settings">
-              <label>
-                {t('Model')}
-                <Select
-                  value={wfModel || 'Runtime default'}
-                  onValueChange={(value) => {
-                    const next = String(value);
-                    setWfModel(next === 'Runtime default' ? '' : next);
-                    setWfEffort('');
-                  }}
-                  disabled={wfSaving || wfModelOptions.length === 0}
-                >
-                  <SelectTrigger>
-                    <span>{wfModel || t('Runtime default')}</span>
-                  </SelectTrigger>
-                  <SelectContent className="ws-select-popup">
-                    <SelectItem value="Runtime default">
-                      {t('Runtime default')}
-                    </SelectItem>
-                    {wfModelOptions.map((model) => (
-                      <SelectItem key={model} value={model}>
-                        {model}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-              {wfEffortOptions.length > 0 && (
-                <label>
-                  {t('Effort')}
-                  <Select
-                    value={wfEffort || 'default'}
-                    onValueChange={(value) => {
-                      const next = String(value);
-                      setWfEffort(next === 'default' ? '' : next);
-                    }}
-                    disabled={wfSaving}
+                    disabled={wfSaving || repositories.length === 0}
                   >
                     <SelectTrigger>
-                      <span>{wfEffort || t('Default')}</span>
+                      <span>{wfRepo?.path || t('Select a repository')}</span>
                     </SelectTrigger>
                     <SelectContent className="ws-select-popup">
-                      <SelectItem value="default">{t('Default')}</SelectItem>
-                      {wfEffortOptions.map((effort) => (
-                        <SelectItem key={effort} value={effort}>
-                          {effort}
+                      {repositories.map((repo) => (
+                        <SelectItem key={repo.repoId} value={repo.repoId}>
+                          {repo.repoPath}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </label>
-              )}
+                {wfNewRepoOpen ? (
+                  <div className="ws-automation-repo-input">
+                    <input
+                      maxLength={300}
+                      value={wfNewRepoPath}
+                      onChange={(event) => {
+                        setWfNewRepoPath(event.target.value);
+                        setWfError('');
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          void addRepository(wfNewRepoPath, {
+                            selectForWorkflow: true,
+                          });
+                        }
+                      }}
+                      placeholder={t('e.g. org/repository')}
+                      disabled={!connection || wfAddingRepo || wfSaving}
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void addRepository(wfNewRepoPath, {
+                          selectForWorkflow: true,
+                        })
+                      }
+                      disabled={
+                        !connection ||
+                        wfAddingRepo ||
+                        !wfNewRepoPath.trim() ||
+                        wfSaving
+                      }
+                    >
+                      {t(wfAddingRepo ? 'Adding…' : 'Add')}
+                    </button>
+                    {repositories.length > 0 && (
+                      <button
+                        type="button"
+                        className="is-quiet"
+                        onClick={() => {
+                          setWfNewRepoOpen(false);
+                          setWfNewRepoPath('');
+                        }}
+                        disabled={wfAddingRepo}
+                      >
+                        {t('Cancel')}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="ws-automation-repo-add-link"
+                    onClick={() => setWfNewRepoOpen(true)}
+                    disabled={!connection || wfSaving}
+                  >
+                    <Plus aria-hidden="true" />
+                    {t('Add another repository')}
+                  </button>
+                )}
+                {wfError && (
+                  <small className="ws-automation-error">{wfError}</small>
+                )}
+              </div>
+              <label>
+                {t('Reviewer agent')}
+                <Select
+                  value={wfAgentId}
+                  onValueChange={(value) => {
+                    setWfAgentId(String(value));
+                    // Model and effort belong to the previous Agent's Runtime.
+                    setWfModel('');
+                    setWfEffort('');
+                  }}
+                  disabled={
+                    wfSaving || agents.filter((a) => !a.shared).length === 0
+                  }
+                >
+                  <SelectTrigger>
+                    <span>
+                      {agents.find((a) => a.id === wfAgentId)?.name ||
+                        t('Select an agent')}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent className="ws-select-popup">
+                    {agents
+                      .filter((a) => !a.shared)
+                      .map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {agents.filter((a) => !a.shared).length === 0 && (
+                  <small className="ws-automation-error">
+                    {t('Create an agent in this workspace first.')}
+                  </small>
+                )}
+              </label>
+              <label>
+                {t('Review instruction')}
+                <textarea
+                  ref={instructionRef}
+                  className="ws-workflow-instruction"
+                  rows={5}
+                  value={wfInstruction}
+                  onChange={(event) => setWfInstruction(event.target.value)}
+                  disabled={wfSaving}
+                  placeholder={t(
+                    'Optional guidance for the reviewer, e.g. focus on error handling and tests.',
+                  )}
+                />
+                <small>
+                  {t(
+                    'Describe the review focus, checklist, and output format. Long instructions are supported.',
+                  )}
+                </small>
+              </label>
+              <details
+                className="ws-workflow-advanced"
+                open={Boolean(editingWorkflow)}
+              >
+                <summary>
+                  <span>{t('Model, Skills & trigger options')}</span>
+                  <span className="ws-workflow-advanced-summary">
+                    {wfModel || t('Runtime default')}
+                    {wfSkillIds.length > 0
+                      ? ` · ${t('{count} Skills', { count: wfSkillIds.length })}`
+                      : ''}
+                    {` · ${t(wfTriggerWebhook ? 'Webhook + manual' : 'Manual only')}`}
+                  </span>
+                </summary>
+                <div className="ws-workflow-advanced-body">
+                  <div className="ws-workflow-run-settings">
+                    <label>
+                      {t('Model')}
+                      <Select
+                        value={wfModel || 'Runtime default'}
+                        onValueChange={(value) => {
+                          const next = String(value);
+                          setWfModel(next === 'Runtime default' ? '' : next);
+                          setWfEffort('');
+                        }}
+                        disabled={wfSaving || wfModelOptions.length === 0}
+                      >
+                        <SelectTrigger>
+                          <span>{wfModel || t('Runtime default')}</span>
+                        </SelectTrigger>
+                        <SelectContent className="ws-select-popup">
+                          <SelectItem value="Runtime default">
+                            {t('Runtime default')}
+                          </SelectItem>
+                          {wfModelOptions.map((model) => (
+                            <SelectItem key={model} value={model}>
+                              {model}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </label>
+                    {wfEffortOptions.length > 0 && (
+                      <label>
+                        {t('Effort')}
+                        <Select
+                          value={wfEffort || 'default'}
+                          onValueChange={(value) => {
+                            const next = String(value);
+                            setWfEffort(next === 'default' ? '' : next);
+                          }}
+                          disabled={wfSaving}
+                        >
+                          <SelectTrigger>
+                            <span>{wfEffort || t('Default')}</span>
+                          </SelectTrigger>
+                          <SelectContent className="ws-select-popup">
+                            <SelectItem value="default">
+                              {t('Default')}
+                            </SelectItem>
+                            {wfEffortOptions.map((effort) => (
+                              <SelectItem key={effort} value={effort}>
+                                {effort}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </label>
+                    )}
+                  </div>
+                  <small>
+                    {t('Runs on the Runtime that owns the reviewer Agent.')}
+                  </small>
+                  <AgentSkillPicker
+                    skills={skills}
+                    initialSelectedIDs={[]}
+                    selectedIDs={wfSkillIds}
+                    onSelectionChange={setWfSkillIds}
+                    disabled={wfSaving}
+                    maxSelected={20}
+                    hint={t(
+                      'Selected Skills are added to this review only, alongside the Agent instructions.',
+                    )}
+                  />
+                  <fieldset className="ws-workflow-options">
+                    <legend>{t('Execution and output')}</legend>
+                    <div className="ws-codebase-webhook-toggle">
+                      <label htmlFor="wf-trigger-webhook">
+                        {t('Trigger review from webhook')}
+                      </label>
+                      <Switch
+                        id="wf-trigger-webhook"
+                        checked={wfTriggerWebhook}
+                        disabled={wfSaving}
+                        onCheckedChange={setWfTriggerWebhook}
+                        aria-describedby="wf-trigger-hint"
+                      />
+                    </div>
+                    {wfTriggerWebhook && webhookEnabled === false ? (
+                      <div
+                        className="ws-automation-warn-inline"
+                        id="wf-trigger-hint"
+                      >
+                        <AlertCircle aria-hidden="true" />
+                        <span>
+                          {t(
+                            'Webhook is currently disabled in this workspace. Enable it in Connection settings to trigger reviews automatically.',
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          className="ws-automation-text-action"
+                          onClick={() => {
+                            setWorkflowOpen(false);
+                            setTab('codebase');
+                          }}
+                        >
+                          {t('Go to connection settings')}
+                        </button>
+                      </div>
+                    ) : (
+                      <small id="wf-trigger-hint">
+                        {t(
+                          'Requires a configured Codebase webhook. Turn off for manual reviews only.',
+                        )}
+                      </small>
+                    )}
+                    <div className="ws-codebase-webhook-toggle">
+                      <label htmlFor="wf-report-enabled">
+                        {t('Write back to MR')}
+                      </label>
+                      <Switch
+                        id="wf-report-enabled"
+                        checked={wfReportEnabled}
+                        disabled={wfSaving}
+                        onCheckedChange={setWfReportEnabled}
+                        aria-describedby="wf-report-hint"
+                      />
+                    </div>
+                    <small id="wf-report-hint">
+                      {t(
+                        'When disabled, results stay in Steer and no MR comment is posted or updated.',
+                      )}
+                    </small>
+                    <div className="ws-codebase-webhook-toggle">
+                      <label htmlFor="wf-enabled">
+                        {t('Workflow enabled')}
+                      </label>
+                      <Switch
+                        id="wf-enabled"
+                        checked={wfEnabled}
+                        disabled={wfSaving}
+                        onCheckedChange={setWfEnabled}
+                      />
+                    </div>
+                    <small>
+                      {t(
+                        'Paused workflows cannot start new reviews. Running reviews continue.',
+                      )}
+                    </small>
+                  </fieldset>
+                </div>
+              </details>
             </div>
-            <small>
-              {t('Runs on the Runtime that owns the reviewer Agent.')}
-            </small>
-            <label>
-              {t('Review instruction')}
-              <textarea
-                ref={instructionRef}
-                className="ws-workflow-instruction"
-                rows={6}
-                value={wfInstruction}
-                onChange={(event) => setWfInstruction(event.target.value)}
-                disabled={wfSaving}
-                placeholder={t(
-                  'Optional guidance for the reviewer, e.g. focus on error handling and tests.',
-                )}
-              />
-              <small>
-                {t(
-                  'Describe the review focus, checklist, and output format. Long instructions are supported.',
-                )}
-              </small>
-            </label>
-            <AgentSkillPicker
-              skills={skills}
-              initialSelectedIDs={[]}
-              selectedIDs={wfSkillIds}
-              onSelectionChange={setWfSkillIds}
-              disabled={wfSaving}
-              maxSelected={20}
-              hint={t(
-                'Selected Skills are added to this review only, alongside the Agent instructions.',
-              )}
-            />
-            <fieldset className="ws-workflow-options">
-              <legend>{t('Execution and output')}</legend>
-              <div className="ws-codebase-webhook-toggle">
-                <label htmlFor="wf-trigger-webhook">
-                  {t('Trigger review from webhook')}
-                </label>
-                <Switch
-                  id="wf-trigger-webhook"
-                  checked={wfTriggerWebhook}
-                  disabled={wfSaving}
-                  onCheckedChange={setWfTriggerWebhook}
-                  aria-describedby="wf-trigger-hint"
-                />
-              </div>
-              <small id="wf-trigger-hint">
-                {t(
-                  'Requires a configured Codebase webhook. Turn off for manual reviews only.',
-                )}
-              </small>
-              <div className="ws-codebase-webhook-toggle">
-                <label htmlFor="wf-report-enabled">
-                  {t('Write back to MR')}
-                </label>
-                <Switch
-                  id="wf-report-enabled"
-                  checked={wfReportEnabled}
-                  disabled={wfSaving}
-                  onCheckedChange={setWfReportEnabled}
-                  aria-describedby="wf-report-hint"
-                />
-              </div>
-              <small id="wf-report-hint">
-                {t(
-                  'When disabled, results stay in Steer and no MR comment is posted or updated.',
-                )}
-              </small>
-              <div className="ws-codebase-webhook-toggle">
-                <label htmlFor="wf-enabled">{t('Workflow enabled')}</label>
-                <Switch
-                  id="wf-enabled"
-                  checked={wfEnabled}
-                  disabled={wfSaving}
-                  onCheckedChange={setWfEnabled}
-                />
-              </div>
-              <small>
-                {t(
-                  'Paused workflows cannot start new reviews. Running reviews continue.',
-                )}
-              </small>
-            </fieldset>
-            <div className="ws-form-actions">
+            <footer className="ws-workflow-dialog-foot ws-form-actions">
               <button
                 type="button"
                 onClick={() => setWorkflowOpen(false)}
@@ -2705,7 +3030,7 @@ export function AutomationView({
                       : 'Create workflow',
                 )}
               </button>
-            </div>
+            </footer>
           </form>
         </DialogContent>
       </Dialog>
@@ -2718,17 +3043,30 @@ export function AutomationView({
         }}
       >
         <DialogContent className="ws-workspace-dialog">
-          <DialogTitle>{t('Delete workflow?')}</DialogTitle>
+          <DialogTitle>
+            {deleteTarget
+              ? t('Delete workflow "{name}"?', { name: deleteTarget.name })
+              : t('Delete workflow?')}
+          </DialogTitle>
           <DialogDescription>
             {t(
               'Remove this workflow and its run records. The repository and its synced merge requests are kept.',
             )}
           </DialogDescription>
           <div className="ws-form-actions">
-            <button onClick={() => setDeleteTarget(null)} disabled={deleting}>
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleting}
+            >
               {t('Cancel')}
             </button>
-            <button onClick={() => void deleteWorkflow()} disabled={deleting}>
+            <button
+              type="button"
+              className="ws-danger-button"
+              onClick={() => void deleteWorkflow()}
+              disabled={deleting}
+            >
               {t(deleting ? 'Deleting…' : 'Delete')}
             </button>
           </div>
@@ -2849,7 +3187,10 @@ export function AutomationView({
               </header>
               <div className="ws-codebase-mr-body">
                 <div className="ws-codebase-description">
-                  <ReactMarkdown>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={markdownComponents}
+                  >
                     {selectedMR.description || t('No MR description.')}
                   </ReactMarkdown>
                 </div>
@@ -3012,7 +3353,12 @@ export function AutomationView({
                       <h3>{t('Run summary')}</h3>
                     </div>
                     <div className="ws-run-detail-summary">
-                      <ReactMarkdown>{detailRun.summary}</ReactMarkdown>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={markdownComponents}
+                      >
+                        {detailRun.summary}
+                      </ReactMarkdown>
                     </div>
                   </section>
                 )}
@@ -3028,28 +3374,60 @@ export function AutomationView({
                   </p>
                 )}
               </div>
-              {(detailRun.conversationId || detailRun.mrUrl) && (
+              {(detailRun.conversationId ||
+                detailRun.mrUrl ||
+                (detailWorkflow &&
+                  detailWorkflow.enabled &&
+                  !isLiveRun(detailRun))) && (
                 <footer className="ws-codebase-mr-footer">
-                  {detailRun.conversationId && (
-                    <a
-                      className="ws-codebase-open-link"
-                      href={conversationURL(detailRun.conversationId)}
-                    >
-                      {t('Open conversation')}
-                      <ExternalLink aria-hidden="true" />
-                    </a>
-                  )}
-                  {detailRun.mrUrl && (
-                    <a
-                      className="ws-codebase-open-link"
-                      href={detailRun.mrUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {t('Open in Codebase')}
-                      <ExternalLink aria-hidden="true" />
-                    </a>
-                  )}
+                  <div className="ws-automation-actions">
+                    {detailWorkflow &&
+                      detailWorkflow.enabled &&
+                      !isLiveRun(detailRun) && (
+                        <button
+                          type="button"
+                          className="ws-automation-button is-compact"
+                          onClick={() => void rerunReview(detailRun)}
+                          disabled={Boolean(rerunningId)}
+                        >
+                          {rerunningId === detailRun.id ? (
+                            <Loader2
+                              aria-hidden="true"
+                              className="is-spinning"
+                            />
+                          ) : (
+                            <RotateCcw aria-hidden="true" />
+                          )}
+                          {t(
+                            rerunningId === detailRun.id
+                              ? 'Re-running…'
+                              : 'Re-run',
+                          )}
+                        </button>
+                      )}
+                  </div>
+                  <div className="ws-run-detail-links">
+                    {detailRun.conversationId && (
+                      <a
+                        className="ws-codebase-open-link"
+                        href={conversationURL(detailRun.conversationId)}
+                      >
+                        {t('Open conversation')}
+                        <ExternalLink aria-hidden="true" />
+                      </a>
+                    )}
+                    {detailRun.mrUrl && (
+                      <a
+                        className="ws-codebase-open-link"
+                        href={detailRun.mrUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {t('Open in Codebase')}
+                        <ExternalLink aria-hidden="true" />
+                      </a>
+                    )}
+                  </div>
                 </footer>
               )}
             </>
@@ -3150,12 +3528,15 @@ export function AutomationView({
           )}
           <div className="ws-form-actions">
             <button
+              type="button"
               onClick={() => setRepoDeleteTarget(null)}
               disabled={repoDeleting}
             >
               {t('Cancel')}
             </button>
             <button
+              type="button"
+              className="ws-danger-button"
               onClick={() => void deleteRepository()}
               disabled={repoDeleting}
             >

@@ -12,7 +12,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-export function CodebaseWebhookSettings() {
+export function CodebaseWebhookSettings({
+  onStatusChange,
+}: {
+  onStatusChange?: (enabled: boolean) => void;
+} = {}) {
   const { t } = useI18n();
   const labelID = useId();
   const [settings, setSettings] = useState<CodebaseWebhookRecord | null>(null);
@@ -26,13 +30,20 @@ export function CodebaseWebhookSettings() {
   const [rotateOpen, setRotateOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
   const action = useRef<AbortController | null>(null);
+  const onStatusChangeRef = useRef(onStatusChange);
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
 
   useEffect(() => {
     const controller = new AbortController();
     steer
       .codebaseWebhook(controller.signal)
       .then((value) => {
-        if (!controller.signal.aborted) setSettings(value);
+        if (!controller.signal.aborted) {
+          setSettings(value);
+          onStatusChangeRef.current?.(Boolean(value?.enabled));
+        }
       })
       .catch(() => {
         if (!controller.signal.aborted)
@@ -83,6 +94,7 @@ export function CodebaseWebhookSettings() {
       );
       if (!controller.signal.aborted) {
         setSettings(value);
+        onStatusChangeRef.current?.(Boolean(value?.enabled));
         setRotateOpen(false);
       }
     } catch (err) {
@@ -121,6 +133,7 @@ export function CodebaseWebhookSettings() {
         {!loading && (
           <div className="ws-automation-actions">
             <button
+              type="button"
               className="ws-automation-button"
               onClick={() => {
                 setConfigOpen(true);
@@ -173,10 +186,16 @@ export function CodebaseWebhookSettings() {
                 </p>
               )}
               <div className="ws-form-actions">
-                <button disabled={saving} onClick={() => setRotateOpen(false)}>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => setRotateOpen(false)}
+                >
                   {t('Cancel')}
                 </button>
                 <button
+                  type="button"
+                  className="ws-danger-button"
                   disabled={saving}
                   onClick={() => void save(settings?.enabled ?? true, true)}
                 >
@@ -236,8 +255,9 @@ export function CodebaseWebhookSettings() {
                   )}
                   <div className="ws-automation-actions">
                     <button
+                      type="button"
                       className="ws-automation-button"
-                      disabled={!callbackURL || !settings.enabled || saving}
+                      disabled={!callbackURL || saving}
                       onClick={async () => {
                         try {
                           await navigator.clipboard.writeText(callbackURL);
@@ -251,7 +271,8 @@ export function CodebaseWebhookSettings() {
                       {t(copied ? 'Copied' : 'Copy callback URL')}
                     </button>
                     <button
-                      className="ws-automation-button"
+                      type="button"
+                      className="ws-automation-button is-danger-outline"
                       disabled={saving}
                       onClick={() => {
                         setError('');
@@ -268,7 +289,9 @@ export function CodebaseWebhookSettings() {
                   </p>
                   <p className="ws-codebase-webhook-stage">
                     {t(
-                      'Webhook deliveries are saved. Automatic MR updates are not connected yet.',
+                      settings.enabled
+                        ? 'Webhook is active. Workflows with Webhook trigger enabled will receive Codebase MR events.'
+                        : 'Enable Webhook above so workflows with Webhook trigger enabled can receive Codebase MR events.',
                     )}
                   </p>
                 </div>
@@ -283,11 +306,19 @@ export function CodebaseWebhookSettings() {
                 </p>
               )}
               <div className="ws-form-actions">
-                <button disabled={saving} onClick={() => setConfigOpen(false)}>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => setConfigOpen(false)}
+                >
                   {t('Close')}
                 </button>
                 {!settings && (
-                  <button disabled={saving} onClick={() => void save(true)}>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void save(true)}
+                  >
                     {t(saving ? 'Saving…' : 'Generate callback URL')}
                   </button>
                 )}

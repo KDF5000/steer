@@ -4,7 +4,6 @@ import {
   Folder,
   Bot,
   Server,
-  FileText,
   LoaderCircle,
   MessageSquare,
   Users,
@@ -30,7 +29,6 @@ import {
   type SessionSearchResult,
   type ProjectRecord,
 } from '@/lib/steer-client';
-import type { Artifact } from '@/lib/domain';
 
 function Highlight({ text, query }: { text: string; query: string }) {
   const terms = [...new Set(query.trim().split(/\s+/).filter(Boolean))].sort(
@@ -59,9 +57,7 @@ export function SessionSearchDialog({
   open,
   onOpen,
   projects,
-  artifacts,
   onProject,
-  onArtifact,
   onAgents,
   onSession,
 }: {
@@ -70,9 +66,7 @@ export function SessionSearchDialog({
   projects: (Pick<ProjectRecord, 'id' | 'name' | 'deletedAt'> & {
     navigationDisabled?: boolean;
   })[];
-  artifacts: Artifact[];
   onProject: (id: string) => void;
-  onArtifact: (index: number) => void;
   onAgents: (tab: string) => void;
   onSession: (result: SessionSearchResult) => Promise<void>;
 }) {
@@ -298,24 +292,6 @@ export function SessionSearchDialog({
                       >
                         <Folder />
                         {p.name}
-                      </CommandItem>
-                    ))}
-                </CommandGroup>
-                <CommandGroup heading={t('Results')}>
-                  {artifacts
-                    .map((a, i) => ({ a, i }))
-                    .filter(({ a }) => includes(a.title))
-                    .map(({ a, i }) => (
-                      <CommandItem
-                        key={a.id}
-                        value={`artifact-${a.id}`}
-                        onSelect={() => {
-                          onArtifact(i);
-                          onOpen(false);
-                        }}
-                      >
-                        <FileText />
-                        {a.title}
                       </CommandItem>
                     ))}
                 </CommandGroup>

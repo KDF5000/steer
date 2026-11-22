@@ -526,6 +526,23 @@ const zhCN: Record<string, string> = {
     '将此地址填入 Codebase 的 Webhook 设置，并选择需要接收的 MR 事件。',
   'Webhook deliveries are saved. Automatic MR updates are not connected yet.':
     '当前回调事件会保存到服务端，MR 列表自动更新尚未接通。',
+  'Webhook is active. Workflows with Webhook trigger enabled will receive Codebase MR events.':
+    'Webhook 已启用。开启「通过 Webhook 触发审查」的流程会自动接收 Codebase MR 事件。',
+  'Enable Webhook above so workflows with Webhook trigger enabled can receive Codebase MR events.':
+    '在上方启用 Webhook 后，开启「通过 Webhook 触发审查」的流程即可自动接收 Codebase MR 事件。',
+  'Webhook is currently disabled in this workspace. Enable it in Connection settings to trigger reviews automatically.':
+    '当前工作区尚未启用 Webhook。请先在「连接设置」中开启回调，否则仅支持手动发起审查。',
+  'Go to connection settings': '前往连接设置',
+  'Go to merge requests to run': '去合并请求立即运行',
+  'Workflow "{name}" created.': '流程「{name}」已创建。',
+  'Delete workflow "{name}"?': '删除流程「{name}」？',
+  'Model, Skills & trigger options': '模型、Skills 与触发选项',
+  'Re-run': '重新运行',
+  'Re-running…': '正在重新提交…',
+  'Latest review: {status}': '最近审查：{status}',
+  'Needs setup': '待配置',
+  'Clear search': '清空搜索',
+  'Dismiss': '关闭',
   'Replace callback URL?': '更换回调地址？',
   'The old callback URL will stop working. Update the URL in Codebase after replacing it.':
     '旧回调地址将立即失效。更换后，请同步更新 Codebase 中的地址。',
