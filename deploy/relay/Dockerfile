@@ -2,6 +2,8 @@
 
 FROM golang:1.26-alpine AS build
 
+RUN apk add --no-cache git
+
 ARG RELAY_VERSION=v0.5.18
 ENV GOPROXY=https://goproxy.cn|https://proxy.golang.org|direct
 RUN CGO_ENABLED=0 go install -trimpath \
