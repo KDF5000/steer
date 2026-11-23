@@ -110,6 +110,15 @@ func (s *Server) processCodebaseWebhookEvent(ctx context.Context, event store.Co
 		return
 	}
 	review, ok := parseCodebaseMergeRequestWebhook(event.Payload)
+	if review.MRIID > 0 {
+		review, err = s.refreshCodebaseWebhookMR(ctx, event.WorkspaceID, review)
+		if err != nil {
+			slog.Warn("codebase webhook MR refresh", "event_id", event.ID, "error", err)
+			_ = s.store.MarkCodebaseWebhookEvent(ctx, event.ID, err.Error(), true)
+			return
+		}
+		ok = ok && review.shouldStart()
+	}
 	if !ok {
 		reason := "unsupported or invalid MR event"
 		if review.MRIID > 0 {

@@ -133,7 +133,9 @@ ON CONFLICT (workspace_id,repo_id,mr_number) DO UPDATE SET
   mr_created_at=EXCLUDED.mr_created_at,
   mr_updated_at=EXCLUDED.mr_updated_at,
   synced_at=now()
-WHERE codebase_merge_requests.repo_path IS DISTINCT FROM EXCLUDED.repo_path
+WHERE (EXCLUDED.mr_updated_at IS NULL OR codebase_merge_requests.mr_updated_at IS NULL
+       OR EXCLUDED.mr_updated_at >= codebase_merge_requests.mr_updated_at)
+  AND (codebase_merge_requests.repo_path IS DISTINCT FROM EXCLUDED.repo_path
    OR codebase_merge_requests.mr_id IS DISTINCT FROM EXCLUDED.mr_id
    OR codebase_merge_requests.title IS DISTINCT FROM EXCLUDED.title
    OR codebase_merge_requests.description IS DISTINCT FROM EXCLUDED.description
@@ -146,7 +148,7 @@ WHERE codebase_merge_requests.repo_path IS DISTINCT FROM EXCLUDED.repo_path
    OR codebase_merge_requests.draft IS DISTINCT FROM EXCLUDED.draft
    OR codebase_merge_requests.labels IS DISTINCT FROM EXCLUDED.labels
    OR codebase_merge_requests.mr_created_at IS DISTINCT FROM EXCLUDED.mr_created_at
-   OR codebase_merge_requests.mr_updated_at IS DISTINCT FROM EXCLUDED.mr_updated_at
+   OR codebase_merge_requests.mr_updated_at IS DISTINCT FROM EXCLUDED.mr_updated_at)
 RETURNING (xmax = 0)`, wid, repoID, repoPath, item.IID, item.ID, item.Title, item.Description,
 			item.State, item.WebURL, item.SourceBranch, item.TargetBranch, item.Author.Name,
 			item.Author.Username, item.Draft, string(labels), item.CreatedAt, item.UpdatedAt,

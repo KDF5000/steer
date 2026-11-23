@@ -221,6 +221,7 @@ export function AutomationView({
   const [result, setResult] = useState<CodebaseMergeRequestsRecord | null>(
     null,
   );
+  const hasMRPage = result !== null;
   const [fetching, setFetching] = useState(false);
   const [syncingRepoId, setSyncingRepoId] = useState('');
   const [mrError, setMRError] = useState('');
@@ -231,6 +232,8 @@ export function AutomationView({
   );
   const [preferredWorkflowId, setPreferredWorkflowId] = useState('');
   const mrController = useRef<AbortController | null>(null);
+  const mrLoading = useRef(false);
+  const activeMRQuery = useRef<MRQuery | null>(null);
   const syncController = useRef<AbortController | null>(null);
   const actionController = useRef<AbortController | null>(null);
   const runController = useRef<AbortController | null>(null);
@@ -383,13 +386,17 @@ export function AutomationView({
   );
 
   const loadMRs = useCallback(
-    async (repoId: string, query: MRQuery) => {
-      if (!repoId) return;
+    async (repoId: string, query: MRQuery, quiet = false) => {
+      if (!repoId || (quiet && mrLoading.current)) return;
       mrController.current?.abort();
       const controller = new AbortController();
       mrController.current = controller;
-      setFetching(true);
-      setMRError('');
+      mrLoading.current = true;
+      activeMRQuery.current = query;
+      if (!quiet) {
+        setFetching(true);
+        setMRError('');
+      }
       try {
         const data = await steer.codebaseMergeRequests(
           {
@@ -402,12 +409,15 @@ export function AutomationView({
         );
         if (!controller.signal.aborted) setResult(data);
       } catch (error) {
-        if (!controller.signal.aborted) {
+        if (!controller.signal.aborted && !quiet) {
           setResult(null);
           setMRError(errorText(error));
         }
       } finally {
-        if (!controller.signal.aborted) setFetching(false);
+        if (mrController.current === controller) {
+          mrLoading.current = false;
+          if (!quiet) setFetching(false);
+        }
       }
     },
     [errorText],
@@ -610,6 +620,38 @@ export function AutomationView({
     }, 8000);
     return () => window.clearInterval(timer);
   }, [tab, runs, runsLoading, loadRuns]);
+
+  // Webhooks update the local MR cache independently of reviews. Read only
+  // that cache while this tab is visible; never run a full Codebase sync here.
+  useEffect(() => {
+    if (tab !== 'mrs' || !selectedRepoId || !hasMRPage) return;
+    const controller = new AbortController();
+    let refreshing = false;
+    const refresh = () => {
+      if (
+        document.visibilityState !== 'visible' ||
+        mrLoading.current ||
+        refreshing
+      )
+        return;
+      const query = activeMRQuery.current;
+      if (!query) return;
+      refreshing = true;
+      void Promise.all([
+        loadMRs(selectedRepoId, query, true),
+        loadRepositories(controller.signal, true),
+      ]).finally(() => {
+        refreshing = false;
+      });
+    };
+    const timer = window.setInterval(refresh, 8000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [tab, selectedRepoId, hasMRPage, loadMRs, loadRepositories]);
 
   // Select the first bound repository when opening the merge request tab.
   useEffect(() => {
@@ -2455,9 +2497,7 @@ export function AutomationView({
                           ) : (
                             <RotateCcw aria-hidden="true" />
                           )}
-                          {t(
-                            rerunningId === run.id ? 'Re-running…' : 'Re-run',
-                          )}
+                          {t(rerunningId === run.id ? 'Re-running…' : 'Re-run')}
                         </button>
                       ) : (
                         <button

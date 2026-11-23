@@ -143,6 +143,8 @@ func TestCodebaseReviewWebhookAndReport(t *testing.T) {
 			fmt.Fprint(w, `{"ResponseMetadata":{"Action":"GetApp"},"Result":{"App":{"Id":"app1","Name":"test-app"}}}`)
 		case "GetRepository":
 			fmt.Fprint(w, `{"ResponseMetadata":{"Action":"GetRepository"},"Result":{"Repository":{"Id":"9","Path":"org/repo","Name":"repo"}}}`)
+		case "GetMergeRequest":
+			fmt.Fprint(w, `{"ResponseMetadata":{"Action":"GetMergeRequest"},"Result":{"MergeRequest":{"Id":"12","Number":3,"TargetRepoId":"9","Title":"Fix login","Status":"open","URL":"https://code.example/org/repo/merge_requests/3"}}}`)
 		case "ListThreads":
 			mu.Lock()
 			defer mu.Unlock()

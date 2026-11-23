@@ -32,3 +32,23 @@ func TestCodebaseMergeRequestsNewestUpdateFirstAcrossPages(t *testing.T) {
 		}
 	}
 }
+
+func TestCodebaseMergeRequestsOlderUpdateCannotReopenMergedMR(t *testing.T) {
+	s, wid := testStore(t)
+	ctx := context.Background()
+	latest := time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
+	older := latest.Add(-time.Hour)
+	mr := CodebaseMergeRequest{ID: 1, IID: 1, Title: "Merged title", State: "merged", UpdatedAt: &latest}
+	if _, _, _, err := s.UpsertCodebaseMergeRequests(ctx, wid, "7", "org/repo", []CodebaseMergeRequest{mr}); err != nil {
+		t.Fatal(err)
+	}
+	mr.Title, mr.State, mr.UpdatedAt = "Stale open title", "open", &older
+	created, updated, unchanged, err := s.UpsertCodebaseMergeRequests(ctx, wid, "7", "org/repo", []CodebaseMergeRequest{mr})
+	if err != nil || created != 0 || updated != 0 || unchanged != 1 {
+		t.Fatalf("stale refresh changed the cache: %d %d %d %v", created, updated, unchanged, err)
+	}
+	saved, err := s.CodebaseMergeRequest(ctx, wid, "7", 1)
+	if err != nil || saved.State != "merged" || saved.Title != "Merged title" || !saved.UpdatedAt.Equal(latest) {
+		t.Fatalf("newer merged state was overwritten: %+v %v", saved, err)
+	}
+}
