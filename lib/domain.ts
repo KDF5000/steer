@@ -68,6 +68,7 @@ export type TaskMessageOptions = {
   referenceMode?: 'explicit' | 'latest' | 'none';
 };
 export type ChatMessage = {
+  executionLocation?: { nodeId?: string; workDir?: string };
   context?: MessageContext;
   id?: string;
   role: 'user' | 'agent';
@@ -115,7 +116,7 @@ export type RelayRunStatus =
 export type RelayRun = {
   id: string;
   status: RelayRunStatus;
-  result?: { summary?: string };
+  result?: { summary?: string; output?: Record<string, unknown> };
   error?: string;
   started_at?: string;
   completed_at?: string;

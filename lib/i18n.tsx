@@ -32,6 +32,8 @@ const zhCN: Record<string, string> = {
 
   'Waiting for approval': '等待审批',
   'Waiting for background tasks': '等待后台任务完成',
+  'Waiting for a machine': '待分配机器',
+  'Machine unavailable': '机器不可用',
   'Finalizing response': '正在收尾',
   'Tool approval': '工具审批',
   'Approve command execution': '批准执行命令',

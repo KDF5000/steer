@@ -78,7 +78,10 @@ import { AgentModelPicker } from './agent-model-picker';
 import { LabsView, useWorkspaceLabs } from './labs';
 import { AutomationView } from './automation';
 import hljs from 'highlight.js/lib/common';
-import { executionMachineIP } from '@/lib/execution-machine';
+import {
+  executionMachineName,
+  runExecutionLocation,
+} from '@/lib/execution-machine';
 import {
   currentTurnEvents,
   runActivity,
@@ -1220,6 +1223,20 @@ export default function Fusion() {
     : projectList.find((project) => project.id === chatProject);
   const composerExecutionRuntimeId =
     activeChatSession?.executionRuntimeId || null;
+  const latestExecutionLocation = messages.findLast(
+    (message) =>
+      message.role === 'agent' &&
+      message.runId &&
+      (!message.context?.delegationSessionId ||
+        message.context.delegationSessionId === chatSession),
+  )?.executionLocation;
+  const currentMachineName = executionMachineName(
+    runtimeNodes,
+    composerExecutionRuntimeId,
+    selectedProject?.nodeId,
+    currentAgent?.runtimeId,
+    latestExecutionLocation?.nodeId,
+  );
   const automaticChoices: RuntimeChoice[] = [
     ...new Set(runtimeChoices.map((item) => item.provider)),
   ].map((provider) => ({
@@ -1461,6 +1478,10 @@ export default function Fusion() {
                       ...message,
                       status: result.run.status,
                       text: terminal ? result.content : '',
+                      executionLocation: runExecutionLocation(
+                        result.events,
+                        result.run,
+                      ),
                       activity: runActivity(result.events),
                       approvals: pendingRunApprovals(result.events),
                       error: result.error || undefined,
@@ -1522,6 +1543,10 @@ export default function Fusion() {
                   result.error || undefined,
                   activeRunContext.current.project,
                   activeRunContext.current.executionRuntimeID,
+                ),
+                executionLocation: runExecutionLocation(
+                  result.events,
+                  result.run,
                 ),
                 activity: runActivity(result.events),
                 approvals: pendingRunApprovals(result.events),
@@ -1599,6 +1624,8 @@ export default function Fusion() {
             ? {
                 ...message,
                 text: finalDraft || message.text,
+                executionLocation:
+                  runExecutionLocation(snapshot) || message.executionLocation,
                 activity: runActivity(snapshot),
                 approvals: pendingRunApprovals(snapshot),
                 activityLog: runActivityLog(snapshot, Boolean(finalDraft)),
@@ -1846,6 +1873,10 @@ export default function Fusion() {
                 result.error || undefined,
                 data.project,
                 data.session.executionRuntimeId,
+              ),
+              executionLocation: runExecutionLocation(
+                result.events,
+                result.run,
               ),
               activity: runActivity(result.events),
               approvals: pendingRunApprovals(result.events),
@@ -3738,12 +3769,15 @@ export default function Fusion() {
             }}
             sessionTitle={activeChatSession?.title}
             parentConversationId={activeChatSession?.parentConversationId}
-            machineIP={executionMachineIP(
-              runtimeNodes,
-              composerExecutionRuntimeId,
-              selectedProject?.nodeId,
-              currentAgent?.runtimeId,
-            )}
+            machineName={
+              currentMachineName ||
+              (latestExecutionLocation?.nodeId || composerExecutionRuntimeId
+                ? t('Machine unavailable')
+                : selectedProject?.workspaceKind === 'git'
+                  ? t('Waiting for a machine')
+                  : '')
+            }
+            executionWorkDir={latestExecutionLocation?.workDir}
             runtimeLabel={
               collaborationShare?.runtimeLabel ||
               sharedAgentGrant?.runtimeLabel ||
@@ -4485,7 +4519,8 @@ function ChatView({
   sessionTitle,
   parentConversationId,
   runtimeLabel,
-  machineIP,
+  machineName,
+  executionWorkDir,
   sessionLoading,
   input,
   inputRevision,
@@ -4534,7 +4569,8 @@ function ChatView({
   sessionTitle?: string;
   parentConversationId?: string | null;
   runtimeLabel: string;
-  machineIP?: string;
+  machineName?: string;
+  executionWorkDir?: string;
   sessionLoading: boolean;
   input: string;
   inputRevision: number;
@@ -4672,10 +4708,11 @@ function ChatView({
   );
   const projectLabel =
     selectedProject?.workspaceSource || t('No project selected');
+  const locationPath = executionWorkDir || projectLabel;
   const projectLocation =
-    machineIP && selectedProject
-      ? `${machineIP} · ${projectLabel}`
-      : projectLabel;
+    machineName && (selectedProject || executionWorkDir)
+      ? `${machineName} · ${locationPath}`
+      : locationPath;
   const scrollArea = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLSpanElement>(null);
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage>();
