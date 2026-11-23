@@ -175,3 +175,68 @@ export function pendingRunApprovals(
   }
   return [...pending.values()];
 }
+
+export function runActivity(events?: RelayEvent[] | null) {
+  if (pendingRunApprovals(events).length) return 'Waiting for approval';
+  const source = withRuntimeToolEvents(events);
+  const antigravity = source.some((event) =>
+    event.type.startsWith('runtime.antigravity.'),
+  );
+  for (const event of source.reverse()) {
+    const eventType = event.type.toLowerCase();
+    if (eventType === 'runtime.antigravity.lifecycle') {
+      if (event.data?.hookEventName === 'Stop') {
+        if (event.data.fullyIdle === false)
+          return 'Waiting for background tasks';
+        if (event.data.fullyIdle === true) return 'Finalizing response';
+      }
+      if (event.data?.hookEventName === 'PreInvocation') return 'Thinking';
+    }
+    if (eventType === 'runtime.antigravity.background.waiting')
+      return 'Waiting for background tasks';
+    if (eventType === 'runtime.antigravity.background.completed')
+      return 'Finalizing response';
+    if (antigravity && eventType === 'assistant.final.completed')
+      return 'Finalizing response';
+    const item = event.data?.item;
+    const itemType =
+      item && typeof item === 'object' && 'type' in item
+        ? String(item.type)
+            .toLowerCase()
+            .replace(/[^a-z]/g, '')
+        : '';
+    // Closing a commentary message after a Stop notification must not mask
+    // the native waiting state. Completion notifications are not text deltas.
+    if (
+      antigravity &&
+      (eventType === 'assistant.message.completed' ||
+        (itemType === 'agentmessage' && eventType.endsWith('item.completed')))
+    ) {
+      if (event.data?.phase === 'final_answer') return 'Finalizing response';
+      continue;
+    }
+    const combined = `${eventType} ${itemType}`;
+    if (combined.includes('agentmessage') || eventType.includes('assistant'))
+      return 'Writing a response';
+    if (combined.includes('command'))
+      return eventType.endsWith('item.started')
+        ? 'Running a command'
+        : 'Thinking';
+    if (combined.includes('filechange') || combined.includes('edit'))
+      return eventType.endsWith('item.started') ? 'Updating files' : 'Thinking';
+    if (combined.includes('websearch') || combined.includes('search'))
+      return eventType.endsWith('item.started') ? 'Searching' : 'Thinking';
+    if (combined.includes('mcp') || combined.includes('tool'))
+      return eventType.endsWith('item.started') ? 'Using a tool' : 'Thinking';
+    if (combined.includes('reasoning')) return 'Thinking';
+    if (eventType === 'workspace.preparing') return 'Preparing the workspace';
+    if (eventType === 'workspace.prepared') return 'Starting Runtime';
+    if (eventType.includes('hook')) return 'Preparing the workspace';
+    if (eventType.includes('turn.started')) return 'Thinking';
+    if (eventType.includes('runtime') && eventType.includes('started'))
+      return 'Starting Runtime';
+    if (eventType.includes('queued') || eventType.includes('leased'))
+      return 'Waiting for a Runtime';
+  }
+  return 'Working';
+}

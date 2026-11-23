@@ -31,6 +31,8 @@ const zhCN: Record<string, string> = {
     '审批设置更新失败，请重试。',
 
   'Waiting for approval': '等待审批',
+  'Waiting for background tasks': '等待后台任务完成',
+  'Finalizing response': '正在收尾',
   'Tool approval': '工具审批',
   'Approve command execution': '批准执行命令',
   'Approve tool execution': '批准使用工具',
@@ -542,7 +544,7 @@ const zhCN: Record<string, string> = {
   'Latest review: {status}': '最近审查：{status}',
   'Needs setup': '待配置',
   'Clear search': '清空搜索',
-  'Dismiss': '关闭',
+  Dismiss: '关闭',
   'Replace callback URL?': '更换回调地址？',
   'The old callback URL will stop working. Update the URL in Codebase after replacing it.':
     '旧回调地址将立即失效。更换后，请同步更新 Codebase 中的地址。',

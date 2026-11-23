@@ -12,10 +12,77 @@ const code = ts.transpileModule(source, {
     module: ts.ModuleKind.ESNext,
   },
 }).outputText;
-const { withRuntimeToolEvents, pendingRunApprovals, currentTurnEvents } =
-  await import(
-    `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
+const {
+  withRuntimeToolEvents,
+  pendingRunApprovals,
+  currentTurnEvents,
+  runActivity,
+} = await import(
+  `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
+);
+
+test('AGY completed text waits for native background tasks', () => {
+  const events = [
+    { sequence: 1, type: 'runtime.antigravity.started' },
+    { sequence: 2, type: 'assistant.message.delta', data: { delta: 'Answer' } },
+    {
+      sequence: 3,
+      type: 'runtime.antigravity.lifecycle',
+      data: { hookEventName: 'Stop', fullyIdle: false },
+    },
+    {
+      sequence: 4,
+      type: 'assistant.message.completed',
+      data: { text: 'Answer', phase: 'commentary' },
+    },
+  ];
+  assert.equal(runActivity(events), 'Waiting for background tasks');
+  events.push({
+    sequence: 5,
+    type: 'runtime.antigravity.lifecycle',
+    data: { hookEventName: 'PreInvocation' },
+  });
+  assert.equal(runActivity(events), 'Thinking');
+  events.push({
+    sequence: 6,
+    type: 'assistant.message.delta',
+    data: { delta: 'More' },
+  });
+  assert.equal(runActivity(events), 'Writing a response');
+  events.push({
+    sequence: 7,
+    type: 'runtime.antigravity.lifecycle',
+    data: { hookEventName: 'Stop', fullyIdle: true },
+  });
+  assert.equal(runActivity(events), 'Finalizing response');
+});
+
+test('AGY waiting preserves pending approval priority', () => {
+  assert.equal(
+    runActivity([
+      {
+        sequence: 1,
+        type: 'interaction.requested',
+        data: { id: 'approval', kind: 'approval', state: 'pending' },
+      },
+      { sequence: 2, type: 'runtime.antigravity.background.waiting' },
+    ]),
+    'Waiting for approval',
   );
+});
+
+test('ordinary response streaming retains its activity label', () => {
+  assert.equal(
+    runActivity([
+      {
+        sequence: 1,
+        type: 'assistant.message.delta',
+        data: { delta: 'Answer' },
+      },
+    ]),
+    'Writing a response',
+  );
+});
 for (const provider of ['qoder', 'qwenwork']) {
   const call = {
     sequence: 1,

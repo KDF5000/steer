@@ -93,6 +93,9 @@ func TestCodebaseOpenAPIReadProtocolAndPagination(t *testing.T) {
 			}
 			fmt.Fprint(w, `{"ResponseMetadata":{"Action":"GetRepository","RequestId":"x"},"Result":{"Repository":{"Id":"7","Path":"org/repo","Name":"repo"}}}`)
 		case "ListRepoMergeRequests":
+			if body["SortBy"] != "UpdatedAt" || body["SortOrder"] != "Desc" {
+				t.Errorf("MR browsing must request newest updates first: %+v", body)
+			}
 			if body["TargetRepoId"] != "7" || body["Status"] != "open" || body["Title"] != "中文 fix" || body["PageNumber"] != float64(2) || body["PageSize"] != float64(20) {
 				t.Errorf("body: %+v", body)
 			}

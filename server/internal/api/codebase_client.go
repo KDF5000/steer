@@ -292,8 +292,8 @@ type codebaseMRListOptions struct {
 }
 
 // codebaseMRListPage reads one page from Codebase for an already resolved
-// repository. Sync uses SortBy=UpdatedAt&SortOrder=Desc so it can stop as soon
-// as it reaches merge requests that were stored by a previous sync.
+// repository. Default to most recently updated first for both browsing and
+// synchronization; sorting upstream keeps that order across page boundaries.
 func codebaseMRListPage(ctx context.Context, baseURL string, credentials codebaseOpenAPICredentials, repo CodebaseRepository, opts codebaseMRListOptions) (CodebaseMergeRequests, error) {
 	result := CodebaseMergeRequests{Items: []CodebaseMergeRequest{}, Page: opts.Page}
 	if opts.Page < 1 || opts.Page > 100000 {
@@ -301,6 +301,12 @@ func codebaseMRListPage(ctx context.Context, baseURL string, credentials codebas
 	}
 	if opts.PageSize <= 0 || opts.PageSize > 100 {
 		opts.PageSize = codebasePageSize
+	}
+	if opts.SortBy == "" {
+		opts.SortBy = "UpdatedAt"
+	}
+	if opts.SortOrder == "" {
+		opts.SortOrder = "Desc"
 	}
 	status, err := codebaseMRStatus(opts.State)
 	if err != nil {

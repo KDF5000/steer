@@ -1102,7 +1102,9 @@
   padding: 5px 10px !important;
 }
 
-.ws-sidebar [data-slot='sidebar-group'] + [data-slot='sidebar-group']:not(.ws-project-navigation) {
+.ws-sidebar
+  [data-slot='sidebar-group']
+  + [data-slot='sidebar-group']:not(.ws-project-navigation) {
   margin-top: 4px;
   padding-top: 10px !important;
   border-top: 1px solid #eceef2;
@@ -12590,6 +12592,13 @@ button.ws-chat-response-meta:focus-visible {
   gap: 10px;
   flex-wrap: wrap;
 }
+.ws-run-detail-eyebrow > .ws-codebase-mr-ref,
+.ws-run-detail-eyebrow > .ws-automation-run-report {
+  line-height: 18px;
+}
+.ws-run-detail-eyebrow > .ws-automation-run-report {
+  margin-top: 0;
+}
 .ws-run-detail-title {
   margin: 0;
   color: var(--ws-text);
@@ -12750,7 +12759,8 @@ button.ws-chat-response-meta:focus-visible {
   border: 1px solid var(--ws-divider);
   border-radius: 5px;
   background: var(--ws-surface-subtle);
-  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family:
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12.5px;
 }
 .ws-run-detail-summary pre {
@@ -12999,7 +13009,8 @@ button.ws-chat-response-meta:focus-visible {
   border-color: currentColor;
 }
 .ws-automation-mono {
-  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family:
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-numeric: tabular-nums;
 }
 .ws-automation-button.is-danger-outline {
@@ -13492,7 +13503,9 @@ button.ws-chat-response-meta:focus-visible {
   font-size: 11.5px;
   font-weight: 540;
   cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
 }
 .ws-session-approval-close:hover:not(:disabled) {
   background: rgb(31 109 73 / 10%);

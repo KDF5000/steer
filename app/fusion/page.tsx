@@ -78,8 +78,10 @@ import { AgentModelPicker } from './agent-model-picker';
 import { LabsView, useWorkspaceLabs } from './labs';
 import { AutomationView } from './automation';
 import hljs from 'highlight.js/lib/common';
+import { executionMachineIP } from '@/lib/execution-machine';
 import {
   currentTurnEvents,
+  runActivity,
   pendingRunApprovals,
   withRuntimeToolEvents,
 } from '@/lib/runtime-events';
@@ -3736,6 +3738,12 @@ export default function Fusion() {
             }}
             sessionTitle={activeChatSession?.title}
             parentConversationId={activeChatSession?.parentConversationId}
+            machineIP={executionMachineIP(
+              runtimeNodes,
+              composerExecutionRuntimeId,
+              selectedProject?.nodeId,
+              currentAgent?.runtimeId,
+            )}
             runtimeLabel={
               collaborationShare?.runtimeLabel ||
               sharedAgentGrant?.runtimeLabel ||
@@ -4477,6 +4485,7 @@ function ChatView({
   sessionTitle,
   parentConversationId,
   runtimeLabel,
+  machineIP,
   sessionLoading,
   input,
   inputRevision,
@@ -4525,6 +4534,7 @@ function ChatView({
   sessionTitle?: string;
   parentConversationId?: string | null;
   runtimeLabel: string;
+  machineIP?: string;
   sessionLoading: boolean;
   input: string;
   inputRevision: number;
@@ -4662,6 +4672,10 @@ function ChatView({
   );
   const projectLabel =
     selectedProject?.workspaceSource || t('No project selected');
+  const projectLocation =
+    machineIP && selectedProject
+      ? `${machineIP} · ${projectLabel}`
+      : projectLabel;
   const scrollArea = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLSpanElement>(null);
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage>();
@@ -4929,12 +4943,12 @@ function ChatView({
             </Button>
             <div className="ws-chat-appbar-context">
               <strong title={conversationTitle}>{conversationTitle}</strong>
-              <span title={projectLabel}>
+              <span title={sharingLabel ? projectLabel : projectLocation}>
                 <Folder aria-hidden="true" />
                 <small>
                   {sharingLabel
                     ? `${sharingLabel} · ${selectedProject?.name || projectLabel}`
-                    : projectLabel}
+                    : projectLocation}
                 </small>
               </span>
             </div>
@@ -9260,43 +9274,6 @@ function responseStatusLabel(message: ChatMessage, now: number) {
   if (message.status === 'failed') return `Failed after ${elapsed}`;
   if (message.status === 'cancelled') return `Stopped after ${elapsed}`;
   return `Working for ${elapsed}`;
-}
-
-function runActivity(events?: RelayEvent[] | null) {
-  if (pendingRunApprovals(events).length) return 'Waiting for approval';
-  for (const event of withRuntimeToolEvents(events).reverse()) {
-    const eventType = event.type.toLowerCase();
-    const item = event.data?.item;
-    const itemType =
-      item && typeof item === 'object' && 'type' in item
-        ? String(item.type)
-            .toLowerCase()
-            .replace(/[^a-z]/g, '')
-        : '';
-    const combined = `${eventType} ${itemType}`;
-    if (combined.includes('agentmessage') || eventType.includes('assistant'))
-      return 'Writing a response';
-    if (combined.includes('command'))
-      return eventType.endsWith('item.started')
-        ? 'Running a command'
-        : 'Thinking';
-    if (combined.includes('filechange') || combined.includes('edit'))
-      return eventType.endsWith('item.started') ? 'Updating files' : 'Thinking';
-    if (combined.includes('websearch') || combined.includes('search'))
-      return eventType.endsWith('item.started') ? 'Searching' : 'Thinking';
-    if (combined.includes('mcp') || combined.includes('tool'))
-      return eventType.endsWith('item.started') ? 'Using a tool' : 'Thinking';
-    if (combined.includes('reasoning')) return 'Thinking';
-    if (eventType === 'workspace.preparing') return 'Preparing the workspace';
-    if (eventType === 'workspace.prepared') return 'Starting Runtime';
-    if (eventType.includes('hook')) return 'Preparing the workspace';
-    if (eventType.includes('turn.started')) return 'Thinking';
-    if (eventType.includes('runtime') && eventType.includes('started'))
-      return 'Starting Runtime';
-    if (eventType.includes('queued') || eventType.includes('leased'))
-      return 'Waiting for a Runtime';
-  }
-  return 'Working';
 }
 
 function runActivityLog(
