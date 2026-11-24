@@ -21,7 +21,8 @@ export type ResourceShare = {
   model?: string;
   agentRole?: string;
   id: string;
-  kind: 'session' | 'agent';
+  kind: 'session' | 'agent' | 'workflow';
+  workspaceName?: string;
   resourceId: string;
   ownerName: string;
   recipientEmail: string;
@@ -190,6 +191,42 @@ export type CodebaseWorkflowRecord = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type SharedWorkflowRecord = {
+  workflow: Pick<
+    CodebaseWorkflowRecord,
+    | 'id'
+    | 'name'
+    | 'repoId'
+    | 'repoPath'
+    | 'enabled'
+    | 'triggerWebhook'
+    | 'reportEnabled'
+    | 'createdAt'
+    | 'updatedAt'
+  >;
+  ownerName: string;
+  workspaceName: string;
+  permission: 'view';
+};
+export type SharedWorkflowRun = Pick<
+  CodebaseRunRecord,
+  | 'id'
+  | 'mrIid'
+  | 'mrTitle'
+  | 'mrUrl'
+  | 'trigger'
+  | 'status'
+  | 'summary'
+  | 'error'
+  | 'conversationId'
+  | 'reportStatus'
+  | 'reportError'
+  | 'reportUrl'
+  | 'startedAt'
+  | 'finishedAt'
+  | 'createdAt'
+>;
 
 export type CodebaseWorkflowInput = {
   name: string;
@@ -685,9 +722,28 @@ export const steer = {
     collaborationScope = id;
   },
   collaboration: () => collaborationScope,
+  sharedWorkflow: (id: string, signal?: AbortSignal) =>
+    request<SharedWorkflowRecord>(
+      `/workflow-shares/${encodeURIComponent(id)}`,
+      { signal },
+    ),
+  sharedWorkflowRuns: (id: string, limit = 100, signal?: AbortSignal) =>
+    request<{ items: SharedWorkflowRun[] }>(
+      `/workflow-shares/${encodeURIComponent(id)}/runs?limit=${encodeURIComponent(String(limit))}`,
+      { signal },
+    ),
+  sharedWorkflowMRs: (
+    id: string,
+    query: { state: string; search: string; page: number },
+    signal?: AbortSignal,
+  ) =>
+    request<CodebaseMergeRequestsRecord & { latestRuns?: SharedWorkflowRun[] }>(
+      `/workflow-shares/${encodeURIComponent(id)}/merge-requests?${new URLSearchParams({ state: query.state, search: query.search, page: String(query.page) })}`,
+      { signal },
+    ),
   resourceShares: () => request<ResourceShare[]>('/resource-shares'),
   inviteResource: (
-    kind: 'session' | 'agent',
+    kind: 'session' | 'agent' | 'workflow',
     id: string,
     input: {
       email: string;

@@ -18,6 +18,71 @@ const storageKey = 'steer.interface-language';
 const languageEvent = 'steer:interface-language';
 
 const zhCN: Record<string, string> = {
+  Result: '结果',
+  'Search merge requests': '搜索 MR',
+  'Workflow read only': '仅查看',
+  'Page {page} · {count} merge requests': '第 {page} 页 · {count} 个 MR',
+
+  'Share workflow': '共享流程',
+  'My workflows': '我的流程',
+  'Workflow source': '流程来源',
+  'View this workflow and its results': '仅查看此流程及其运行结果',
+  'Includes merge requests, run records and linked conversations. Future runs are visible automatically.':
+    '包括 MR、运行记录和关联会话。后续运行自动可见。',
+  'The recipient can accept the invitation in Shared with me after signing in.':
+    '对方登录后，可在「与我共享」中接受邀请。',
+  'The recipient can accept the invitation in Automation after signing in.':
+    '对方登录后，可在「自动化」页面中接受邀请。',
+  'Invitation sent to {email}.': '已向 {email} 发送邀请。',
+  'Confirm revoke': '确认撤销',
+  Ownership: '归属',
+  'My repositories': '我的仓库',
+  'Shared workflows': '与我共享的流程',
+  'View result': '查看结果',
+  'More actions': '更多操作',
+  'Declining…': '正在拒绝…',
+  'Leaving…': '正在退出…',
+  'After declining, this invitation will be removed. Ask the owner to invite you again if needed.':
+    '拒绝后，这条邀请将被移除。之后如需查看，需要请流程所有者重新发送邀请。',
+  'Accepted "{name}".': '已接受「{name}」的共享邀请。',
+  'Left "{name}".': '已退出「{name}」的共享。',
+  'Auto-refresh failed temporarily. Showing the last loaded results.':
+    '自动刷新暂时失败，当前仍显示上次已加载的结果。',
+  'Repository or shared workflow': '仓库 / 共享流程',
+  'No Codebase connection required': '无需配置 Codebase 连接',
+  'Workflow, repository, agent, or owner': '流程、仓库、智能体或共享人',
+  'Future runs are visible automatically': '后续运行自动可见',
+  'Only this workflow is shared. Workspace membership is not granted.':
+    '仅共享此流程，不授予工作区成员权限。',
+  'Revoke access for {name}?': '撤销 {name} 的访问权限？',
+  'No workflows shared with you': '暂无共享给你的流程',
+  'Invitations from other people will appear here.':
+    '其他人邀请你后，流程会出现在这里。',
+  'Workflow or repository': '流程或仓库',
+  '{name} invited you to view {workflow}': '{name} 邀请你查看「{workflow}」',
+  'Accepting…': '正在接受…',
+  'Accept invitation': '接受邀请',
+  Decline: '拒绝',
+  'View workflow': '查看流程',
+  'Shared by {name}': '{name} 共享',
+  'Future runs of shared workflows are visible automatically. No Codebase connection is required.':
+    '共享流程的后续运行自动可见，无需配置 Codebase 连接。',
+  'Decline invitation?': '拒绝此邀请？',
+  'Leave workflow sharing?': '退出流程共享？',
+  'You will no longer be able to view this workflow and its results.':
+    '退出后，你将无法继续查看此流程及其运行结果。',
+  'Shared workflow': '共享流程',
+  'Workflow information': '流程信息',
+  'View merge requests, run records and linked conversations':
+    '查看 MR、运行记录和关联会话',
+  'Contact the owner to re-run reviews or change this workflow.':
+    '需要重跑或调整流程时，请联系流程所有者。',
+  'Review task': '审查任务',
+  'View review result': '查看审查结果',
+  'No review yet': '尚无审查',
+  'The review is still running. Results will appear here.':
+    '审查仍在执行，结果将自动显示在这里。',
+
   'Approving automatically': '正在自动批准',
   'Automatically approving tool request…': '正在自动批准工具请求…',
   'Session auto-approval enabled. Resuming…': '已开启本会话自动批准，正在继续…',
@@ -209,7 +274,7 @@ const zhCN: Record<string, string> = {
   Participating: '我参与的',
   'Shared by me': '我共享的',
   'My Agents': '我的智能体',
-  'Shared with me': '共享给我',
+  'Shared with me': '与我共享',
   'Access shared conversations while keeping your workspace private.':
     '访问共享会话，个人工作区保持私有。',
   'Search shared conversations': '搜索协作会话',

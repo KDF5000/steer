@@ -16,12 +16,16 @@ import {
   Clock,
   Code2,
   Copy,
+  Eye,
   ExternalLink,
   FileText,
   FolderGit2,
   GitBranch,
   History,
+  Info,
   Loader2,
+  LogOut,
+  MoreHorizontal,
   Pencil,
   Play,
   Plus,
@@ -30,6 +34,7 @@ import {
   Search,
   Trash2,
   User,
+  Share2,
   Workflow,
   X,
   XCircle,
@@ -37,8 +42,24 @@ import {
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodebaseWebhookSettings } from './codebase-webhook';
+import {
+  LeaveSharedWorkflowDialog,
+  SharedWorkflowInfoDialog,
+  SharedWorkflowInvitations,
+  sharedWorkflowIdFromKey,
+  sharedWorkflowKey,
+  toSharedRunRecord,
+} from './workflow-sharing';
+import { CollaborationAvatars } from './resource-sharing';
 import { AgentSkillPicker } from './agent-skill-picker';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useI18n } from '@/lib/i18n';
 import type { AgentProfile, RuntimeModel } from '@/lib/domain';
 import {
@@ -50,6 +71,8 @@ import {
   type CodebaseRunRecord,
   type CodebaseWorkflowRecord,
   type SkillRecord,
+  type ResourceShare,
+  type AuthUser,
 } from '@/lib/steer-client';
 import {
   Dialog,
@@ -60,7 +83,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
@@ -169,9 +194,21 @@ export function AutomationView({
   runtimes = [],
   skills = [],
   onRefreshRuntimes,
+  user,
+  shares,
+  sharingError,
+  onRefreshSharing,
+  onShareWorkflow,
+  onOpenSharedConversation,
   onNotice,
 }: {
   scope: string;
+  user: AuthUser;
+  shares: ResourceShare[];
+  sharingError?: string;
+  onRefreshSharing: () => Promise<void>;
+  onShareWorkflow: (workflow: CodebaseWorkflowRecord) => void;
+  onOpenSharedConversation: (share: ResourceShare, id: string) => void;
   agents: AgentProfile[];
   runtimes?: WorkflowRuntime[];
   skills?: SkillRecord[];
@@ -180,7 +217,36 @@ export function AutomationView({
 }) {
   const { t, language } = useI18n();
   const [tab, setTab] = useState<AutomationTab>('flows');
+  const [flowOwner, setFlowOwner] = useState<'all' | 'mine' | 'shared'>('all');
+  const [mrPollWarning, setMRPollWarning] = useState('');
+  const [infoShare, setInfoShare] = useState<ResourceShare | null>(null);
+  const [leaveShare, setLeaveShare] = useState<ResourceShare | null>(null);
   const tabChosen = useRef(false);
+  const incomingWorkflowShares = shares.filter(
+    (share) => share.kind === 'workflow' && !share.owned,
+  );
+  const pendingWorkflowInvites = incomingWorkflowShares.filter(
+    (share) => share.status === 'pending',
+  );
+  const acceptedSharedWorkflows = incomingWorkflowShares.filter(
+    (share) => share.status === 'accepted',
+  );
+  const acceptedSharedKey = acceptedSharedWorkflows
+    .map((share) => share.id)
+    .join(',');
+  const sharedRepoPaths = Array.from(
+    new Set(
+      acceptedSharedWorkflows
+        .map((share) => share.projectSource || '')
+        .filter(Boolean),
+    ),
+  );
+  const incomingWorkflowAvailable = useRef(false);
+  const acceptedSharedRef = useRef(acceptedSharedWorkflows);
+  useEffect(() => {
+    incomingWorkflowAvailable.current = incomingWorkflowShares.length > 0;
+    acceptedSharedRef.current = acceptedSharedWorkflows;
+  }, [incomingWorkflowShares.length, acceptedSharedWorkflows]);
   const [connection, setConnection] = useState<CodebaseConnectionRecord | null>(
     null,
   );
@@ -355,11 +421,18 @@ export function AutomationView({
         const data = await steer.codebaseRepositories(signal);
         if (signal?.aborted) return;
         setRepositories(data.items);
-        setSelectedRepoId((current) =>
-          current && data.items.some((item) => item.repoId === current)
+        setSelectedRepoId((current) => {
+          if (!current) return '';
+          const shareId = sharedWorkflowIdFromKey(current);
+          if (shareId) {
+            return acceptedSharedRef.current.some((item) => item.id === shareId)
+              ? current
+              : '';
+          }
+          return data.items.some((item) => item.repoId === current)
             ? current
-            : '',
-        );
+            : '';
+        });
       } catch (error) {
         if (!signal?.aborted) setReposError(errorText(error));
       } finally {
@@ -396,22 +469,62 @@ export function AutomationView({
       if (!quiet) {
         setFetching(true);
         setMRError('');
+        setMRPollWarning('');
       }
+      const shareId = sharedWorkflowIdFromKey(repoId);
       try {
-        const data = await steer.codebaseMergeRequests(
-          {
-            repoId,
-            state: query.state,
-            search: query.search,
-            page: query.page,
-          },
-          controller.signal,
-        );
-        if (!controller.signal.aborted) setResult(data);
+        if (shareId) {
+          const share = acceptedSharedRef.current.find(
+            (item) => item.id === shareId,
+          );
+          const data = await steer.sharedWorkflowMRs(
+            shareId,
+            {
+              state: query.state,
+              search: query.search,
+              page: query.page,
+            },
+            controller.signal,
+          );
+          if (!controller.signal.aborted) {
+            setResult(data);
+            setMRError('');
+            setMRPollWarning('');
+            if (share && data.latestRuns) {
+              const latest: Record<number, CodebaseRunRecord> = {};
+              for (const item of data.latestRuns) {
+                if (!latest[item.mrIid]) {
+                  latest[item.mrIid] = toSharedRunRecord(item, share);
+                }
+              }
+              setRepoLatestRuns(latest);
+            }
+          }
+        } else {
+          const data = await steer.codebaseMergeRequests(
+            {
+              repoId,
+              state: query.state,
+              search: query.search,
+              page: query.page,
+            },
+            controller.signal,
+          );
+          if (!controller.signal.aborted) {
+            setResult(data);
+            setMRError('');
+            setMRPollWarning('');
+          }
+        }
       } catch (error) {
-        if (!controller.signal.aborted && !quiet) {
-          setResult(null);
-          setMRError(errorText(error));
+        if (!controller.signal.aborted) {
+          if (quiet) {
+            setMRPollWarning(errorText(error));
+          } else {
+            setResult(null);
+            setMRError(errorText(error));
+          }
+          if (shareId) void onRefreshSharing();
         }
       } finally {
         if (mrController.current === controller) {
@@ -420,7 +533,7 @@ export function AutomationView({
         }
       }
     },
-    [errorText],
+    [errorText, onRefreshSharing],
   );
 
   const syncRepo = useCallback(
@@ -488,30 +601,127 @@ export function AutomationView({
         setRunsLoading(true);
         setRunsError('');
       }
+      const shareId = sharedWorkflowIdFromKey(runsWorkflowFilter);
+      const sharedRepoPrefix = 'share-repo:';
+      const selectedSharedRepoPath = runsRepoFilter.startsWith(sharedRepoPrefix)
+        ? runsRepoFilter.slice(sharedRepoPrefix.length)
+        : '';
+      const sortByCreatedDesc = (a: CodebaseRunRecord, b: CodebaseRunRecord) =>
+        Date.parse(b.createdAt) - Date.parse(a.createdAt);
       try {
-        const data = await steer.codebaseRuns(
-          {
-            repoId: runsRepoFilter || undefined,
-            workflowId: runsWorkflowFilter || undefined,
-            limit: runsLimit,
-            sync,
-          },
-          controller.signal,
-        );
-        if (!controller.signal.aborted) {
-          setRuns(data.items);
-          setRunClock(Date.now());
-          setRunsError('');
+        if (shareId) {
+          const share = acceptedSharedRef.current.find(
+            (item) => item.id === shareId,
+          );
+          const data = await steer.sharedWorkflowRuns(
+            shareId,
+            runsLimit,
+            controller.signal,
+          );
+          if (!controller.signal.aborted) {
+            setRuns(
+              share
+                ? data.items.map((item) => toSharedRunRecord(item, share))
+                : [],
+            );
+            setRunClock(Date.now());
+            setRunsError('');
+          }
+        } else if (selectedSharedRepoPath) {
+          const matchingShares = acceptedSharedRef.current.filter(
+            (item) => (item.projectSource || '') === selectedSharedRepoPath,
+          );
+          const results = await Promise.allSettled(
+            matchingShares.map(async (share) => {
+              const data = await steer.sharedWorkflowRuns(
+                share.id,
+                runsLimit,
+                controller.signal,
+              );
+              return data.items.map((item) => toSharedRunRecord(item, share));
+            }),
+          );
+          if (!controller.signal.aborted) {
+            const merged = results
+              .flatMap((res) => (res.status === 'fulfilled' ? res.value : []))
+              .sort(sortByCreatedDesc);
+            setRuns(merged);
+            setRunClock(Date.now());
+            setRunsError('');
+            if (results.some((res) => res.status === 'rejected')) {
+              void onRefreshSharing();
+            }
+          }
+        } else if (!runsRepoFilter && !runsWorkflowFilter) {
+          const [ownResult, ...sharedResults] = await Promise.allSettled([
+            steer.codebaseRuns({ limit: runsLimit, sync }, controller.signal),
+            ...acceptedSharedRef.current.map(async (share) => {
+              const data = await steer.sharedWorkflowRuns(
+                share.id,
+                runsLimit,
+                controller.signal,
+              );
+              return data.items.map((item) => toSharedRunRecord(item, share));
+            }),
+          ]);
+          if (!controller.signal.aborted) {
+            const ownItems =
+              ownResult.status === 'fulfilled' ? ownResult.value.items : [];
+            const sharedItems = sharedResults.flatMap((res) =>
+              res.status === 'fulfilled' ? res.value : [],
+            );
+            const merged = [...ownItems, ...sharedItems].sort(
+              sortByCreatedDesc,
+            );
+            setRuns(merged);
+            setRunClock(Date.now());
+            if (
+              ownResult.status === 'rejected' &&
+              sharedItems.length === 0 &&
+              !quiet
+            ) {
+              setRunsError(errorText(ownResult.reason));
+            } else {
+              setRunsError('');
+            }
+            if (sharedResults.some((res) => res.status === 'rejected')) {
+              void onRefreshSharing();
+            }
+          }
+        } else {
+          const data = await steer.codebaseRuns(
+            {
+              repoId: runsRepoFilter || undefined,
+              workflowId: runsWorkflowFilter || undefined,
+              limit: runsLimit,
+              sync,
+            },
+            controller.signal,
+          );
+          if (!controller.signal.aborted) {
+            setRuns(data.items);
+            setRunClock(Date.now());
+            setRunsError('');
+          }
         }
       } catch (error) {
-        if (!controller.signal.aborted) setRunsError(errorText(error));
+        if (!controller.signal.aborted) {
+          if (!quiet) setRunsError(errorText(error));
+          if (shareId) void onRefreshSharing();
+        }
       } finally {
         // Switching the repository filter aborts the previous request; only the
         // latest request owns the loading state.
         if (runsController.current === controller) setRunsLoading(false);
       }
     },
-    [runsRepoFilter, runsWorkflowFilter, runsLimit, errorText],
+    [
+      runsRepoFilter,
+      runsWorkflowFilter,
+      runsLimit,
+      errorText,
+      onRefreshSharing,
+    ],
   );
 
   useEffect(() => {
@@ -527,7 +737,12 @@ export function AutomationView({
       .then((saved) => {
         if (!controller.signal.aborted) {
           setConnection(saved);
-          if (!saved && !tabChosen.current) setTab('codebase');
+          if (
+            !saved &&
+            !tabChosen.current &&
+            !incomingWorkflowAvailable.current
+          )
+            setTab('codebase');
         }
       })
       .catch((error: unknown) => {
@@ -535,7 +750,8 @@ export function AutomationView({
           setConnectionError(
             error instanceof Error ? error.message : 'Request failed.',
           );
-          if (!tabChosen.current) setTab('codebase');
+          if (!tabChosen.current && !incomingWorkflowAvailable.current)
+            setTab('codebase');
         }
       })
       .finally(() => {
@@ -569,10 +785,20 @@ export function AutomationView({
     });
   }, [loadWorkflows, loadRepositories, loadRuns]);
 
+  useEffect(() => {
+    if (!acceptedSharedKey || tab !== 'runs') return;
+    void Promise.resolve().then(() => loadRuns(false, true));
+  }, [acceptedSharedKey, tab, loadRuns]);
+
   // Quietly load recent runs for the selected repository on the MR tab so each
   // MR row can display its latest review status without switching tabs.
   useEffect(() => {
-    if (tab !== 'mrs' || !selectedRepoId) return;
+    if (
+      tab !== 'mrs' ||
+      !selectedRepoId ||
+      Boolean(sharedWorkflowIdFromKey(selectedRepoId))
+    )
+      return;
     const controller = new AbortController();
     steer
       .codebaseRuns({ repoId: selectedRepoId, limit: 100 }, controller.signal)
@@ -637,9 +863,10 @@ export function AutomationView({
       const query = activeMRQuery.current;
       if (!query) return;
       refreshing = true;
+      const isShared = Boolean(sharedWorkflowIdFromKey(selectedRepoId));
       void Promise.all([
         loadMRs(selectedRepoId, query, true),
-        loadRepositories(controller.signal, true),
+        ...(isShared ? [] : [loadRepositories(controller.signal, true)]),
       ]).finally(() => {
         refreshing = false;
       });
@@ -653,15 +880,20 @@ export function AutomationView({
     };
   }, [tab, selectedRepoId, hasMRPage, loadMRs, loadRepositories]);
 
-  // Select the first bound repository when opening the merge request tab.
+  // Select the first bound repository or shared workflow when opening the MR tab.
   useEffect(() => {
-    if (tab !== 'mrs' || selectedRepoId || repositories.length === 0) return;
-    const first = repositories[0].repoId;
+    if (tab !== 'mrs' || selectedRepoId) return;
+    const first =
+      repositories[0]?.repoId ||
+      (acceptedSharedWorkflows[0]
+        ? sharedWorkflowKey(acceptedSharedWorkflows[0].id)
+        : '');
+    if (!first) return;
     void Promise.resolve().then(() => {
       setResult(null);
       setSelectedRepoId(first);
     });
-  }, [tab, selectedRepoId, repositories]);
+  }, [tab, selectedRepoId, repositories, acceptedSharedWorkflows]);
 
   // A repository can disappear when its last workflow is deleted. Drop the
   // stale merge request page so it is not rendered under another repository.
@@ -670,14 +902,23 @@ export function AutomationView({
     void Promise.resolve().then(() => {
       setResult(null);
       setMRError('');
+      setMRPollWarning('');
     });
   }, [selectedRepoId]);
 
-  // Load a repository once it becomes selected. Repositories without a sync
-  // cursor are synced first so the list is never silently empty.
+  // Load a repository or shared workflow once it becomes selected.
   useEffect(() => {
     if (!selectedRepoId) {
       loadedRepo.current = '';
+      return;
+    }
+    const shareId = sharedWorkflowIdFromKey(selectedRepoId);
+    if (shareId) {
+      if (loadedRepo.current === selectedRepoId) return;
+      loadedRepo.current = selectedRepoId;
+      void Promise.resolve().then(() =>
+        loadMRs(selectedRepoId, { state: 'all', search: '', page: 1 }),
+      );
       return;
     }
     const repo = repositories.find((item) => item.repoId === selectedRepoId);
@@ -1051,8 +1292,16 @@ export function AutomationView({
     setRepoLatestRuns({});
     setResult(null);
     setMRError('');
+    setMRPollWarning('');
     setSearch('');
-    setMRState('opened');
+    const isShared = Boolean(sharedWorkflowIdFromKey(repoId));
+    const initialState = isShared ? 'all' : 'opened';
+    setMRState(initialState);
+    if (isShared) {
+      loadedRepo.current = repoId;
+      void loadMRs(repoId, { state: initialState, search: '', page: 1 });
+      return;
+    }
     const repo = repositories.find((item) => item.repoId === repoId);
     if (!repo) {
       // The repository list is still refreshing; the selection effect loads it
@@ -1208,18 +1457,47 @@ export function AutomationView({
   const selectedRepo = repositories.find(
     (item) => item.repoId === selectedRepoId,
   );
+  const selectedMRShare =
+    acceptedSharedWorkflows.find(
+      (item) => sharedWorkflowKey(item.id) === selectedRepoId,
+    ) || null;
+  const selectedRunsShare =
+    acceptedSharedWorkflows.find(
+      (item) => sharedWorkflowKey(item.id) === runsWorkflowFilter,
+    ) || null;
   const runStatusLabel = (value: string) => t(RUN_STATUS_LABEL[value] || value);
-  const visibleWorkflows = workflows.filter((workflow) => {
-    const needle = flowSearch.trim().toLowerCase();
-    const agent = agents.find((item) => item.id === workflow.agentId);
-    return (
-      (flowState === 'all' || workflow.enabled === (flowState === 'enabled')) &&
-      (!needle ||
-        [workflow.name, workflow.repoPath, agent?.name || ''].some((value) =>
-          value.toLowerCase().includes(needle),
-        ))
-    );
-  });
+  const flowNeedle = flowSearch.trim().toLowerCase();
+  const visibleWorkflows =
+    flowOwner === 'shared'
+      ? []
+      : workflows.filter((workflow) => {
+          const agent = agents.find((item) => item.id === workflow.agentId);
+          return (
+            (flowState === 'all' ||
+              workflow.enabled === (flowState === 'enabled')) &&
+            (!flowNeedle ||
+              [workflow.name, workflow.repoPath, agent?.name || ''].some(
+                (value) => value.toLowerCase().includes(flowNeedle),
+              ))
+          );
+        });
+  const visibleSharedWorkflows =
+    flowOwner === 'mine'
+      ? []
+      : acceptedSharedWorkflows.filter(
+          (share) =>
+            !flowNeedle ||
+            [
+              share.resourceName,
+              share.projectSource || '',
+              share.ownerName,
+              share.workspaceName || '',
+            ].some((value) => value.toLowerCase().includes(flowNeedle)),
+        );
+  const totalVisibleWorkflows =
+    visibleWorkflows.length + visibleSharedWorkflows.length;
+  const hasAnyWorkflows =
+    workflows.length > 0 || acceptedSharedWorkflows.length > 0;
   const visibleRuns = runs.filter(
     (run) =>
       runsResultFilter === 'all' ||
@@ -1265,6 +1543,11 @@ export function AutomationView({
   const detailWorkflow = detailRun
     ? workflows.find((item) => item.id === detailRun.workflowId)
     : undefined;
+  const detailShare = detailRun
+    ? acceptedSharedWorkflows.find(
+        (item) => sharedWorkflowKey(item.id) === detailRun.workflowId,
+      ) || null
+    : null;
   const detailLog = detailRun?.error ? cleanRunLog(detailRun.error) : '';
   const conversationURL = (conversationId: string) =>
     `${window.location.origin}${window.location.pathname}#chat/${conversationId}`;
@@ -1335,6 +1618,11 @@ export function AutomationView({
           {automationTabs.map(({ value, label }) => (
             <TabsTrigger key={value} value={value}>
               {t(label)}
+              {value === 'flows' && pendingWorkflowInvites.length > 0 && (
+                <span className="ws-automation-tab-pill">
+                  {pendingWorkflowInvites.length}
+                </span>
+              )}
               {value === 'runs' && activeRunCount > 0 && (
                 <span className="ws-automation-tab-pill">{activeRunCount}</span>
               )}
@@ -1589,7 +1877,7 @@ export function AutomationView({
         {/* Merge requests: repository-centric, database-backed */}
         <TabsContent value="mrs" hidden={tab !== 'mrs'}>
           <section className="ws-automation-mrs">
-            {!connection ? (
+            {!connection && acceptedSharedWorkflows.length === 0 ? (
               <div className="ws-automation-empty is-small">
                 <Code2 aria-hidden="true" />
                 <h2>{t('Connect Codebase first')}</h2>
@@ -1606,7 +1894,7 @@ export function AutomationView({
                   {t('Go to connection settings')}
                 </button>
               </div>
-            ) : reposLoading ? (
+            ) : reposLoading && acceptedSharedWorkflows.length === 0 ? (
               <output
                 className="ws-automation-skeleton"
                 aria-label={t('Loading…')}
@@ -1615,7 +1903,8 @@ export function AutomationView({
                 <div />
                 <div />
               </output>
-            ) : repositories.length === 0 ? (
+            ) : repositories.length === 0 &&
+              acceptedSharedWorkflows.length === 0 ? (
               reposError ? (
                 <p className="ws-automation-error" role="alert">
                   <AlertCircle aria-hidden="true" />
@@ -1647,24 +1936,52 @@ export function AutomationView({
               <>
                 <div className="ws-automation-mr-toolbar">
                   <label className="ws-automation-repo-picker">
-                    <span>{t('Repository')}</span>
+                    <span>
+                      {t(
+                        acceptedSharedWorkflows.length > 0
+                          ? 'Repository or shared workflow'
+                          : 'Repository',
+                      )}
+                    </span>
                     <Select
                       value={selectedRepoId}
                       onValueChange={(value) => selectRepo(String(value))}
                     >
                       <SelectTrigger>
                         <span>
-                          {selectedRepo
-                            ? selectedRepo.repoPath
-                            : t('Select a repository')}
+                          {selectedMRShare
+                            ? `${selectedMRShare.resourceName} (${selectedMRShare.ownerName})`
+                            : selectedRepo
+                              ? selectedRepo.repoPath
+                              : t('Select a repository')}
                         </span>
                       </SelectTrigger>
                       <SelectContent className="ws-select-popup">
-                        {repositories.map((repo) => (
-                          <SelectItem key={repo.repoId} value={repo.repoId}>
-                            {repo.repoPath} · {repo.openCount} {t('open')}
-                          </SelectItem>
-                        ))}
+                        {repositories.length > 0 && (
+                          <SelectGroup>
+                            {acceptedSharedWorkflows.length > 0 && (
+                              <SelectLabel>{t('My repositories')}</SelectLabel>
+                            )}
+                            {repositories.map((repo) => (
+                              <SelectItem key={repo.repoId} value={repo.repoId}>
+                                {repo.repoPath} · {repo.openCount} {t('open')}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                        {acceptedSharedWorkflows.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>{t('Shared workflows')}</SelectLabel>
+                            {acceptedSharedWorkflows.map((share) => (
+                              <SelectItem
+                                key={share.id}
+                                value={sharedWorkflowKey(share.id)}
+                              >
+                                {share.resourceName} ({share.ownerName})
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
                       </SelectContent>
                     </Select>
                   </label>
@@ -1702,7 +2019,7 @@ export function AutomationView({
                       )}
                     </div>
                   </label>
-                  {runCandidates.length > 1 && (
+                  {!selectedMRShare && runCandidates.length > 1 && (
                     <AutomationFilter
                       label={t('Review workflow')}
                       value={
@@ -1750,26 +2067,101 @@ export function AutomationView({
                       </SelectContent>
                     </Select>
                   </label>
-                  <button
-                    type="button"
-                    className="ws-automation-button ws-automation-sync-button"
-                    onClick={() => void syncRepo(selectedRepoId)}
-                    disabled={Boolean(syncingRepoId) || !selectedRepoId}
-                    title={t(
-                      'Fetch new updates from Codebase. Known merge requests are not re-imported.',
-                    )}
-                  >
-                    <RefreshCw
-                      aria-hidden="true"
-                      className={
-                        syncingRepoId === selectedRepoId
-                          ? 'is-spinning'
-                          : undefined
+                  {selectedMRShare ? (
+                    <button
+                      type="button"
+                      className="ws-automation-button ws-automation-sync-button"
+                      onClick={() =>
+                        void loadMRs(selectedRepoId, {
+                          state: mrState,
+                          search: search.trim(),
+                          page: result?.page || 1,
+                        })
                       }
-                    />
-                    {t(syncingRepoId === selectedRepoId ? 'Syncing…' : 'Sync')}
-                  </button>
+                      disabled={fetching}
+                    >
+                      <RefreshCw
+                        aria-hidden="true"
+                        className={fetching ? 'is-spinning' : undefined}
+                      />
+                      {t(fetching ? 'Refreshing…' : 'Refresh')}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ws-automation-button ws-automation-sync-button"
+                      onClick={() => void syncRepo(selectedRepoId)}
+                      disabled={Boolean(syncingRepoId) || !selectedRepoId}
+                      title={t(
+                        'Fetch new updates from Codebase. Known merge requests are not re-imported.',
+                      )}
+                    >
+                      <RefreshCw
+                        aria-hidden="true"
+                        className={
+                          syncingRepoId === selectedRepoId
+                            ? 'is-spinning'
+                            : undefined
+                        }
+                      />
+                      {t(
+                        syncingRepoId === selectedRepoId ? 'Syncing…' : 'Sync',
+                      )}
+                    </button>
+                  )}
                 </div>
+
+                {selectedMRShare && (
+                  <div className="ws-workflow-readonly-strip">
+                    <span className="ws-workflow-readonly-strip-copy">
+                      <span className="ws-automation-badge">
+                        <Eye aria-hidden="true" />
+                        {t('Workflow read only')}
+                      </span>
+                      <span>
+                        {t('Shared by {name}', {
+                          name: selectedMRShare.ownerName,
+                        })}
+                        {selectedMRShare.projectSource
+                          ? ` · ${selectedMRShare.projectSource}`
+                          : ''}
+                        {' · '}
+                        {t('No Codebase connection required')}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      className="ws-automation-text-action"
+                      onClick={() => setInfoShare(selectedMRShare)}
+                    >
+                      {t('Workflow information')}
+                    </button>
+                  </div>
+                )}
+
+                {mrPollWarning && (
+                  <output className="ws-workflow-poll-warning">
+                    <span>
+                      <AlertCircle aria-hidden="true" />
+                      {t(
+                        'Auto-refresh failed temporarily. Showing the last loaded results.',
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      className="ws-automation-text-action"
+                      onClick={() =>
+                        void loadMRs(selectedRepoId, {
+                          state: mrState,
+                          search: search.trim(),
+                          page: result?.page || 1,
+                        })
+                      }
+                    >
+                      {t('Retry')}
+                    </button>
+                  </output>
+                )}
 
                 {lastStartedRun && lastStartedRun.repoId === selectedRepoId && (
                   <output className="ws-automation-started-notice">
@@ -1926,32 +2318,52 @@ export function AutomationView({
                             {stateName(mr.state)}
                           </span>
                           <div className="ws-automation-mr-actions">
-                            <button
-                              type="button"
-                              className="ws-automation-button is-compact"
-                              onClick={() => requestRun(mr)}
-                              disabled={
-                                submittingRun !== null ||
-                                runCandidates.length === 0
-                              }
-                              title={
-                                runCandidates.length === 0
-                                  ? t(
-                                      'Create an enabled workflow for this repository first.',
-                                    )
-                                  : t('Run review')
-                              }
-                            >
-                              {submittingRun === mr.iid ? (
-                                <Loader2
-                                  aria-hidden="true"
-                                  className="is-spinning"
-                                />
+                            {selectedMRShare ? (
+                              latestRun ? (
+                                <button
+                                  type="button"
+                                  className="ws-automation-button is-compact"
+                                  onClick={() => {
+                                    setDetailCopied(false);
+                                    setDetailRun(latestRun);
+                                  }}
+                                >
+                                  <FileText aria-hidden="true" />
+                                  {t('View result')}
+                                </button>
                               ) : (
-                                <Play aria-hidden="true" />
-                              )}
-                              {t('Run review')}
-                            </button>
+                                <span className="ws-automation-filter-count">
+                                  {t('No review yet')}
+                                </span>
+                              )
+                            ) : (
+                              <button
+                                type="button"
+                                className="ws-automation-button is-compact"
+                                onClick={() => requestRun(mr)}
+                                disabled={
+                                  submittingRun !== null ||
+                                  runCandidates.length === 0
+                                }
+                                title={
+                                  runCandidates.length === 0
+                                    ? t(
+                                        'Create an enabled workflow for this repository first.',
+                                      )
+                                    : t('Run review')
+                                }
+                              >
+                                {submittingRun === mr.iid ? (
+                                  <Loader2
+                                    aria-hidden="true"
+                                    className="is-spinning"
+                                  />
+                                ) : (
+                                  <Play aria-hidden="true" />
+                                )}
+                                {t('Run review')}
+                              </button>
+                            )}
                             {mr.web_url && (
                               <a
                                 className="ws-automation-icon-action"
@@ -1971,61 +2383,65 @@ export function AutomationView({
                   </div>
                 ) : (
                   !mrError &&
-                  selectedRepo && (
+                  (selectedRepo || selectedMRShare) && (
                     <div className="ws-automation-empty is-small">
                       <GitBranch aria-hidden="true" />
                       <h2>{t('No matching merge requests')}</h2>
                       <p>
-                        {selectedRepo.lastSyncedAt
-                          ? t(
-                              'No merge requests match the current filters. Sync to check for updates.',
-                            )
-                          : t(
-                              'Sync this repository to import its merge requests.',
-                            )}
+                        {selectedMRShare
+                          ? t('No merge requests match the current filters.')
+                          : selectedRepo?.lastSyncedAt
+                            ? t(
+                                'No merge requests match the current filters. Sync to check for updates.',
+                              )
+                            : t(
+                                'Sync this repository to import its merge requests.',
+                              )}
                       </p>
                     </div>
                   )
                 )}
 
-                {!fetching && result && (
-                  <div className="ws-automation-pagination">
-                    <span>
-                      {t('Page')} {result.page} · {result.total}{' '}
-                      {t('merge requests')}
-                    </span>
-                    <div className="ws-automation-actions">
-                      <button
-                        type="button"
-                        className="ws-automation-button"
-                        disabled={result.page <= 1}
-                        onClick={() =>
-                          void loadMRs(selectedRepoId, {
-                            state: mrState,
-                            search: search.trim(),
-                            page: result.page - 1,
-                          })
-                        }
-                      >
-                        {t('Previous')}
-                      </button>
-                      <button
-                        type="button"
-                        className="ws-automation-button"
-                        disabled={!result.nextPage}
-                        onClick={() =>
-                          void loadMRs(selectedRepoId, {
-                            state: mrState,
-                            search: search.trim(),
-                            page: result.nextPage || result.page + 1,
-                          })
-                        }
-                      >
-                        {t('Next')}
-                      </button>
+                {!fetching &&
+                  result &&
+                  (result.page > 1 || Boolean(result.nextPage)) && (
+                    <div className="ws-automation-pagination">
+                      <span>
+                        {t('Page')} {result.page} · {result.total}{' '}
+                        {t('merge requests')}
+                      </span>
+                      <div className="ws-automation-actions">
+                        <button
+                          type="button"
+                          className="ws-automation-button"
+                          disabled={result.page <= 1}
+                          onClick={() =>
+                            void loadMRs(selectedRepoId, {
+                              state: mrState,
+                              search: search.trim(),
+                              page: result.page - 1,
+                            })
+                          }
+                        >
+                          {t('Previous')}
+                        </button>
+                        <button
+                          type="button"
+                          className="ws-automation-button"
+                          disabled={!result.nextPage}
+                          onClick={() =>
+                            void loadMRs(selectedRepoId, {
+                              state: mrState,
+                              search: search.trim(),
+                              page: result.nextPage || result.page + 1,
+                            })
+                          }
+                        >
+                          {t('Next')}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </>
             )}
           </section>
@@ -2033,6 +2449,23 @@ export function AutomationView({
 
         {/* Workflows are the daily entry point; connection setup is separate. */}
         <TabsContent value="flows" hidden={tab !== 'flows'}>
+          {sharingError && (
+            <p className="ws-form-error" role="alert">
+              {sharingError}
+              <button
+                type="button"
+                className="ws-automation-text-action"
+                onClick={() => void onRefreshSharing()}
+              >
+                {t('Retry')}
+              </button>
+            </p>
+          )}
+          <SharedWorkflowInvitations
+            invitations={pendingWorkflowInvites}
+            onRefresh={onRefreshSharing}
+            onNotice={onNotice}
+          />
           {recentlyCreatedWorkflow && (
             <output className="ws-automation-created-banner">
               <CheckCircle2 aria-hidden="true" />
@@ -2067,7 +2500,7 @@ export function AutomationView({
               </div>
             </output>
           )}
-          {workflows.length > 0 && (
+          {hasAnyWorkflows && (
             <div className="ws-automation-filterbar">
               <label className="ws-automation-filter ws-automation-filter-search">
                 <span>{t('Search workflows')}</span>
@@ -2078,7 +2511,11 @@ export function AutomationView({
                     maxLength={200}
                     value={flowSearch}
                     onChange={(event) => setFlowSearch(event.target.value)}
-                    placeholder={t('Workflow, repository, or agent')}
+                    placeholder={t(
+                      acceptedSharedWorkflows.length > 0
+                        ? 'Workflow, repository, agent, or owner'
+                        : 'Workflow, repository, or agent',
+                    )}
                     aria-label={t('Search workflows')}
                   />
                   {flowSearch && (
@@ -2092,18 +2529,34 @@ export function AutomationView({
                   )}
                 </search>
               </label>
-              <AutomationFilter
-                label={t('Status')}
-                value={flowState}
-                onChange={setFlowState}
-                options={[
-                  { value: 'all', label: t('All workflows') },
-                  { value: 'enabled', label: t('Enabled') },
-                  { value: 'disabled', label: t('Paused') },
-                ]}
-              />
+              {acceptedSharedWorkflows.length > 0 && (
+                <AutomationFilter
+                  label={t('Ownership')}
+                  value={flowOwner}
+                  onChange={(value) =>
+                    setFlowOwner(value as 'all' | 'mine' | 'shared')
+                  }
+                  options={[
+                    { value: 'all', label: t('All workflows') },
+                    { value: 'mine', label: t('My workflows') },
+                    { value: 'shared', label: t('Shared with me') },
+                  ]}
+                />
+              )}
+              {flowOwner !== 'shared' && workflows.length > 0 && (
+                <AutomationFilter
+                  label={t('Status')}
+                  value={flowState}
+                  onChange={setFlowState}
+                  options={[
+                    { value: 'all', label: t('All workflows') },
+                    { value: 'enabled', label: t('Enabled') },
+                    { value: 'disabled', label: t('Paused') },
+                  ]}
+                />
+              )}
               <span className="ws-automation-filter-count">
-                {t('{count} workflows', { count: visibleWorkflows.length })}
+                {t('{count} workflows', { count: totalVisibleWorkflows })}
               </span>
             </div>
           )}
@@ -2120,7 +2573,7 @@ export function AutomationView({
               </button>
             </p>
           )}
-          {loading || workflowsLoading ? (
+          {(loading || workflowsLoading) && !hasAnyWorkflows ? (
             <output
               className="ws-automation-skeleton"
               aria-label={t('Loading…')}
@@ -2128,7 +2581,7 @@ export function AutomationView({
               <div />
               <div />
             </output>
-          ) : workflows.length === 0 && !workflowsError ? (
+          ) : !hasAnyWorkflows && !workflowsError ? (
             <div className="ws-automation-empty">
               <Workflow aria-hidden="true" />
               <h2>{t('No review workflows')}</h2>
@@ -2150,7 +2603,7 @@ export function AutomationView({
                 {t(connection ? 'New workflow' : 'Connect Codebase')}
               </button>
             </div>
-          ) : visibleWorkflows.length === 0 && workflows.length > 0 ? (
+          ) : totalVisibleWorkflows === 0 && hasAnyWorkflows ? (
             <div className="ws-automation-empty is-small">
               <Search aria-hidden="true" />
               <h2>{t('No matching workflows')}</h2>
@@ -2160,6 +2613,7 @@ export function AutomationView({
                 onClick={() => {
                   setFlowSearch('');
                   setFlowState('all');
+                  setFlowOwner('all');
                 }}
               >
                 {t('Clear filters')}
@@ -2170,6 +2624,10 @@ export function AutomationView({
               {visibleWorkflows.map((wf) => {
                 const agent = agents.find((a) => a.id === wf.agentId);
                 const isToggling = Boolean(togglingWorkflows[wf.id]);
+                const members = shares.filter(
+                  (s) =>
+                    s.owned && s.kind === 'workflow' && s.resourceId === wf.id,
+                );
                 return (
                   <div
                     key={wf.id}
@@ -2220,12 +2678,31 @@ export function AutomationView({
                         </span>
                         {!!wf.skillIds?.length && (
                           <span>
-                            {t('{count} Skills', { count: wf.skillIds.length })}
+                            {t('{count} Skills', {
+                              count: wf.skillIds.length,
+                            })}
                           </span>
                         )}
                       </div>
                     </div>
                     <div className="ws-automation-workflow-actions">
+                      {members.length > 0 ? (
+                        <CollaborationAvatars
+                          members={members}
+                          user={user}
+                          onClick={() => onShareWorkflow(wf)}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className="ws-automation-icon-action"
+                          onClick={() => onShareWorkflow(wf)}
+                          aria-label={t('Share workflow')}
+                          title={t('Share workflow')}
+                        >
+                          <Share2 aria-hidden="true" />
+                        </button>
+                      )}
                       <Switch
                         checked={wf.enabled}
                         disabled={isToggling}
@@ -2240,6 +2717,7 @@ export function AutomationView({
                         type="button"
                         className="ws-automation-button is-compact"
                         onClick={() => {
+                          tabChosen.current = true;
                           setTab('mrs');
                           selectRepo(wf.repoId);
                           setPreferredWorkflowId(wf.id);
@@ -2248,39 +2726,143 @@ export function AutomationView({
                         <Play aria-hidden="true" />
                         {t('Run review')}
                       </button>
-                      <button
-                        type="button"
-                        className="ws-automation-icon-action"
-                        onClick={() => showWorkflowRuns(wf)}
-                        title={t('Run records')}
-                        aria-label={t('Run records')}
-                      >
-                        <History aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        className="ws-automation-icon-action"
-                        onClick={() => openWorkflowDialog(wf)}
-                        disabled={isToggling}
-                        title={t('Edit')}
-                        aria-label={t('Edit')}
-                      >
-                        <Pencil aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        className="ws-automation-icon-action is-danger"
-                        onClick={() => setDeleteTarget(wf)}
-                        disabled={isToggling}
-                        title={t('Delete workflow')}
-                        aria-label={t('Delete workflow')}
-                      >
-                        <Trash2 aria-hidden="true" />
-                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          className="ws-automation-icon-action"
+                          aria-label={t('More actions')}
+                          title={t('More actions')}
+                        >
+                          <MoreHorizontal aria-hidden="true" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => showWorkflowRuns(wf)}
+                          >
+                            <History aria-hidden="true" />
+                            {t('Run records')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onShareWorkflow(wf)}>
+                            <Share2 aria-hidden="true" />
+                            {t('Share workflow')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={isToggling}
+                            onClick={() => openWorkflowDialog(wf)}
+                          >
+                            <Pencil aria-hidden="true" />
+                            {t('Edit')}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            disabled={isToggling}
+                            onClick={() => setDeleteTarget(wf)}
+                          >
+                            <Trash2 aria-hidden="true" />
+                            {t('Delete workflow')}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 );
               })}
+              {visibleSharedWorkflows.map((share) => (
+                <div
+                  key={sharedWorkflowKey(share.id)}
+                  className="ws-automation-workflow-row"
+                >
+                  <div className="ws-automation-workflow-main">
+                    <div className="ws-automation-workflow-title">
+                      <button
+                        type="button"
+                        className="ws-automation-title-button"
+                        onClick={() => {
+                          tabChosen.current = true;
+                          setTab('mrs');
+                          selectRepo(sharedWorkflowKey(share.id));
+                        }}
+                      >
+                        {share.resourceName}
+                      </button>
+                      <span className="ws-automation-badge">
+                        <Eye aria-hidden="true" />
+                        {t('Workflow read only')}
+                      </span>
+                    </div>
+                    <p className="ws-automation-workflow-repo">
+                      <GitBranch aria-hidden="true" />
+                      {share.projectSource}
+                    </p>
+                    <div className="ws-automation-workflow-meta">
+                      <span>
+                        <Share2 aria-hidden="true" />
+                        {t('Shared by {name}', { name: share.ownerName })}
+                      </span>
+                      {share.workspaceName && (
+                        <span>{share.workspaceName}</span>
+                      )}
+                      <span>{t('Future runs are visible automatically')}</span>
+                    </div>
+                  </div>
+                  <div className="ws-automation-workflow-actions">
+                    <button
+                      type="button"
+                      className="ws-automation-button is-compact"
+                      onClick={() => {
+                        tabChosen.current = true;
+                        setTab('mrs');
+                        selectRepo(sharedWorkflowKey(share.id));
+                      }}
+                    >
+                      <GitBranch aria-hidden="true" />
+                      {t('View MRs')}
+                    </button>
+                    <button
+                      type="button"
+                      className="ws-automation-button is-compact"
+                      onClick={() => {
+                        tabChosen.current = true;
+                        setRunsRepoFilter(
+                          share.projectSource
+                            ? `share-repo:${share.projectSource}`
+                            : '',
+                        );
+                        setRunsWorkflowFilter(sharedWorkflowKey(share.id));
+                        setRunsResultFilter('all');
+                        setRunsLimit(100);
+                        setTab('runs');
+                      }}
+                    >
+                      <History aria-hidden="true" />
+                      {t('Run records')}
+                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        className="ws-automation-icon-action"
+                        aria-label={t('More actions')}
+                        title={t('More actions')}
+                      >
+                        <MoreHorizontal aria-hidden="true" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setInfoShare(share)}>
+                          <Info aria-hidden="true" />
+                          {t('Workflow information')}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => setLeaveShare(share)}
+                        >
+                          <LogOut aria-hidden="true" />
+                          {t('Leave sharing')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </TabsContent>
@@ -2288,40 +2870,143 @@ export function AutomationView({
         {/* Run records: filterable by repository */}
         <TabsContent value="runs" hidden={tab !== 'runs'}>
           <div className="ws-automation-filterbar">
-            <AutomationFilter
-              label={t('Repository')}
-              value={runsRepoFilter || allRepositoriesValue}
-              options={[
-                { value: allRepositoriesValue, label: t('All repositories') },
-                ...repositories.map((repo) => ({
-                  value: repo.repoId,
-                  label: repo.repoPath,
-                })),
-              ]}
-              onChange={(value) => {
-                setRunsRepoFilter(value === allRepositoriesValue ? '' : value);
-                setRunsWorkflowFilter('');
-                setRunsLimit(100);
-              }}
-            />
-            <AutomationFilter
-              label={t('Workflow')}
-              value={runsWorkflowFilter || allRepositoriesValue}
-              options={[
-                { value: allRepositoriesValue, label: t('All workflows') },
-                ...workflows
-                  .filter(
-                    (wf) => !runsRepoFilter || wf.repoId === runsRepoFilter,
-                  )
-                  .map((wf) => ({ value: wf.id, label: wf.name })),
-              ]}
-              onChange={(value) => {
-                setRunsWorkflowFilter(
-                  value === allRepositoriesValue ? '' : value,
-                );
-                setRunsLimit(100);
-              }}
-            />
+            <label className="ws-automation-filter">
+              <span>{t('Repository')}</span>
+              <Select
+                value={runsRepoFilter || allRepositoriesValue}
+                onValueChange={(value) => {
+                  const next = String(value);
+                  setRunsRepoFilter(next === allRepositoriesValue ? '' : next);
+                  setRunsWorkflowFilter('');
+                  setRunsLimit(100);
+                }}
+              >
+                <SelectTrigger aria-label={t('Repository')}>
+                  <span>
+                    {runsRepoFilter.startsWith('share-repo:')
+                      ? runsRepoFilter.slice('share-repo:'.length)
+                      : repositories.find((r) => r.repoId === runsRepoFilter)
+                          ?.repoPath || t('All repositories')}
+                  </span>
+                </SelectTrigger>
+                <SelectContent className="ws-select-popup">
+                  <SelectItem value={allRepositoriesValue}>
+                    {t('All repositories')}
+                  </SelectItem>
+                  {repositories.length > 0 && (
+                    <SelectGroup>
+                      {sharedRepoPaths.length > 0 && (
+                        <SelectLabel>{t('My repositories')}</SelectLabel>
+                      )}
+                      {repositories.map((repo) => (
+                        <SelectItem key={repo.repoId} value={repo.repoId}>
+                          {repo.repoPath}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+                  {sharedRepoPaths.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>{t('Shared workflows')}</SelectLabel>
+                      {sharedRepoPaths.map((path) => (
+                        <SelectItem key={path} value={`share-repo:${path}`}>
+                          {path}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="ws-automation-filter">
+              <span>{t('Workflow')}</span>
+              <Select
+                value={runsWorkflowFilter || allRepositoriesValue}
+                onValueChange={(value) => {
+                  const next = String(value);
+                  setRunsWorkflowFilter(
+                    next === allRepositoriesValue ? '' : next,
+                  );
+                  const nextShareId = sharedWorkflowIdFromKey(next);
+                  if (nextShareId) {
+                    const nextShare = acceptedSharedWorkflows.find(
+                      (s) => s.id === nextShareId,
+                    );
+                    setRunsRepoFilter(
+                      nextShare?.projectSource
+                        ? `share-repo:${nextShare.projectSource}`
+                        : '',
+                    );
+                  } else if (runsRepoFilter.startsWith('share-repo:')) {
+                    setRunsRepoFilter('');
+                  }
+                  setRunsLimit(100);
+                }}
+              >
+                <SelectTrigger aria-label={t('Workflow')}>
+                  <span>
+                    {selectedRunsShare
+                      ? `${selectedRunsShare.resourceName} (${selectedRunsShare.ownerName})`
+                      : workflows.find((wf) => wf.id === runsWorkflowFilter)
+                          ?.name || t('All workflows')}
+                  </span>
+                </SelectTrigger>
+                <SelectContent className="ws-select-popup">
+                  <SelectItem value={allRepositoriesValue}>
+                    {t('All workflows')}
+                  </SelectItem>
+                  {workflows.filter(
+                    (wf) =>
+                      !runsRepoFilter ||
+                      runsRepoFilter.startsWith('share-repo:') ||
+                      wf.repoId === runsRepoFilter,
+                  ).length > 0 && (
+                    <SelectGroup>
+                      {acceptedSharedWorkflows.length > 0 && (
+                        <SelectLabel>{t('My workflows')}</SelectLabel>
+                      )}
+                      {workflows
+                        .filter(
+                          (wf) =>
+                            !runsRepoFilter ||
+                            runsRepoFilter.startsWith('share-repo:') ||
+                            wf.repoId === runsRepoFilter,
+                        )
+                        .map((wf) => (
+                          <SelectItem key={wf.id} value={wf.id}>
+                            {wf.name}
+                          </SelectItem>
+                        ))}
+                    </SelectGroup>
+                  )}
+                  {acceptedSharedWorkflows.filter(
+                    (share) =>
+                      !runsRepoFilter.startsWith('share-repo:') ||
+                      share.projectSource ===
+                        runsRepoFilter.slice('share-repo:'.length),
+                  ).length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>{t('Shared workflows')}</SelectLabel>
+                      {acceptedSharedWorkflows
+                        .filter(
+                          (share) =>
+                            !runsRepoFilter.startsWith('share-repo:') ||
+                            share.projectSource ===
+                              runsRepoFilter.slice('share-repo:'.length),
+                        )
+                        .map((share) => (
+                          <SelectItem
+                            key={share.id}
+                            value={sharedWorkflowKey(share.id)}
+                          >
+                            {share.resourceName} ({share.ownerName})
+                          </SelectItem>
+                        ))}
+                    </SelectGroup>
+                  )}
+                </SelectContent>
+              </Select>
+            </label>
             <AutomationFilter
               label={t('Run status')}
               value={runsResultFilter}
@@ -2347,6 +3032,31 @@ export function AutomationView({
               {t(runsLoading ? 'Refreshing…' : 'Refresh')}
             </button>
           </div>
+          {selectedRunsShare && (
+            <div className="ws-workflow-readonly-strip">
+              <span className="ws-workflow-readonly-strip-copy">
+                <span className="ws-automation-badge">
+                  <Eye aria-hidden="true" />
+                  {t('Workflow read only')}
+                </span>
+                <span>
+                  {t('Shared by {name}', {
+                    name: selectedRunsShare.ownerName,
+                  })}
+                  {selectedRunsShare.projectSource
+                    ? ` · ${selectedRunsShare.projectSource}`
+                    : ''}
+                </span>
+              </span>
+              <button
+                type="button"
+                className="ws-automation-text-action"
+                onClick={() => setInfoShare(selectedRunsShare)}
+              >
+                {t('Workflow information')}
+              </button>
+            </div>
+          )}
           {runs.length > 0 && (
             <div className="ws-automation-list-caption">
               <span>
@@ -2404,7 +3114,13 @@ export function AutomationView({
             <div className="ws-automation-run-table">
               {visibleRuns.map((run) => {
                 const wf = workflows.find((w) => w.id === run.workflowId);
-                const canRerun = Boolean(wf && wf.enabled && !isLiveRun(run));
+                const runShare =
+                  acceptedSharedWorkflows.find(
+                    (s) => sharedWorkflowKey(s.id) === run.workflowId,
+                  ) || null;
+                const canRerun = Boolean(
+                  !runShare && wf && wf.enabled && !isLiveRun(run),
+                );
                 return (
                   <div key={run.id} className="ws-automation-run-row">
                     <div className="ws-automation-run-main">
@@ -2459,7 +3175,12 @@ export function AutomationView({
                         )}
                       </div>
                       <p>
-                        {wf ? wf.name : t('Workflow')} ·{' '}
+                        {runShare
+                          ? `${runShare.resourceName} · ${t('Shared by {name}', { name: runShare.ownerName })}`
+                          : wf
+                            ? wf.name
+                            : t('Workflow')}{' '}
+                        ·{' '}
                         <span className="ws-automation-mono">
                           {run.repoPath}
                         </span>{' '}
@@ -2512,15 +3233,30 @@ export function AutomationView({
                           {t('Details')}
                         </button>
                       )}
-                      {run.conversationId && (
-                        <a
-                          className="ws-automation-button is-compact"
-                          href={conversationURL(run.conversationId)}
-                        >
-                          {t('Open conversation')}
-                          <ExternalLink aria-hidden="true" />
-                        </a>
-                      )}
+                      {run.conversationId &&
+                        (runShare ? (
+                          <button
+                            type="button"
+                            className="ws-automation-button is-compact"
+                            onClick={() =>
+                              onOpenSharedConversation(
+                                runShare,
+                                run.conversationId,
+                              )
+                            }
+                          >
+                            {t('Open conversation')}
+                            <ExternalLink aria-hidden="true" />
+                          </button>
+                        ) : (
+                          <a
+                            className="ws-automation-button is-compact"
+                            href={conversationURL(run.conversationId)}
+                          >
+                            {t('Open conversation')}
+                            <ExternalLink aria-hidden="true" />
+                          </a>
+                        ))}
                       {run.mrUrl && (
                         <a
                           className="ws-automation-icon-action"
@@ -2539,7 +3275,7 @@ export function AutomationView({
               })}
             </div>
           )}
-          {runs.length === runsLimit && runsLimit < 500 && (
+          {runs.length >= runsLimit && runsLimit < 500 && (
             <div className="ws-automation-load-more">
               <button
                 type="button"
@@ -3236,28 +3972,30 @@ export function AutomationView({
                 </div>
               </div>
               <footer className="ws-codebase-mr-footer">
-                <button
-                  type="button"
-                  className="ws-automation-button"
-                  onClick={() => {
-                    const mr = selectedMR;
-                    setSelectedMR(null);
-                    requestRun(mr);
-                  }}
-                  disabled={
-                    submittingRun !== null || runCandidates.length === 0
-                  }
-                  title={
-                    runCandidates.length === 0
-                      ? t(
-                          'Create an enabled workflow for this repository first.',
-                        )
-                      : undefined
-                  }
-                >
-                  <Play aria-hidden="true" />
-                  {t('Run review')}
-                </button>
+                {!selectedMRShare && (
+                  <button
+                    type="button"
+                    className="ws-automation-button"
+                    onClick={() => {
+                      const mr = selectedMR;
+                      setSelectedMR(null);
+                      requestRun(mr);
+                    }}
+                    disabled={
+                      submittingRun !== null || runCandidates.length === 0
+                    }
+                    title={
+                      runCandidates.length === 0
+                        ? t(
+                            'Create an enabled workflow for this repository first.',
+                          )
+                        : undefined
+                    }
+                  >
+                    <Play aria-hidden="true" />
+                    {t('Run review')}
+                  </button>
+                )}
                 {selectedMR.web_url && (
                   <a
                     className="ws-codebase-open-link"
@@ -3326,8 +4064,12 @@ export function AutomationView({
                   {detailRun.mrTitle || t('Merge request')}
                 </DialogTitle>
                 <DialogDescription className="ws-run-detail-subtitle">
-                  {detailWorkflow ? detailWorkflow.name : t('Workflow')} ·{' '}
-                  {detailRun.repoPath}
+                  {detailShare
+                    ? `${detailShare.resourceName} · ${t('Shared by {name}', { name: detailShare.ownerName })}`
+                    : detailWorkflow
+                      ? detailWorkflow.name
+                      : t('Workflow')}{' '}
+                  · {detailRun.repoPath}
                 </DialogDescription>
               </header>
               <div className="ws-run-detail-body">
@@ -3447,15 +4189,30 @@ export function AutomationView({
                       )}
                   </div>
                   <div className="ws-run-detail-links">
-                    {detailRun.conversationId && (
-                      <a
-                        className="ws-codebase-open-link"
-                        href={conversationURL(detailRun.conversationId)}
-                      >
-                        {t('Open conversation')}
-                        <ExternalLink aria-hidden="true" />
-                      </a>
-                    )}
+                    {detailRun.conversationId &&
+                      (detailShare ? (
+                        <button
+                          type="button"
+                          className="ws-codebase-open-link"
+                          onClick={() => {
+                            const targetShare = detailShare;
+                            const convId = detailRun.conversationId;
+                            setDetailRun(null);
+                            onOpenSharedConversation(targetShare, convId);
+                          }}
+                        >
+                          {t('Open conversation')}
+                          <ExternalLink aria-hidden="true" />
+                        </button>
+                      ) : (
+                        <a
+                          className="ws-codebase-open-link"
+                          href={conversationURL(detailRun.conversationId)}
+                        >
+                          {t('Open conversation')}
+                          <ExternalLink aria-hidden="true" />
+                        </a>
+                      ))}
                     {detailRun.mrUrl && (
                       <a
                         className="ws-codebase-open-link"
@@ -3585,6 +4342,25 @@ export function AutomationView({
           </div>
         </DialogContent>
       </Dialog>
+
+      <SharedWorkflowInfoDialog
+        share={infoShare}
+        onClose={() => setInfoShare(null)}
+      />
+      <LeaveSharedWorkflowDialog
+        share={leaveShare}
+        onClose={() => setLeaveShare(null)}
+        onLeft={(shareId) => {
+          const key = sharedWorkflowKey(shareId);
+          if (selectedRepoId === key) setSelectedRepoId('');
+          if (runsWorkflowFilter === key) {
+            setRunsWorkflowFilter('');
+            if (runsRepoFilter.startsWith('share-repo:')) setRunsRepoFilter('');
+          }
+        }}
+        onRefresh={onRefreshSharing}
+        onNotice={onNotice}
+      />
     </div>
   );
 }

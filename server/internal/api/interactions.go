@@ -122,6 +122,9 @@ func (s *Server) disableSessionAutoApproval(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) autoApproveRun(ctx context.Context, wid string, run relay.Run, events []relay.Event) (bool, error) {
+	if grant, ok := ctx.Value(collaborationKey{}).(store.ResourceShare); ok && grant.Kind == "workflow" {
+		return false, nil
+	}
 	if run.Status != relay.RunRunning || run.CancelRequestedAt != nil {
 		return false, nil
 	}

@@ -29,6 +29,177 @@
   --ws-reading-width: 860px;
 }
 
+/* Workflow sharing integrates directly into Automation's native tabs; chat typography is untouched. */
+.ws-workflow-sharing-scope {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+}
+.ws-workflow-sharing-scope > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--ws-text-secondary);
+  margin-top: 2px;
+}
+.ws-workflow-sharing-scope > div {
+  flex: 1;
+  min-width: 0;
+}
+.ws-workflow-sharing-scope strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+.ws-workflow-sharing-scope p {
+  font-size: 12px;
+  color: var(--ws-text-secondary);
+  margin: 4px 0 0;
+  line-height: 1.6;
+}
+.ws-workflow-share-dialog .ws-sharing-invite-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.ws-workflow-sharing-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--ws-divider);
+  padding-top: 16px;
+}
+.ws-workflow-sharing-footer .ws-sharing-note {
+  margin: 0;
+}
+.ws-sharing-success {
+  display: block;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--ws-positive-soft);
+  color: var(--ws-positive);
+  font-size: 12px;
+}
+.ws-sharing-inline-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.ws-sharing-invite-dialog .ws-sharing-members .ws-sharing-inline-confirm button,
+.ws-workflow-share-dialog.ws-sharing-invite-dialog .ws-sharing-members button {
+  width: auto;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 10px;
+}
+.ws-workflow-invitation {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--ws-accent) 24%, var(--ws-border));
+  border-radius: 10px;
+  margin-bottom: 12px;
+  background: var(--ws-accent-soft);
+}
+.ws-workflow-invitation-copy {
+  flex: 1;
+  min-width: 0;
+}
+.ws-workflow-invitation-copy strong {
+  font-size: 13.5px;
+  font-weight: 560;
+}
+.ws-workflow-invitation-copy p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ws-text-secondary);
+}
+.ws-workflow-invitation-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.ws-workflow-readonly-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--ws-border);
+  border-radius: 10px;
+  background: var(--ws-surface-subtle);
+  font-size: 12.5px;
+  color: var(--ws-text-secondary);
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.ws-workflow-readonly-strip-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ws-workflow-poll-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  border: 1px solid color-mix(in srgb, #b45309 30%, var(--ws-border));
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #9a4708;
+  font-size: 12.5px;
+  margin-bottom: 12px;
+}
+.ws-workflow-poll-warning > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ws-workflow-poll-warning svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+.ws-workflow-info-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ws-workflow-info-note svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.ws-automation-workflow-title .ws-automation-badge {
+  align-items: center;
+  gap: 4px;
+}
+.ws-automation-workflow-title .ws-automation-badge svg {
+  width: 12px;
+  height: 12px;
+}
+.ws-automation-workflow-actions {
+  flex-wrap: wrap;
+}
+@media (max-width: 680px) {
+  .ws-workflow-invitation {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .ws-workflow-invitation-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .ws-workflow-share-dialog input {
+    font-size: 16px;
+  }
+}
+
 /* Labs manages feature availability; actual workflows live in Automation. */
 .ws-labs-page .ws-page-intro h1 {
   font-size: clamp(24px, 2.4vw, 28px);
@@ -11430,6 +11601,13 @@ button.ws-chat-response-meta:focus-visible {
     justify-self: end;
     margin-top: 3px;
   }
+  .ws-workflow-share-dialog .ws-sharing-invite-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .ws-workflow-share-dialog .ws-sharing-invite-row > button {
+    grid-column: auto;
+    margin-top: 0;
+  }
   .ws-sharing-invite-dialog .ws-sharing-members > div {
     flex-wrap: nowrap;
     gap: 7px;
@@ -13040,14 +13218,17 @@ button.ws-chat-response-meta:focus-visible {
 }
 .ws-automation-filter {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
-  flex: 0 1 190px;
+  flex: 0 1 220px;
   min-width: 0;
   color: var(--ws-text-secondary);
   font-size: 12px;
 }
 .ws-automation-filter [data-slot='select-trigger'] {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   height: 36px;
 }
 .ws-automation-filter [data-slot='select-trigger'] > span {
@@ -13286,6 +13467,8 @@ button.ws-chat-response-meta:focus-visible {
 }
 .ws-automation-mr-toolbar [data-slot='select-trigger'] {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   height: 36px;
 }
 .ws-automation-mr-toolbar [data-slot='select-trigger'] > span {

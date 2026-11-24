@@ -1,7 +1,7 @@
 # Account-scoped resource sharing
 
-Workspaces remain owned by one user. Sharing grants access to one conversation
-or an Agent's execution capability; it does not create Workspace membership.
+Workspaces remain owned by one user. Sharing grants access to one conversation,
+an Agent's execution capability or one automation workflow; it does not create Workspace membership.
 The public `/shares/{token}` snapshot API remains a separate read-only feature.
 
 ## Invitations
@@ -11,7 +11,7 @@ All endpoints require a signed-in account and use its selected personal Workspac
 - `GET /api/v1/resource-shares`: outgoing grants in the selected Workspace plus
   invitations addressed to the account's email. Each entry includes `owned`.
 - `POST /api/v1/resource-shares/{kind}/{id}`: invite an email address.
-  `kind` is `session` or `agent`; fields are `email`, `permission` (`view` or
+  `kind` is `session`, `agent` or `workflow`; fields are `email`, `permission` (`view` or
   `execute`), and, for Agents, `projectId` and `maxConcurrency` (1–10, default 1).
 - `POST /api/v1/resource-shares/{id}/accept`: accept an invitation for this account.
 - `PUT /api/v1/resource-shares/{id}`: owner updates `permission`.
@@ -20,6 +20,42 @@ All endpoints require a signed-in account and use its selected personal Workspac
 Agent grants require an explicitly bound Runtime and authorized owner project.
 Inviting an unregistered email is supported; the matching account can accept
 later. This implementation records invitations in-app and sends no email.
+
+## Shared automation workflows
+
+Workflow grants permit only `view`, with no authorized project or execution
+capability. The Automation workflow list has My workflows and Shared with me.
+Owners invite by account email; recipients accept, decline or leave. Owners
+can revoke access. No workflow, repository or run is copied into the recipient's
+Workspace. New runs of that workflow remain accessible under the same grant.
+
+- `GET /api/v1/workflow-shares/{shareID}` returns display metadata, sharing
+  source and view permission. Instructions, Skills and Runtime configuration
+  are omitted.
+- `GET /api/v1/workflow-shares/{shareID}/runs` returns stored run results for
+  that workflow. `limit` defaults to 100 and is capped at 500.
+- `GET /api/v1/workflow-shares/{shareID}/merge-requests` reads the cached MR
+  list for the workflow's repository. It supports the ordinary state, search
+  and pagination options; the server determines the repository. `latestRuns`
+  contains the latest review from this workflow for each MR on the page,
+  including reviews outside the recent run list.
+
+The shared page refreshes results every eight seconds while visible. These
+reads do not initiate repository sync, reviews or report writeback. The existing
+background workers continue to update run results.
+
+The conversation gateway also accepts workflow grants for GET requests to
+sessions linked by that workflow's runs and their own runs, tasks, attachments
+and artifacts. It checks the workflow/conversation relationship on every
+request. Task submission, cancellation, approval and configuration writes are
+denied. Viewing cannot approve an Agent's pending tool request. Opening a linked
+conversation uses the existing chat UI; its route includes both grant and
+conversation IDs so refresh restores the same read-only scope.
+
+Pending invitations, unrelated accounts, revoked grants and deleted workflows
+cannot read results. Revoking the workflow grant also removes access to linked
+conversations; active event streams recheck the grant. This authorization is
+independent of any future Workspace membership and can coexist with member roles.
 
 ## Shared conversations
 

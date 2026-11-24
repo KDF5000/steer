@@ -103,6 +103,9 @@ func (s *Server) decryptCredential(ciphertext []byte) (string, error) {
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/workflow-shares/{shareID}", s.sharedWorkflow)
+	mux.HandleFunc("GET /api/v1/workflow-shares/{shareID}/runs", s.sharedWorkflowRuns)
+	mux.HandleFunc("GET /api/v1/workflow-shares/{shareID}/merge-requests", s.sharedWorkflowMRs)
 	mux.HandleFunc("GET /api/v1/resource-shares", s.listResourceShares)
 	mux.HandleFunc("POST /api/v1/resource-shares/{kind}/{id}", s.inviteResource)
 	mux.HandleFunc("POST /api/v1/resource-shares/{id}/accept", s.acceptResourceShare)
@@ -1031,13 +1034,14 @@ func (s *Server) streamRunEventsForID(w http.ResponseWriter, r *http.Request, ru
 	err := s.relay.StreamEvents(r.Context(), runID, after, func(event relay.Event) error {
 		if g, ok := r.Context().Value(collaborationKey{}).(store.ResourceShare); ok {
 			latest, err := s.store.ResourceShare(r.Context(), g.ID)
-			if err != nil || latest.Status == "revoked" {
+			if err != nil || latest.ResourceName == "" || latest.Status == "revoked" || (latest.OwnerUserID != userFromContext(r.Context()).ID && (latest.Status != "accepted" || value(latest.RecipientUserID) != userFromContext(r.Context()).ID)) {
 				return errors.New("conversation sharing has been revoked")
 			}
 		}
 		// Process an explicitly authorized approval before exposing it as a
 		// pending user action. A later poll must not race the live event stream.
-		if event.Type == "interaction.requested" {
+		grant, _ := r.Context().Value(collaborationKey{}).(store.ResourceShare)
+		if event.Type == "interaction.requested" && grant.Kind != "workflow" {
 			run, approvalErr := s.relay.GetRun(r.Context(), runID)
 			if approvalErr == nil {
 				var approved bool

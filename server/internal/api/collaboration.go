@@ -56,7 +56,7 @@ func (s *Server) inviteResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	kind := r.PathValue("kind")
-	if kind != "session" && kind != "agent" {
+	if kind != "session" && kind != "agent" && kind != "workflow" {
 		writeJSON(w, 400, map[string]string{"error": "invalid resource kind"})
 		return
 	}
@@ -71,7 +71,17 @@ func (s *Server) inviteResource(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "concurrency must be between 1 and 10"})
 		return
 	}
-	if kind == "session" {
+	if kind == "workflow" {
+		if in.Permission != "view" {
+			writeJSON(w, 400, map[string]string{"error": "Workflows can only be shared for viewing."})
+			return
+		}
+		if _, err := s.store.CodebaseWorkflow(r.Context(), wid, r.PathValue("id")); err != nil {
+			writeError(w, err)
+			return
+		}
+		in.ProjectID = nil
+	} else if kind == "session" {
 		session, err := s.store.Session(r.Context(), wid, r.PathValue("id"))
 		if err != nil {
 			writeError(w, err)
@@ -202,7 +212,7 @@ func (s *Server) updateResourceShare(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	if in.Permission != "view" && in.Permission != "execute" || g.Kind == "agent" && in.Permission != "execute" {
+	if in.Permission != "view" && in.Permission != "execute" || g.Kind == "agent" && in.Permission != "execute" || g.Kind == "workflow" && in.Permission != "view" {
 		writeJSON(w, 400, map[string]string{"error": "invalid permission"})
 		return
 	}
@@ -282,13 +292,31 @@ func (s *Server) createSharedAgentConversation(w http.ResponseWriter, r *http.Re
 // It never grants Workspace membership or access to bootstrap/configuration APIs.
 func (s *Server) collaborationAccess(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		g, err := s.accessibleShare(r, r.PathValue("shareID"), "session")
+		candidate, err := s.store.ResourceShare(r.Context(), r.PathValue("shareID"))
+		if err != nil || (candidate.Kind != "session" && candidate.Kind != "workflow") {
+			writeError(w, store.ErrNotFound)
+			return
+		}
+		g, err := s.accessibleShare(r, candidate.ID, candidate.Kind)
 		if err != nil {
 			writeError(w, err)
 			return
 		}
 		path := strings.Trim(r.PathValue("path"), "/")
 		parts := strings.Split(path, "/")
+		if g.Kind == "workflow" {
+			if r.Method != "GET" {
+				writeJSON(w, 403, map[string]string{"error": "Workflows are shared with view permission."})
+				return
+			}
+			conversationID, err := s.workflowSharedConversation(r, g, parts)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			g.ResourceID = conversationID
+			g.Permission = "view"
+		}
 		allowed := false
 		if r.Method == "GET" && len(parts) == 2 && parts[0] == "sessions" && parts[1] == g.ResourceID {
 			allowed = true

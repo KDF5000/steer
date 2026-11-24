@@ -9,6 +9,7 @@ import (
 )
 
 type ResourceShare struct {
+	WorkspaceName   string    `json:"workspaceName"`
 	RecipientName   string    `json:"recipientName"`
 	Model           string    `json:"model"`
 	AgentRole       string    `json:"agentRole"`
@@ -34,11 +35,11 @@ type ResourceShare struct {
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
-const shareSelect = `SELECT g.id,g.kind,g.resource_id,g.workspace_id,g.owner_user_id,u.display_name,g.recipient_email,g.recipient_user_id,g.permission,g.status,COALESCE(g.project_id,c.project_id),g.max_concurrency,COALESCE(c.title,a.name,''),COALESCE(p.name,cp.name,''),COALESCE(a.runtime_provider,ca.runtime_provider,''),COALESCE(p.workspace_source,cp.workspace_source,''),COALESCE(p.workspace_kind,cp.workspace_kind,''),COALESCE(n.name,'') || CASE WHEN n.name IS NOT NULL THEN ' / ' ELSE '' END || COALESCE(a.runtime_provider,ca.runtime_provider,''),COALESCE(ru.display_name,''),COALESCE(a.model,''),COALESCE(a.role,''),g.created_at,g.updated_at FROM resource_shares g JOIN users u ON u.id=g.owner_user_id LEFT JOIN chat_sessions c ON g.kind='session' AND c.id=g.resource_id AND c.workspace_id=g.workspace_id LEFT JOIN agents ca ON ca.id=c.agent_id LEFT JOIN agents a ON g.kind='agent' AND a.id=g.resource_id AND a.workspace_id=g.workspace_id LEFT JOIN projects p ON p.id=g.project_id LEFT JOIN projects cp ON cp.id=c.project_id LEFT JOIN workspace_runtime_bindings b ON b.id=COALESCE(a.runtime_id,c.execution_runtime_id,ca.runtime_id) LEFT JOIN relay_node_runtimes nr ON nr.id=b.node_runtime_id LEFT JOIN relay_nodes n ON n.id=nr.node_id LEFT JOIN users ru ON ru.id=g.recipient_user_id `
+const shareSelect = `SELECT g.id,g.kind,g.resource_id,g.workspace_id,g.owner_user_id,u.display_name,g.recipient_email,g.recipient_user_id,g.permission,g.status,COALESCE(g.project_id,c.project_id),g.max_concurrency,COALESCE(c.title,a.name,wf.name,''),COALESCE(p.name,cp.name,''),COALESCE(a.runtime_provider,ca.runtime_provider,''),COALESCE(p.workspace_source,cp.workspace_source,wf.repo_path,''),COALESCE(p.workspace_kind,cp.workspace_kind,''),COALESCE(n.name,'') || CASE WHEN n.name IS NOT NULL THEN ' / ' ELSE '' END || COALESCE(a.runtime_provider,ca.runtime_provider,''),COALESCE(ru.display_name,''),COALESCE(a.model,''),COALESCE(a.role,''),ws.name,g.created_at,g.updated_at FROM resource_shares g JOIN workspaces ws ON ws.id=g.workspace_id LEFT JOIN codebase_workflows wf ON g.kind='workflow' AND wf.id=g.resource_id AND wf.workspace_id=g.workspace_id JOIN users u ON u.id=g.owner_user_id LEFT JOIN chat_sessions c ON g.kind='session' AND c.id=g.resource_id AND c.workspace_id=g.workspace_id LEFT JOIN agents ca ON ca.id=c.agent_id LEFT JOIN agents a ON g.kind='agent' AND a.id=g.resource_id AND a.workspace_id=g.workspace_id LEFT JOIN projects p ON p.id=g.project_id LEFT JOIN projects cp ON cp.id=c.project_id LEFT JOIN workspace_runtime_bindings b ON b.id=COALESCE(a.runtime_id,c.execution_runtime_id,ca.runtime_id) LEFT JOIN relay_node_runtimes nr ON nr.id=b.node_runtime_id LEFT JOIN relay_nodes n ON n.id=nr.node_id LEFT JOIN users ru ON ru.id=g.recipient_user_id `
 
 func scanShare(row rowScanner) (ResourceShare, error) {
 	var g ResourceShare
-	err := row.Scan(&g.ID, &g.Kind, &g.ResourceID, &g.WorkspaceID, &g.OwnerUserID, &g.OwnerName, &g.RecipientEmail, &g.RecipientUserID, &g.Permission, &g.Status, &g.ProjectID, &g.MaxConcurrency, &g.ResourceName, &g.ProjectName, &g.RuntimeProvider, &g.ProjectSource, &g.ProjectKind, &g.RuntimeLabel, &g.RecipientName, &g.Model, &g.AgentRole, &g.CreatedAt, &g.UpdatedAt)
+	err := row.Scan(&g.ID, &g.Kind, &g.ResourceID, &g.WorkspaceID, &g.OwnerUserID, &g.OwnerName, &g.RecipientEmail, &g.RecipientUserID, &g.Permission, &g.Status, &g.ProjectID, &g.MaxConcurrency, &g.ResourceName, &g.ProjectName, &g.RuntimeProvider, &g.ProjectSource, &g.ProjectKind, &g.RuntimeLabel, &g.RecipientName, &g.Model, &g.AgentRole, &g.WorkspaceName, &g.CreatedAt, &g.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = ErrNotFound
 	}
@@ -48,7 +49,7 @@ func (s *Store) ResourceShare(ctx context.Context, id string) (ResourceShare, er
 	return scanShare(s.pool.QueryRow(ctx, shareSelect+`WHERE g.id=$1`, id))
 }
 func (s *Store) ResourceShares(ctx context.Context, user User, wid string) ([]ResourceShare, error) {
-	rows, err := s.pool.Query(ctx, shareSelect+`WHERE g.status<>'revoked' AND ((g.owner_user_id=$1 AND g.workspace_id=$2) OR lower(g.recipient_email)=lower($3)) AND (c.id IS NOT NULL OR a.id IS NOT NULL) ORDER BY g.updated_at DESC`, user.ID, wid, user.Email)
+	rows, err := s.pool.Query(ctx, shareSelect+`WHERE g.status<>'revoked' AND ((g.owner_user_id=$1 AND g.workspace_id=$2) OR lower(g.recipient_email)=lower($3)) AND (c.id IS NOT NULL OR a.id IS NOT NULL OR wf.id IS NOT NULL) ORDER BY g.updated_at DESC`, user.ID, wid, user.Email)
 	if err != nil {
 		return nil, err
 	}

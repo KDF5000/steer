@@ -26,7 +26,7 @@ import {
   type AuthUser,
 } from '@/lib/steer-client';
 export type SharingTarget = {
-  kind: 'session' | 'agent';
+  kind: 'session' | 'agent' | 'workflow';
   id: string;
   name: string;
   context?: string;
@@ -410,7 +410,7 @@ export function SharedAgentsList({
                       await onRefresh();
                       setSelected(null);
                     } catch (e) {
-                      setError(String(e));
+                      setError(e instanceof Error ? e.message : String(e));
                     } finally {
                       setBusy(false);
                     }
@@ -477,6 +477,19 @@ export function ResourceSharingDialog({
   const [capacity, setCapacity] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [revoking, setRevoking] = useState<ResourceShare | null>(null);
+  const [prevTargetKey, setPrevTargetKey] = useState('');
+  const targetKey = target ? `${target.kind}:${target.id}` : '';
+  if (targetKey !== prevTargetKey) {
+    setPrevTargetKey(targetKey);
+    setEmail('');
+    setPermission(target?.viewOnly ? 'view' : 'execute');
+    setError('');
+    setSuccess('');
+    setRevoking(null);
+  }
+  const workflow = target?.kind === 'workflow';
   const members = shares.filter(
     (s) => s.owned && s.kind === target?.kind && s.resourceId === target?.id,
   );
@@ -484,6 +497,7 @@ export function ResourceSharingDialog({
     if (busy) return;
     setBusy(true);
     setError('');
+    setSuccess('');
     try {
       await fn();
       await onRefresh();
@@ -498,9 +512,17 @@ export function ResourceSharingDialog({
       open={Boolean(target)}
       onOpenChange={(open) => !busy && !open && onClose()}
     >
-      <DialogContent className="ws-sharing-dialog ws-sharing-invite-dialog">
+      <DialogContent
+        className={`ws-sharing-dialog ws-sharing-invite-dialog${workflow ? ' ws-workflow-share-dialog' : ''}`}
+      >
         <DialogTitle>
-          {t(target?.kind === 'agent' ? 'Share Agent' : 'Invite collaboration')}
+          {t(
+            workflow
+              ? 'Share workflow'
+              : target?.kind === 'agent'
+                ? 'Share Agent'
+                : 'Invite collaboration',
+          )}
         </DialogTitle>
         <DialogDescription
           className="ws-sharing-summary"
@@ -514,6 +536,22 @@ export function ResourceSharingDialog({
             ? `${target.context} · ${target.name}`
             : target?.name}
         </DialogDescription>
+        {workflow && (
+          <div className="ws-workflow-sharing-scope">
+            <Eye />
+            <div>
+              <strong>{t('View this workflow and its results')}</strong>
+              <p>
+                {t(
+                  'Includes merge requests, run records and linked conversations. Future runs are visible automatically.',
+                )}
+              </p>
+            </div>
+            <span className="ws-automation-badge">
+              {t('Workflow read only')}
+            </span>
+          </div>
+        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -528,14 +566,21 @@ export function ResourceSharingDialog({
               return;
             }
             void act(async () => {
+              const trimmed = email.trim();
               await steer.inviteResource(target.kind, target.id, {
-                email,
-                permission: target.kind === 'agent' ? 'execute' : permission,
+                email: trimmed,
+                permission:
+                  target.kind === 'workflow'
+                    ? 'view'
+                    : target.kind === 'agent'
+                      ? 'execute'
+                      : permission,
                 ...(target.kind === 'agent'
                   ? { projectId: project, maxConcurrency: capacity }
                   : {}),
               });
               setEmail('');
+              setSuccess(t('Invitation sent to {email}.', { email: trimmed }));
             });
           }}
         >
@@ -577,36 +622,47 @@ export function ResourceSharingDialog({
               {t('Email')}
               <input
                 type="email"
+                name="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                spellCheck={false}
+                aria-describedby="resource-sharing-error"
+                aria-invalid={Boolean(error)}
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError('');
+                }}
                 required
                 placeholder="colleague@example.com"
                 disabled={busy}
               />
             </label>
-            <label>
-              {t('Permission')}
-              <select
-                value={target?.kind === 'agent' ? 'execute' : permission}
-                onChange={(e) =>
-                  setPermission(e.target.value as 'view' | 'execute')
-                }
-                disabled={busy || target?.kind === 'agent'}
-              >
-                {!target?.viewOnly && (
-                  <option value="execute">
-                    {t(
-                      target?.kind === 'agent'
-                        ? 'Available'
-                        : 'Can collaborate',
-                    )}
-                  </option>
-                )}
-                {target?.kind !== 'agent' && (
-                  <option value="view">{t('View only')}</option>
-                )}
-              </select>
-            </label>
+            {!workflow && (
+              <label>
+                {t('Permission')}
+                <select
+                  value={target?.kind === 'agent' ? 'execute' : permission}
+                  onChange={(e) =>
+                    setPermission(e.target.value as 'view' | 'execute')
+                  }
+                  disabled={busy || target?.kind === 'agent'}
+                >
+                  {!target?.viewOnly && (
+                    <option value="execute">
+                      {t(
+                        target?.kind === 'agent'
+                          ? 'Available'
+                          : 'Can collaborate',
+                      )}
+                    </option>
+                  )}
+                  {target?.kind !== 'agent' && (
+                    <option value="view">{t('View only')}</option>
+                  )}
+                </select>
+              </label>
+            )}
             <Button type="submit" disabled={busy}>
               {busy ? <LoaderCircle className="animate-spin" /> : t('Invite')}
             </Button>
@@ -614,15 +670,18 @@ export function ResourceSharingDialog({
         </form>
         <p className="ws-sharing-note">
           {t(
-            target?.kind === 'agent'
-              ? 'Git projects use independent worktrees. Local projects use the authorized directory.'
-              : target?.viewOnly
-                ? 'This conversation can only be shared for viewing.'
-                : 'Collaborators can start Agent tasks in this conversation.',
+            workflow
+              ? 'The recipient can accept the invitation in Automation after signing in.'
+              : target?.kind === 'agent'
+                ? 'Git projects use independent worktrees. Local projects use the authorized directory.'
+                : target?.viewOnly
+                  ? 'This conversation can only be shared for viewing.'
+                  : 'Collaborators can start Agent tasks in this conversation.',
           )}
         </p>
+        {success && <output className="ws-sharing-success">{success}</output>}
         {error && (
-          <p role="alert" className="ws-form-error">
+          <p id="resource-sharing-error" role="alert" className="ws-form-error">
             {error}
           </p>
         )}
@@ -660,44 +719,87 @@ export function ResourceSharingDialog({
                 <small>{s.recipientEmail}</small>
                 {target?.kind === 'agent' && <small>{s.projectName}</small>}
               </span>
-              {target?.kind === 'session' ? (
-                <select
-                  aria-label={`${t('Permission')} ${s.recipientEmail}`}
-                  value={s.permission}
-                  disabled={busy}
-                  onChange={(e) =>
-                    void act(() =>
-                      steer.updateResourceShare(
-                        s.id,
-                        e.target.value as 'view' | 'execute',
-                      ),
-                    )
-                  }
-                >
-                  {!target.viewOnly && (
-                    <option value="execute">{t('Can collaborate')}</option>
-                  )}
-                  <option value="view">{t('View only')}</option>
-                </select>
+              {revoking?.id === s.id ? (
+                <div className="ws-sharing-inline-confirm" role="alert">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => setRevoking(null)}
+                  >
+                    {t('Cancel')}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() =>
+                      void act(async () => {
+                        await steer.revokeResourceShare(s.id);
+                        setRevoking(null);
+                      })
+                    }
+                  >
+                    {t('Confirm revoke')}
+                  </Button>
+                </div>
               ) : (
-                <small>{t('Available')}</small>
+                <>
+                  {target?.kind === 'session' ? (
+                    <select
+                      aria-label={`${t('Permission')} ${s.recipientEmail}`}
+                      value={s.permission}
+                      disabled={busy}
+                      onChange={(e) =>
+                        void act(() =>
+                          steer.updateResourceShare(
+                            s.id,
+                            e.target.value as 'view' | 'execute',
+                          ),
+                        )
+                      }
+                    >
+                      {!target.viewOnly && (
+                        <option value="execute">{t('Can collaborate')}</option>
+                      )}
+                      <option value="view">{t('View only')}</option>
+                    </select>
+                  ) : (
+                    <small>
+                      {t(workflow ? 'Workflow read only' : 'Available')}
+                    </small>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size={workflow ? 'sm' : 'icon'}
+                    aria-label={`${t('Revoke access')} ${s.recipientEmail}`}
+                    title={t('Revoke access')}
+                    disabled={busy}
+                    onClick={() => setRevoking(s)}
+                  >
+                    {workflow ? t('Revoke') : <X />}
+                  </Button>
+                </>
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`${t('Revoke access')} ${s.recipientEmail}`}
-                title={t('Revoke access')}
-                disabled={busy}
-                onClick={() => void act(() => steer.revokeResourceShare(s.id))}
-              >
-                <X />
-              </Button>
             </div>
           ))}
         </div>
-        <p className="ws-sharing-note">
-          {t('Only this resource is shared. Your workspace stays private.')}
-        </p>
+        {workflow ? (
+          <div className="ws-workflow-sharing-footer">
+            <p className="ws-sharing-note">
+              {t(
+                'Only this workflow is shared. Workspace membership is not granted.',
+              )}
+            </p>
+            <Button variant="outline" disabled={busy} onClick={onClose}>
+              {t('Done')}
+            </Button>
+          </div>
+        ) : (
+          <p className="ws-sharing-note">
+            {t('Only this resource is shared. Your workspace stays private.')}
+          </p>
+        )}
       </DialogContent>
     </Dialog>
   );

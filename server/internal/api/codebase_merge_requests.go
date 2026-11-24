@@ -12,11 +12,12 @@ import (
 )
 
 type codebaseMRPage struct {
-	Items    []store.CodebaseMergeRequest `json:"items"`
-	Page     int                          `json:"page"`
-	NextPage *int                         `json:"nextPage"`
-	Total    int                          `json:"total"`
-	SyncedAt *time.Time                   `json:"syncedAt"`
+	LatestRuns []sharedWorkflowRun          `json:"latestRuns,omitempty"`
+	Items      []store.CodebaseMergeRequest `json:"items"`
+	Page       int                          `json:"page"`
+	NextPage   *int                         `json:"nextPage"`
+	Total      int                          `json:"total"`
+	SyncedAt   *time.Time                   `json:"syncedAt"`
 }
 
 // codebaseRepositories lists repositories bound to a review workflow. The
@@ -91,6 +92,18 @@ func (s *Server) codebaseMergeRequests(w http.ResponseWriter, r *http.Request) {
 	} else if !errors.Is(err, store.ErrNotFound) {
 		writeCodebaseError(w, err)
 		return
+	}
+	if workflow, ok := r.Context().Value(sharedWorkflowMRKey{}).(store.CodebaseWorkflow); ok {
+		numbers := make([]int, 0, len(items))
+		for _, item := range items {
+			numbers = append(numbers, item.IID)
+		}
+		runs, err := s.store.LatestWorkflowRunsForMRs(r.Context(), wid, workflow.ID, numbers)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		result.LatestRuns = sharedWorkflowRunsView(runs)
 	}
 	writeJSON(w, http.StatusOK, result)
 }

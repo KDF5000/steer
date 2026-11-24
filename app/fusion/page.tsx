@@ -2039,12 +2039,23 @@ export default function Fusion() {
     if (!loaded) return;
     const readRoute = () => {
       skipRouteWrite.current = true;
-      const [section, id] = window.location.hash.slice(1).split('/');
+      const [section, id, conversationID] = window.location.hash
+        .slice(1)
+        .split('/');
       if (section === 'shared' && id) {
         const share = resourceShares.find(
-          (item) => item.id === id && item.kind === 'session',
+          (item) =>
+            item.id === id &&
+            (item.kind === 'session' ||
+              (item.kind === 'workflow' && Boolean(conversationID))),
         );
-        if (share) void openChatSession(share.resourceId, share);
+        if (share)
+          void openChatSession(
+            share.kind === 'workflow' ? conversationID : share.resourceId,
+            share.kind === 'workflow'
+              ? { ...share, resourceId: conversationID }
+              : share,
+          );
         return;
       }
       skipRouteWrite.current = true;
@@ -2103,7 +2114,7 @@ export default function Fusion() {
     const id = view === 'chat' ? chatSession : '';
     const hash =
       view === 'chat' && collaborationShare
-        ? `#shared/${collaborationShare.id}`
+        ? `#shared/${collaborationShare.id}${collaborationShare.kind === 'workflow' ? `/${chatSession}` : ''}`
         : `#${section}${id ? `/${id}` : ''}`;
     if (window.location.hash !== hash) window.history.pushState(null, '', hash);
   }, [agentTab, chatSession, view, collaborationShare, automatedReviewEnabled]);
@@ -3924,6 +3935,26 @@ export default function Fusion() {
             runtimes={runtimeChoices}
             skills={skillList}
             onRefreshRuntimes={refreshComposerRuntimes}
+            user={authUser}
+            shares={resourceShares}
+            sharingError={sharingError}
+            onRefreshSharing={refreshSharing}
+            onShareWorkflow={(workflow) => {
+              void refreshSharing();
+              setSharingTarget({
+                kind: 'workflow',
+                id: workflow.id,
+                name: workflow.name,
+                context: workflow.repoPath,
+                viewOnly: true,
+              });
+            }}
+            onOpenSharedConversation={(share, conversationID) => {
+              void openChatSession(conversationID, {
+                ...share,
+                resourceId: conversationID,
+              });
+            }}
             onNotice={setNotice}
           />
         ) : view === 'settings' ? (
