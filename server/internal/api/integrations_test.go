@@ -47,6 +47,15 @@ func TestFeishuThreadKey(t *testing.T) {
 	if got := feishuThreadKey(&channeltypes.NormalizedMessage{ChatType: "group", MessageID: "top"}); got != "thread:top" {
 		t.Fatalf("group top-level key = %q", got)
 	}
+	threadID := "omt-native-thread"
+	event.Event.Message.ThreadId = &threadID
+	if got := feishuThreadKey(&channeltypes.NormalizedMessage{ChatType: "group", MessageID: "reply", RawEvent: event}); got != "thread:root-message" {
+		t.Fatalf("native thread ID hid original message key: %q", got)
+	}
+	event.Event.Message.RootId = nil
+	if got := feishuThreadKey(&channeltypes.NormalizedMessage{ChatType: "group", MessageID: "reply", RawEvent: event}); got != "thread:"+threadID {
+		t.Fatalf("thread-only key = %q", got)
+	}
 }
 
 func TestFeishuParentMessageContext(t *testing.T) {

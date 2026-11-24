@@ -33,6 +33,7 @@ import {
   RotateCcw,
   Search,
   Trash2,
+  Upload,
   User,
   Share2,
   Workflow,
@@ -334,13 +335,18 @@ export function AutomationView({
 
   // Runs
   const [runs, setRuns] = useState<CodebaseRunRecord[]>([]);
+  const runsTopRef = useRef<HTMLDivElement>(null);
+  const renderedRunPage = useRef({ page: 1, pageSize: 25 });
   const [runClock, setRunClock] = useState(() => Date.now());
   const [runsLoading, setRunsLoading] = useState(false);
   const [runsError, setRunsError] = useState('');
   const [runsRepoFilter, setRunsRepoFilter] = useState('');
   const [runsWorkflowFilter, setRunsWorkflowFilter] = useState('');
   const [runsResultFilter, setRunsResultFilter] = useState('all');
-  const [runsLimit, setRunsLimit] = useState(100);
+  const [runsPage, setRunsPage] = useState(1);
+  const [runsPageSize, setRunsPageSize] = useState(25);
+  const [runsTotal, setRunsTotal] = useState(0);
+  const [runsNextPage, setRunsNextPage] = useState<number | null>(null);
   const [lastStartedRun, setLastStartedRun] =
     useState<CodebaseRunRecord | null>(null);
   const [submittingRun, setSubmittingRun] = useState<number | null>(null);
@@ -355,7 +361,11 @@ export function AutomationView({
   const detailRun =
     runs.find((run) => run.id === detailRunSnapshot?.id) ?? detailRunSnapshot;
   const [detailCopied, setDetailCopied] = useState(false);
+  const [reportingId, setReportingId] = useState('');
+  const reportController = useRef<AbortController | null>(null);
   const detailDialogRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => () => reportController.current?.abort(), [scope]);
 
   // Reviewer execution settings follow the selected Agent's Runtime.
   const instructionRef = useRef<HTMLTextAreaElement | null>(null);
@@ -585,131 +595,62 @@ export function AutomationView({
   const loadRuns = useCallback(
     async (sync = false, quiet = false) => {
       runsController.current?.abort();
-      workflowToggleController.current?.abort();
       const controller = new AbortController();
       runsController.current = controller;
       if (!quiet) {
         setRunsLoading(true);
         setRunsError('');
       }
-      const shareId = sharedWorkflowIdFromKey(runsWorkflowFilter);
-      const sharedRepoPrefix = 'share-repo:';
-      const selectedSharedRepoPath = runsRepoFilter.startsWith(sharedRepoPrefix)
-        ? runsRepoFilter.slice(sharedRepoPrefix.length)
-        : '';
-      const sortByCreatedDesc = (a: CodebaseRunRecord, b: CodebaseRunRecord) =>
-        Date.parse(b.createdAt) - Date.parse(a.createdAt);
       try {
-        if (shareId) {
-          const share = acceptedSharedRef.current.find(
-            (item) => item.id === shareId,
-          );
-          const data = await steer.sharedWorkflowRuns(
-            shareId,
-            runsLimit,
-            controller.signal,
-          );
-          if (!controller.signal.aborted) {
-            setRuns(
-              share
-                ? data.items.map((item) => toSharedRunRecord(item, share))
-                : [],
-            );
-            setRunClock(Date.now());
-            setRunsError('');
-          }
-        } else if (selectedSharedRepoPath) {
-          const matchingShares = acceptedSharedRef.current.filter(
-            (item) => (item.projectSource || '') === selectedSharedRepoPath,
-          );
-          const results = await Promise.allSettled(
-            matchingShares.map(async (share) => {
-              const data = await steer.sharedWorkflowRuns(
-                share.id,
-                runsLimit,
-                controller.signal,
-              );
-              return data.items.map((item) => toSharedRunRecord(item, share));
-            }),
-          );
-          if (!controller.signal.aborted) {
-            const merged = results
-              .flatMap((res) => (res.status === 'fulfilled' ? res.value : []))
-              .sort(sortByCreatedDesc);
-            setRuns(merged);
-            setRunClock(Date.now());
-            setRunsError('');
-            if (results.some((res) => res.status === 'rejected')) {
-              void onRefreshSharing();
-            }
-          }
-        } else if (!runsRepoFilter && !runsWorkflowFilter) {
-          const [ownResult, ...sharedResults] = await Promise.allSettled([
-            steer.codebaseRuns({ limit: runsLimit, sync }, controller.signal),
-            ...acceptedSharedRef.current.map(async (share) => {
-              const data = await steer.sharedWorkflowRuns(
-                share.id,
-                runsLimit,
-                controller.signal,
-              );
-              return data.items.map((item) => toSharedRunRecord(item, share));
-            }),
-          ]);
-          if (!controller.signal.aborted) {
-            const ownItems =
-              ownResult.status === 'fulfilled' ? ownResult.value.items : [];
-            const sharedItems = sharedResults.flatMap((res) =>
-              res.status === 'fulfilled' ? res.value : [],
-            );
-            const merged = [...ownItems, ...sharedItems].sort(
-              sortByCreatedDesc,
-            );
-            setRuns(merged);
-            setRunClock(Date.now());
-            if (
-              ownResult.status === 'rejected' &&
-              sharedItems.length === 0 &&
-              !quiet
-            ) {
-              setRunsError(errorText(ownResult.reason));
-            } else {
-              setRunsError('');
-            }
-            if (sharedResults.some((res) => res.status === 'rejected')) {
-              void onRefreshSharing();
-            }
-          }
-        } else {
-          const data = await steer.codebaseRuns(
-            {
-              repoId: runsRepoFilter || undefined,
-              workflowId: runsWorkflowFilter || undefined,
-              limit: runsLimit,
-              sync,
-            },
-            controller.signal,
-          );
-          if (!controller.signal.aborted) {
-            setRuns(data.items);
-            setRunClock(Date.now());
-            setRunsError('');
-          }
+        const data = await steer.codebaseRunPage(
+          {
+            repoId: runsRepoFilter || undefined,
+            workflowId: runsWorkflowFilter || undefined,
+            status: runsResultFilter,
+            page: runsPage,
+            pageSize: runsPageSize,
+            sync,
+          },
+          controller.signal,
+        );
+        if (!controller.signal.aborted) {
+          setRuns(data.items);
+          if (
+            renderedRunPage.current.page !== data.page ||
+            renderedRunPage.current.pageSize !== data.pageSize
+          )
+            runsTopRef.current?.scrollIntoView({ block: 'start' });
+          renderedRunPage.current = {
+            page: data.page,
+            pageSize: data.pageSize,
+          };
+          setRunsTotal(data.total);
+          setRunsNextPage(data.nextPage);
+          setRunsPage(data.page);
+          setRunClock(Date.now());
+          setRunsError('');
         }
       } catch (error) {
         if (!controller.signal.aborted) {
-          if (!quiet) setRunsError(errorText(error));
-          if (shareId) void onRefreshSharing();
+          setRunsError(errorText(error));
+          // Keep already-loaded rows for temporary connection failures. The
+          // server rechecks grants before returning every page.
+          if (
+            sharedWorkflowIdFromKey(runsWorkflowFilter) ||
+            runsRepoFilter.startsWith('share-repo:')
+          )
+            void onRefreshSharing();
         }
       } finally {
-        // Switching the repository filter aborts the previous request; only the
-        // latest request owns the loading state.
         if (runsController.current === controller) setRunsLoading(false);
       }
     },
     [
       runsRepoFilter,
       runsWorkflowFilter,
-      runsLimit,
+      runsResultFilter,
+      runsPage,
+      runsPageSize,
       errorText,
       onRefreshSharing,
     ],
@@ -772,14 +713,8 @@ export function AutomationView({
     void Promise.resolve().then(() => {
       void loadWorkflows();
       void loadRepositories();
-      void loadRuns(false, true);
     });
-  }, [loadWorkflows, loadRepositories, loadRuns]);
-
-  useEffect(() => {
-    if (!acceptedSharedKey || tab !== 'runs') return;
-    void Promise.resolve().then(() => loadRuns(false, true));
-  }, [acceptedSharedKey, tab, loadRuns]);
+  }, [loadWorkflows, loadRepositories]);
 
   // Quietly load recent runs for the selected repository on the MR tab so each
   // MR row can display its latest review status without switching tabs.
@@ -825,8 +760,8 @@ export function AutomationView({
   }, [tab, selectedRepoId, search, mrState, loadMRs]);
 
   useEffect(() => {
-    if (tab === 'runs') void Promise.resolve().then(() => loadRuns(true));
-  }, [tab, loadRuns]);
+    void Promise.resolve().then(() => loadRuns(tab === 'runs', tab !== 'runs'));
+  }, [tab, loadRuns, acceptedSharedKey]);
 
   // Refresh only visible, unfinished work. Settled history stays still.
   useEffect(() => {
@@ -1202,6 +1137,7 @@ export function AutomationView({
         setResult(null);
       }
       if (runsWorkflowFilter === deleteTarget.id) setRunsWorkflowFilter('');
+      void loadRuns(false, true);
       if (preferredWorkflowId === deleteTarget.id) setPreferredWorkflowId('');
       setDeleteTarget(null);
       void loadRepositories(undefined, true);
@@ -1266,7 +1202,7 @@ export function AutomationView({
     setRunsRepoFilter(workflow.repoId);
     setRunsWorkflowFilter(workflow.id);
     setRunsResultFilter('all');
-    setRunsLimit(100);
+    setRunsPage(1);
     setTab('runs');
     if (run) {
       setDetailCopied(false);
@@ -1371,7 +1307,8 @@ export function AutomationView({
           }),
         );
       }
-      setRuns((prev) => [run, ...prev]);
+      setRunsPage(1);
+      if (runsPage === 1) void loadRuns(false, true);
       setRepoLatestRuns((prev) => ({ ...prev, [run.mrIid]: run }));
       setLastStartedRun(run);
       setRunClock(Date.parse(run.startedAt || run.createdAt));
@@ -1411,7 +1348,8 @@ export function AutomationView({
           }),
         );
       }
-      setRuns((prev) => [nextRun, ...prev]);
+      setRunsPage(1);
+      if (runsPage === 1) void loadRuns(false, true);
       setRepoLatestRuns((prev) => ({ ...prev, [nextRun.mrIid]: nextRun }));
       setRunClock(Date.parse(nextRun.startedAt || nextRun.createdAt));
       if (detailRunSnapshot?.id === run.id) {
@@ -1422,6 +1360,46 @@ export function AutomationView({
       if (!controller.signal.aborted) notice(errorText(error));
     } finally {
       if (!controller.signal.aborted) setRerunningId('');
+    }
+  };
+
+  const reportReview = async (run: CodebaseRunRecord) => {
+    if (reportController.current || sharedWorkflowIdFromKey(run.workflowId))
+      return;
+    const controller = new AbortController();
+    reportController.current = controller;
+    setReportingId(run.id);
+    try {
+      const updated = await steer.reportCodebaseRun(run.id, controller.signal);
+      if (controller.signal.aborted) return;
+      setRuns((items) =>
+        items.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setDetailRun((current) =>
+        current?.id === updated.id ? updated : current,
+      );
+      setRepoLatestRuns((items) =>
+        Object.fromEntries(
+          Object.entries(items).map(([key, item]) => [
+            key,
+            item.id === updated.id ? updated : item,
+          ]),
+        ),
+      );
+      notice(
+        updated.reportStatus === 'sent'
+          ? 'Review written back to MR.'
+          : updated.reportStatus === 'failed'
+            ? 'Writeback failed. Check the error and retry.'
+            : 'Reporting to merge request…',
+      );
+    } catch (error) {
+      if (!controller.signal.aborted) notice(errorText(error));
+    } finally {
+      if (reportController.current === controller) {
+        reportController.current = null;
+        setReportingId('');
+      }
     }
   };
 
@@ -1489,15 +1467,6 @@ export function AutomationView({
     visibleWorkflows.length + visibleSharedWorkflows.length;
   const hasAnyWorkflows =
     workflows.length > 0 || acceptedSharedWorkflows.length > 0;
-  const visibleRuns = runs.filter(
-    (run) =>
-      runsResultFilter === 'all' ||
-      (runsResultFilter === 'active'
-        ? ['pending', 'running'].includes(run.status)
-        : runsResultFilter === 'report-failed'
-          ? run.reportStatus === 'failed'
-          : run.status === runsResultFilter),
-  );
   const runDuration = (run: CodebaseRunRecord) => {
     if (!run.finishedAt && !['pending', 'running'].includes(run.status))
       return '—';
@@ -1540,6 +1509,55 @@ export function AutomationView({
       ) || null
     : null;
   const detailLog = detailRun?.error ? cleanRunLog(detailRun.error) : '';
+  const detailCanReport = Boolean(
+    detailRun &&
+    !sharedWorkflowIdFromKey(detailRun.workflowId) &&
+    detailRun.status === 'succeeded' &&
+    detailRun.summary.trim(),
+  );
+  const reportingDetailId =
+    detailRun?.reportStatus === 'sending' &&
+    !sharedWorkflowIdFromKey(detailRun.workflowId)
+      ? detailRun.id
+      : '';
+  useEffect(() => {
+    if (!reportingDetailId) return;
+    const controller = new AbortController();
+    let busy = false;
+    const timer = window.setInterval(async () => {
+      if (document.visibilityState !== 'visible' || busy) return;
+      busy = true;
+      try {
+        const updated = await steer.syncCodebaseRun(
+          reportingDetailId,
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+        setRuns((items) =>
+          items.map((item) => (item.id === updated.id ? updated : item)),
+        );
+        setDetailRun((current) =>
+          current?.id === updated.id ? updated : current,
+        );
+        setRepoLatestRuns((items) =>
+          Object.fromEntries(
+            Object.entries(items).map(([key, item]) => [
+              key,
+              item.id === updated.id ? updated : item,
+            ]),
+          ),
+        );
+      } catch {
+        // Keep the last known report state during a temporary disconnect.
+      } finally {
+        busy = false;
+      }
+    }, 3000);
+    return () => {
+      window.clearInterval(timer);
+      controller.abort();
+    };
+  }, [reportingDetailId]);
   const conversationURL = (conversationId: string) =>
     `${window.location.origin}${window.location.pathname}#chat/${conversationId}`;
   const activeRunCount = runs.filter(isLiveRun).length;
@@ -2323,7 +2341,7 @@ export function AutomationView({
                                   {t('View result')}
                                 </button>
                               ) : (
-                                <span className="ws-automation-filter-count">
+                                <span className="ws-automation-no-review">
                                   {t('No review yet')}
                                 </span>
                               )
@@ -2821,7 +2839,7 @@ export function AutomationView({
                         );
                         setRunsWorkflowFilter(sharedWorkflowKey(share.id));
                         setRunsResultFilter('all');
-                        setRunsLimit(100);
+                        setRunsPage(1);
                         setTab('runs');
                       }}
                     >
@@ -2860,7 +2878,7 @@ export function AutomationView({
 
         {/* Run records: filterable by repository */}
         <TabsContent value="runs" hidden={tab !== 'runs'}>
-          <div className="ws-automation-filterbar">
+          <div ref={runsTopRef} className="ws-automation-filterbar">
             <label className="ws-automation-filter">
               <span>{t('Repository')}</span>
               <Select
@@ -2869,7 +2887,7 @@ export function AutomationView({
                   const next = String(value);
                   setRunsRepoFilter(next === allRepositoriesValue ? '' : next);
                   setRunsWorkflowFilter('');
-                  setRunsLimit(100);
+                  setRunsPage(1);
                 }}
               >
                 <SelectTrigger aria-label={t('Repository')}>
@@ -2931,7 +2949,7 @@ export function AutomationView({
                   } else if (runsRepoFilter.startsWith('share-repo:')) {
                     setRunsRepoFilter('');
                   }
-                  setRunsLimit(100);
+                  setRunsPage(1);
                 }}
               >
                 <SelectTrigger aria-label={t('Workflow')}>
@@ -3001,7 +3019,10 @@ export function AutomationView({
             <AutomationFilter
               label={t('Run status')}
               value={runsResultFilter}
-              onChange={setRunsResultFilter}
+              onChange={(value) => {
+                setRunsResultFilter(value);
+                setRunsPage(1);
+              }}
               options={[
                 { value: 'all', label: t('All results') },
                 { value: 'active', label: t('In progress') },
@@ -3051,9 +3072,9 @@ export function AutomationView({
           {runs.length > 0 && (
             <div className="ws-automation-list-caption">
               <span>
-                {t('{matched} of {count} loaded runs', {
-                  matched: visibleRuns.length,
+                {t('Showing {count} of {total} runs', {
                   count: runs.length,
+                  total: runsTotal,
                 })}
               </span>
               <span>
@@ -3082,28 +3103,36 @@ export function AutomationView({
           ) : runs.length === 0 && !runsError ? (
             <div className="ws-automation-empty">
               <History aria-hidden="true" />
-              <h2>{t('No review runs')}</h2>
+              <h2>
+                {t(
+                  runsResultFilter === 'all'
+                    ? 'No review runs'
+                    : 'No matching runs',
+                )}
+              </h2>
               <p>
                 {t(
-                  'Run a review from the Merge requests tab to create a record.',
+                  runsResultFilter === 'all'
+                    ? 'Run a review from the Merge requests tab to create a record.'
+                    : 'No runs match the selected status.',
                 )}
               </p>
-            </div>
-          ) : visibleRuns.length === 0 && runs.length > 0 ? (
-            <div className="ws-automation-empty is-small">
-              <History aria-hidden="true" />
-              <h2>{t('No matching runs')}</h2>
-              <button
-                type="button"
-                className="ws-automation-text-action"
-                onClick={() => setRunsResultFilter('all')}
-              >
-                {t('Clear status filter')}
-              </button>
+              {runsResultFilter !== 'all' && (
+                <button
+                  type="button"
+                  className="ws-automation-text-action"
+                  onClick={() => {
+                    setRunsResultFilter('all');
+                    setRunsPage(1);
+                  }}
+                >
+                  {t('Clear status filter')}
+                </button>
+              )}
             </div>
           ) : (
             <div className="ws-automation-run-table">
-              {visibleRuns.map((run) => {
+              {runs.map((run) => {
                 const wf = workflows.find((w) => w.id === run.workflowId);
                 const runShare =
                   acceptedSharedWorkflows.find(
@@ -3266,26 +3295,55 @@ export function AutomationView({
               })}
             </div>
           )}
-          {runs.length >= runsLimit && runsLimit < 500 && (
-            <div className="ws-automation-load-more">
-              <button
-                type="button"
-                className="ws-automation-button"
-                disabled={runsLoading}
-                onClick={() =>
-                  setRunsLimit((limit) => Math.min(limit + 100, 500))
-                }
-              >
-                {t('Load more records')}
-              </button>
-            </div>
-          )}
-          {runs.length >= 500 && (
-            <p className="ws-automation-list-caption">
-              {t(
-                'Showing the latest 500 runs. Select a repository or workflow to narrow the history.',
-              )}
-            </p>
+          {!runsError && runsTotal > 0 && (
+            <nav
+              className="ws-automation-pagination"
+              aria-label={t('Run records pagination')}
+            >
+              <span aria-live="polite">
+                {t('Page {page} of {pages} · {count} runs', {
+                  page: runsPage,
+                  pages: Math.max(1, Math.ceil(runsTotal / runsPageSize)),
+                  count: runsTotal,
+                })}
+              </span>
+              <div className="ws-automation-actions">
+                <label className="ws-automation-page-size">
+                  <span>{t('Records per page')}</span>
+                  <select
+                    aria-label={t('Records per page')}
+                    value={runsPageSize}
+                    disabled={runsLoading}
+                    onChange={(e) => {
+                      setRunsPageSize(Number(e.target.value));
+                      setRunsPage(1);
+                    }}
+                  >
+                    {[10, 25, 50, 100].map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="ws-automation-button"
+                  disabled={runsLoading || runsPage <= 1}
+                  onClick={() => setRunsPage((page) => page - 1)}
+                >
+                  {t('Previous')}
+                </button>
+                <button
+                  type="button"
+                  className="ws-automation-button"
+                  disabled={runsLoading || !runsNextPage}
+                  onClick={() => setRunsPage(runsNextPage || runsPage)}
+                >
+                  {t('Next')}
+                </button>
+              </div>
+            </nav>
           )}
         </TabsContent>
       </Tabs>
@@ -3745,7 +3803,7 @@ export function AutomationView({
                     )}
                     <div className="ws-codebase-webhook-toggle">
                       <label htmlFor="wf-report-enabled">
-                        {t('Write back to MR')}
+                        {t('Automatically write back to MR')}
                       </label>
                       <Switch
                         id="wf-report-enabled"
@@ -3757,7 +3815,7 @@ export function AutomationView({
                     </div>
                     <small id="wf-report-hint">
                       {t(
-                        'When disabled, results stay in Steer and no MR comment is posted or updated.',
+                        'When disabled, review the result in Steer and manually write it back from run details.',
                       )}
                     </small>
                     <div className="ws-codebase-webhook-toggle">
@@ -4138,14 +4196,52 @@ export function AutomationView({
                     {detailRun.reportError}
                   </p>
                 )}
+                {detailCanReport && detailRun.reportStatus !== 'sent' && (
+                  <p className="ws-run-detail-note">
+                    {t(
+                      'After checking the result, write this review to MR. This updates the existing comment from this workflow when present.',
+                    )}
+                  </p>
+                )}
               </div>
               {(detailRun.conversationId ||
                 detailRun.mrUrl ||
+                detailCanReport ||
                 (detailWorkflow &&
                   detailWorkflow.enabled &&
                   !isLiveRun(detailRun))) && (
                 <footer className="ws-codebase-mr-footer">
                   <div className="ws-automation-actions">
+                    {detailCanReport && (
+                      <button
+                        type="button"
+                        className="ws-automation-button is-compact"
+                        disabled={
+                          Boolean(reportingId) ||
+                          ['sent', 'sending'].includes(detailRun.reportStatus)
+                        }
+                        onClick={() => void reportReview(detailRun)}
+                      >
+                        {reportingId === detailRun.id ||
+                        detailRun.reportStatus === 'sending' ? (
+                          <Loader2 aria-hidden="true" className="is-spinning" />
+                        ) : detailRun.reportStatus === 'sent' ? (
+                          <Check aria-hidden="true" />
+                        ) : (
+                          <Upload aria-hidden="true" />
+                        )}
+                        {t(
+                          reportingId === detailRun.id ||
+                            detailRun.reportStatus === 'sending'
+                            ? 'Reporting to merge request…'
+                            : detailRun.reportStatus === 'sent'
+                              ? 'Reported to merge request'
+                              : detailRun.reportStatus === 'failed'
+                                ? 'Retry writeback'
+                                : 'Write back to MR',
+                        )}
+                      </button>
+                    )}
                     {detailWorkflow &&
                       detailWorkflow.enabled &&
                       !isLiveRun(detailRun) && (

@@ -87,7 +87,7 @@ func (m *integrationManager) feishuModelRuntime(ctx context.Context, integration
 	return controlplane.Runtime{}, agent, session, fmt.Errorf("当前 Runtime 不可用，请稍后重试")
 }
 
-func (m *integrationManager) sendFeishuSelection(ctx context.Context, integration store.WorkspaceIntegration, bot channeltypes.Channel, msg *channeltypes.NormalizedMessage, threadKey, kind string) error {
+func (m *integrationManager) sendFeishuSelection(ctx context.Context, integration store.WorkspaceIntegration, client *lark.Client, bot channeltypes.Channel, msg *channeltypes.NormalizedMessage, threadKey, kind string) error {
 	conversation, snapshot, err := m.feishuSelectionContext(ctx, integration, msg.ChatID, threadKey)
 	if err != nil {
 		return err
@@ -118,7 +118,7 @@ func (m *integrationManager) sendFeishuSelection(ctx context.Context, integratio
 	} else {
 		content = feishuProjectCard(card.ID, projects, &snapshot.ProjectID)
 	}
-	result, err := bot.Send(ctx, &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Card: content})
+	result, err := m.sendFeishuReply(ctx, integration, client, bot, msg, threadKey, &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Card: content})
 	if err != nil {
 		return err
 	}

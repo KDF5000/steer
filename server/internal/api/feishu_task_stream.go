@@ -15,14 +15,14 @@ import (
 
 type feishuLiveReply struct{ MessageID, Token, Content string }
 
-func (m *integrationManager) startFeishuTaskCard(ctx context.Context, integration store.WorkspaceIntegration, bot channeltypes.Channel, msg *channeltypes.NormalizedMessage, task store.Task, threadKey string, projection runProjection) (*feishuLiveReply, error) {
+func (m *integrationManager) startFeishuTaskCard(ctx context.Context, integration store.WorkspaceIntegration, client *lark.Client, bot channeltypes.Channel, msg *channeltypes.NormalizedMessage, task store.Task, threadKey string, projection runProjection) (*feishuLiveReply, error) {
 	snapshot, _ := json.Marshal(feishuCardContext{TaskID: task.ID, ConversationID: task.ConversationID})
 	card, err := m.server.store.CreateIntegrationCard(ctx, store.IntegrationCard{IntegrationID: integration.ID, ChatID: msg.ChatID, ThreadKey: threadKey, Kind: "task", Context: snapshot})
 	if err != nil {
 		return nil, err
 	}
 	content := feishuExecutionCard(string(projection.Run.Status), projection.Events, "", card.ID)
-	result, err := bot.Send(ctx, &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Card: content})
+	result, err := m.sendFeishuReply(ctx, integration, client, bot, msg, threadKey, &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Card: content})
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (m *integrationManager) watchFeishuTask(ctx context.Context, integration st
 			answer = strings.TrimSpace(feishuFinalContent(projection.Events))
 		}
 		if reply == nil && !cardFailed {
-			reply, err = m.startFeishuTaskCard(ctx, integration, bot, msg, task, threadKey, projection)
+			reply, err = m.startFeishuTaskCard(ctx, integration, client, bot, msg, task, threadKey, projection)
 			if err != nil {
 				cardFailed = true
 				slog.Warn("Could not create Feishu task card", "task_id", task.ID, "error", err)
@@ -97,7 +97,7 @@ func (m *integrationManager) watchFeishuTask(ctx context.Context, integration st
 			// Preserve complete long answers when the process card's byte budget
 			// requires truncation, and fall back if card APIs are unavailable.
 			if cardFailed || len(answer) > 12<<10 {
-				_, err := bot.Send(ctx, &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Markdown: answer})
+				_, err := m.sendFeishuReply(ctx, integration, client, bot, msg, threadKey, &channeltypes.SendInput{ChatID: msg.ChatID, ReplyMessageID: msg.MessageID, Markdown: answer})
 				return err
 			}
 			return nil

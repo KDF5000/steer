@@ -18,6 +18,24 @@ const storageKey = 'steer.interface-language';
 const languageEvent = 'steer:interface-language';
 
 const zhCN: Record<string, string> = {
+  'Automatically write back to MR': '自动回写到 MR',
+  'When disabled, review the result in Steer and manually write it back from run details.':
+    '关闭后，先在 Steer 检查结果，再从运行详情中手动回写到 MR。',
+  'After checking the result, write this review to MR. This updates the existing comment from this workflow when present.':
+    '检查结果后，可将这份审查回写到 MR；该流程已有的审查评论会被更新。',
+  'Retry writeback': '重试回写',
+  'Review written back to MR.': '审查结果已回写到 MR。',
+  'Writeback failed. Check the error and retry.':
+    '回写失败，请检查错误后重试。',
+  'Only a successful review with a summary can be written back.':
+    '只能回写已成功完成且有结果正文的审查。',
+  'No runs match the selected status.': '没有符合所选状态的运行记录。',
+  'Run records pagination': '运行记录分页',
+  'Showing {count} of {total} runs': '显示 {count} 条，共 {total} 条运行记录',
+  'Page {page} of {pages} · {count} runs':
+    '第 {page} / {pages} 页 · 共 {count} 条',
+  'Records per page': '每页条数',
+
   'Code block': '代码块',
   "Enter another user's email address.":
     '请输入其他账号的有效邮箱，不能邀请自己。',

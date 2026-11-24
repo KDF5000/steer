@@ -11972,7 +11972,12 @@ button.ws-chat-response-meta:focus-visible {
   background: var(--ws-surface);
 }
 .ws-automation-search-input:focus-within {
-  border-color: var(--ws-border-strong);
+  border-color: var(--ws-text-tertiary);
+}
+.ws .ws-automation-search-input input:focus,
+.ws .ws-automation-search-input input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 .ws-automation-search-input input {
   flex: 1;
@@ -12022,6 +12027,31 @@ button.ws-chat-response-meta:focus-visible {
   align-items: center;
   gap: 8px;
   flex: none;
+}
+.ws-automation-no-review {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ws-text-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+.ws-automation-page-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ws-text-secondary);
+  font-size: 12px;
+}
+.ws-automation-page-size select {
+  padding: 4px 8px;
+  border: 1px solid var(--ws-border);
+  border-radius: 6px;
+  background: var(--ws-surface);
+  color: var(--ws-text);
+  font: inherit;
+}
+.ws-automation-pagination .ws-automation-actions {
+  flex-wrap: wrap;
 }
 .ws-automation-mr-actions a svg {
   width: 16px;

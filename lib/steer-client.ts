@@ -921,6 +921,27 @@ export const steer = {
       `/codebase/workflows/${encodeURIComponent(workflowId)}/runs`,
       { method: 'POST', body: JSON.stringify(input), signal },
     ),
+  codebaseRunPage: (
+    query: {
+      workflowId?: string;
+      repoId?: string;
+      status?: string;
+      page: number;
+      pageSize: number;
+      sync?: boolean;
+    },
+    signal?: AbortSignal,
+  ) =>
+    request<{
+      items: CodebaseRunRecord[];
+      total: number;
+      page: number;
+      pageSize: number;
+      nextPage: number | null;
+    }>(
+      `/codebase/runs?${new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize), includeShared: 'true', status: query.status || 'all', ...(query.workflowId ? { workflowId: query.workflowId } : {}), ...(query.repoId ? { repoId: query.repoId } : {}), ...(query.sync ? { sync: 'true' } : {}) })}`,
+      { signal },
+    ),
   codebaseRuns: (
     query: {
       workflowId?: string;
@@ -942,6 +963,11 @@ export const steer = {
   syncCodebaseRun: (id: string, signal?: AbortSignal) =>
     request<CodebaseRunRecord>(
       `/codebase/runs/${encodeURIComponent(id)}/sync`,
+      { method: 'POST', signal },
+    ),
+  reportCodebaseRun: (id: string, signal?: AbortSignal) =>
+    request<CodebaseRunRecord>(
+      `/codebase/runs/${encodeURIComponent(id)}/report`,
       { method: 'POST', signal },
     ),
   createFeishuIntegration: (input: FeishuIntegrationInput) =>

@@ -40,9 +40,38 @@ Workspace. New runs of that workflow remain accessible under the same grant.
   contains the latest review from this workflow for each MR on the page,
   including reviews outside the recent run list.
 
+The unified run history uses `GET /api/v1/codebase/runs?page=1&pageSize=25&includeShared=true`.
+The server combines personal runs from the selected Workspace with accepted
+workflow grants for the recipient account before filtering and pagination.
+`page` is one-based; `pageSize` defaults to 25 and accepts 1–100. Responses
+include `items`, `total`, `page`, `pageSize` and nullable `nextPage`. Out-of-range
+pages are corrected to the last available page. The UI offers 10, 25, 50 or
+100 records per page and resets to page one when filters change.
+`status` accepts `all`, `active`, `report-failed`, `succeeded`, `failed`,
+`pending`, `running` or `skipped`. `workflowId=share:{shareID}` and
+`repoId=share-repo:{repoPath}` filter authorized shared runs; ordinary IDs
+filter personal runs. Shared responses omit private execution configuration
+and task/Workspace IDs. `sync=true` only reconciles personal runs. Every page
+rechecks sharing authorization; this endpoint does not grant shared execution
+or writeback access. Requests without `page` retain the existing personal
+history API and its capped `limit` behavior.
+
 The shared page refreshes results every eight seconds while visible. These
 reads do not initiate repository sync, reviews or report writeback. The existing
 background workers continue to update run results.
+
+Owners can inspect a successful run's summary and publish it using
+`POST /api/v1/codebase/runs/{runID}/report`, including runs skipped because
+automatic MR writeback is disabled. The server publishes its stored summary;
+client-supplied text is not used. The action preserves the workflow's automatic
+writeback setting, updates this workflow's existing MR comment when present,
+and returns the run with its writeback status. Already sent or currently sending
+runs are not published again. A failed manual writeback retains its error and
+requires an explicit retry; background workers do not retry it. Pending,
+failed, or empty reviews are rejected. This endpoint is scoped to the selected
+owner Workspace; workflow recipients have no writeback permission. The run
+detail dialog provides the action after the summary, while the workflow setting
+is labeled as automatic writeback.
 
 The conversation gateway also accepts workflow grants for GET requests to
 sessions linked by that workflow's runs and their own runs, tasks, attachments
@@ -139,6 +168,10 @@ duplicate entries are consolidated while preserving conversation IDs and
 worktree keys. Personal project names remain unique within a Workspace; imported
 projects retain their original names and use source identity for uniqueness. Update Steer backend and frontend together; the backend
 runs the migration at startup. Relay requires no changes.
+
+Migration `000052_codebase_manual_report.sql` records manual writeback claims
+so background reporting cannot retry or overwrite their outcomes. Deploy the
+updated Steer backend and frontend together; Relay requires no update.
 
 `TestAccountScopedSharing` uses PostgreSQL and a mock Relay server to check
 invitation acceptance, isolation, view/execute permissions, author attribution,

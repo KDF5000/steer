@@ -57,6 +57,17 @@ console.
 - A direct chat reuses one Steer conversation until `/new` is sent.
 - A group message starts a conversation for its Feishu thread. Replies in that
   thread reuse the same Steer conversation.
+- The bot creates a topic reply under the original group message
+  (`reply_in_thread=true`), rather than posting a separate quoted message in
+  the main chat. Task cards, command replies and long-answer fallbacks all
+  stay in that topic. Users can open the original message's replies and
+  continue there.
+- Native Feishu thread IDs and root message IDs resolve to one persisted
+  conversation key. Initial reply responses save this association, so later
+  messages reuse the session even when only `thread_id` is present. Existing
+  thread-ID sessions are reused when no root-message session is bound. The
+  aliases contain no copied session state, so `/new`, project switching and
+  model selection remain consistent across both identifiers.
 - When the bot is mentioned in a reply, Steer reads the immediate parent
   message when starting a new Steer session and includes its text, rich text,
   and supported images as explicit context for the Agent. Replies in an
@@ -144,7 +155,9 @@ events. The transcript retains recent whole message and action-group blocks
 within its byte budget, without adding omission notices to the Agent's progress. Complete
 events remain in Steer. Answers beyond the card's display budget are
 also sent as a complete rich-text reply. If sending or updating a card fails,
-the complete final reply falls back to a normal message.
+the complete final reply falls back to a rich-text message inside the same
+topic. A failed topic-send request is never downgraded to a standalone group
+message; transient retries use the same message UUID to avoid duplicate replies.
 
 Card routing and interaction bindings are persisted, so buttons still route
 correctly after a server restart. Selection cards can be applied once and
@@ -165,6 +178,11 @@ The integration manager is an internal `steer-server` component. At startup it
 loads all enabled Workspace integrations and starts one Feishu channel for each
 configured application. Creating, editing, disabling, reconnecting, or deleting
 an integration updates that channel without restarting the server.
+
+Migration `000053_feishu_thread_aliases.sql` adds the persistent thread-to-session
+alias lookup. Update Steer Server to apply it at startup and enable topic
+replies. The frontend, Relay Server and Relay Node require no changes for this
+Feishu update.
 
 Multiple `steer-server` replicas may open long connections for the same App ID;
 Feishu distributes incoming events among those connections. This version does

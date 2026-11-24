@@ -150,6 +150,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/codebase/workflows/{id}/runs", s.createCodebaseRun)
 	mux.HandleFunc("GET /api/v1/codebase/runs", s.listCodebaseRuns)
 	mux.HandleFunc("POST /api/v1/codebase/runs/{id}/sync", s.syncCodebaseRun)
+	mux.HandleFunc("POST /api/v1/codebase/runs/{id}/report", s.publishCodebaseRun)
 	mux.HandleFunc("POST /api/v1/relay-node-enrollments", s.createRelayNodeEnrollment)
 	mux.HandleFunc("GET /api/v1/relay-nodes", s.listOwnedRelayNodes)
 	mux.HandleFunc("DELETE /api/v1/relay-nodes/{id}", s.deleteOwnedRelayNode)

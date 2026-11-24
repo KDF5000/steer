@@ -198,11 +198,30 @@ WHERE workspace_id=$1 AND id=$2 RETURNING `+codebaseRunColumns, wid, id, status,
 // compare-and-set so parallel sync calls cannot post the same review twice.
 func (s *Store) ClaimCodebaseRunReport(ctx context.Context, wid, id string) (bool, error) {
 	tag, err := s.pool.Exec(ctx, `UPDATE codebase_runs SET report_status='sending', report_error='', report_attempts=report_attempts+1
-WHERE workspace_id=$1 AND id=$2 AND status='succeeded' AND report_status IN ('','failed')`, wid, id)
+WHERE workspace_id=$1 AND id=$2 AND status='succeeded' AND report_status IN ('','failed') AND NOT report_manual`, wid, id)
 	if err != nil {
 		return false, err
 	}
 	return tag.RowsAffected() > 0, nil
+}
+
+// Manual reports may publish skipped results without enabling workflow-wide
+// writeback. They are excluded from automatic retry and skip transitions.
+func (s *Store) ClaimManualCodebaseRunReport(ctx context.Context, wid, id string) (bool, error) {
+	tag, err := s.pool.Exec(ctx, `UPDATE codebase_runs SET report_status='sending', report_error='', report_attempts=report_attempts+1, report_manual=true
+WHERE workspace_id=$1 AND id=$2 AND status='succeeded' AND report_status IN ('','failed','skipped') AND btrim(summary)<>''`, wid, id)
+	return tag.RowsAffected() > 0, err
+}
+
+// A stale automatic worker must not replace a manually claimed or sent result
+// with "skipped", even when the workflow's automatic writeback is disabled.
+func (s *Store) SkipAutomaticCodebaseRunReport(ctx context.Context, wid, id, reason string) (CodebaseRun, error) {
+	run, err := scanCodebaseRun(s.pool.QueryRow(ctx, `UPDATE codebase_runs SET report_status='skipped', report_error=$3
+WHERE workspace_id=$1 AND id=$2 AND NOT report_manual AND report_status IN ('','failed') RETURNING `+codebaseRunColumns, wid, id, reason))
+	if err == ErrNotFound {
+		return s.CodebaseRun(ctx, wid, id)
+	}
+	return run, err
 }
 
 func (s *Store) UpdateCodebaseRunReport(ctx context.Context, wid, id, status, reportErr, reportURL string) (CodebaseRun, error) {
@@ -243,7 +262,7 @@ func (s *Store) CodebaseRunsNeedingReport(ctx context.Context, limit int) ([]Cod
 		limit = 50
 	}
 	rows, err := s.pool.Query(ctx, `SELECT `+codebaseRunColumns+` FROM codebase_runs
-WHERE status='succeeded' AND report_status IN ('','failed') AND report_attempts < 5 ORDER BY finished_at DESC NULLS LAST LIMIT $1`, limit)
+WHERE status='succeeded' AND report_status IN ('','failed') AND NOT report_manual AND report_attempts < 5 ORDER BY finished_at DESC NULLS LAST LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
 	}

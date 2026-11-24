@@ -316,6 +316,7 @@ func TestFeishuCardActionsPersistAndPreserveSession(t *testing.T) {
 	}))
 	defer relayServer.Close()
 	var patches []string
+	var threadReplies []string
 	larkServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fakeMu.Lock()
 		defer fakeMu.Unlock()
@@ -324,9 +325,18 @@ func TestFeishuCardActionsPersistAndPreserveSession(t *testing.T) {
 			return
 		}
 		var body struct {
-			Content string `json:"content"`
+			Content       string `json:"content"`
+			ReplyInThread bool   `json:"reply_in_thread"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		if strings.HasSuffix(r.URL.Path, "/reply") {
+			if !body.ReplyInThread {
+				t.Error("task reply was not sent inside the original topic")
+			}
+			threadReplies = append(threadReplies, body.Content)
+			writeJSON(w, 200, map[string]any{"code": 0, "data": map[string]string{"message_id": "generated-card", "chat_id": "chat", "root_id": "root", "thread_id": "native-thread"}})
+			return
+		}
 		patches = append(patches, body.Content)
 		writeJSON(w, 200, map[string]any{"code": 0})
 	}))
@@ -377,9 +387,10 @@ func TestFeishuCardActionsPersistAndPreserveSession(t *testing.T) {
 		t.Errorf("submitted preferences: %+v", submittedRequest)
 	}
 	finalCard := patches[len(patches)-1]
+	sentReplies := append([]string(nil), threadReplies...)
 	fakeMu.Unlock()
-	if len(bot.Sent) != 1 || bot.Sent[0].Card == "" || !strings.Contains(finalCard, "Done") || !strings.Contains(finalCard, "go test") || strings.Contains(finalCard, "cancel_task") {
-		t.Fatalf("task card not completed: sent=%+v final=%s", bot.Sent, finalCard)
+	if len(bot.Sent) != 0 || len(sentReplies) != 1 || !strings.Contains(sentReplies[0], "schema") || !strings.Contains(finalCard, "Done") || !strings.Contains(finalCard, "go test") || strings.Contains(finalCard, "cancel_task") {
+		t.Fatalf("task card not completed in topic: sent=%+v replies=%+v final=%s", bot.Sent, sentReplies, finalCard)
 	}
 	badModel := makeCard("model", feishuCardContext{ConversationID: sessionID, AgentID: agent.ID, RuntimeID: runtimeID})
 	event.Action.Name = "apply_model:" + badModel.ID

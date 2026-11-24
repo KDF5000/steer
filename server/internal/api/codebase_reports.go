@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/KDF5000/steer/server/internal/store"
 )
@@ -33,12 +35,12 @@ func (s *Server) reportCodebaseRun(ctx context.Context, wid string, run store.Co
 	if err == nil && !workflow.ReportEnabled {
 		// Check before claiming or resolving credentials: disabled workflows do
 		// not read comments, publish results, or consume report retries.
-		return s.store.UpdateCodebaseRunReport(ctx, wid, run.ID, "skipped", "", "")
+		return s.store.SkipAutomaticCodebaseRunReport(ctx, wid, run.ID, "")
 	}
 	if strings.TrimSpace(run.Summary) == "" {
 		// A succeeded run without a summary cannot be published; mark it so the
 		// worker does not retry it forever.
-		return s.store.UpdateCodebaseRunReport(ctx, wid, run.ID, "skipped", "Review produced no summary.", "")
+		return s.store.SkipAutomaticCodebaseRunReport(ctx, wid, run.ID, "Review produced no summary.")
 	}
 	claimed, err := s.store.ClaimCodebaseRunReport(ctx, wid, run.ID)
 	if err != nil {
@@ -52,6 +54,56 @@ func (s *Server) reportCodebaseRun(ctx context.Context, wid string, run store.Co
 		return s.store.UpdateCodebaseRunReport(ctx, wid, run.ID, "failed", reportErr.Error(), "")
 	}
 	return updated, nil
+}
+
+// publishCodebaseRun is an explicit owner action for the stored review result.
+// Shared workflow grants remain read-only and cannot reach this writeback path.
+func (s *Server) publishCodebaseRun(w http.ResponseWriter, r *http.Request) {
+	wid := s.workspace(r)
+	run, err := s.store.CodebaseRun(r.Context(), wid, r.PathValue("id"))
+	if err != nil {
+		writeCodebaseError(w, err)
+		return
+	}
+	if run.Status != "succeeded" || strings.TrimSpace(run.Summary) == "" {
+		writeCodebaseError(w, invalidCodebase("Only a successful review with a summary can be written back."))
+		return
+	}
+	if run.ReportStatus == "sent" || run.ReportStatus == "sending" {
+		writeJSON(w, http.StatusOK, run)
+		return
+	}
+	workflow, err := s.store.CodebaseWorkflow(r.Context(), wid, run.WorkflowID)
+	if err != nil {
+		writeCodebaseError(w, err)
+		return
+	}
+	claimed, err := s.store.ClaimManualCodebaseRunReport(r.Context(), wid, run.ID)
+	if err != nil {
+		writeCodebaseError(w, err)
+		return
+	}
+	if !claimed {
+		run, err = s.store.CodebaseRun(r.Context(), wid, run.ID)
+	} else {
+		// Once claimed, finish the external write and persist its outcome even
+		// if the browser closes, so the result is not stranded in "sending".
+		reportCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 45*time.Second)
+		defer cancel()
+		updated, reportErr := s.writeCodebaseReport(reportCtx, wid, workflow, run)
+		if reportErr != nil {
+			persistCtx, persistCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
+			defer persistCancel()
+			run, err = s.store.UpdateCodebaseRunReport(persistCtx, wid, run.ID, "failed", reportErr.Error(), "")
+		} else {
+			run = updated
+		}
+	}
+	if err != nil {
+		writeCodebaseError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, run)
 }
 
 func (s *Server) writeCodebaseReport(ctx context.Context, wid string, workflow store.CodebaseWorkflow, run store.CodebaseRun) (store.CodebaseRun, error) {
@@ -154,7 +206,7 @@ func buildCodebaseReport(workflow store.CodebaseWorkflow, run store.CodebaseRun,
 	b.WriteString(title)
 	b.WriteString("\n\n")
 	b.WriteString(summary)
-	b.WriteString("\n\n---\nPosted automatically by Steer")
+	b.WriteString("\n\n---\nPosted by Steer")
 	if run.Model != "" {
 		b.WriteString(" · ")
 		b.WriteString(run.Model)

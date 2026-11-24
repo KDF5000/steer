@@ -269,6 +269,10 @@ func (s *Server) deleteCodebaseWorkflow(w http.ResponseWriter, r *http.Request) 
 // ---- Runs ----
 
 func (s *Server) listCodebaseRuns(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("page") != "" {
+		s.listCodebaseRunPage(w, r)
+		return
+	}
 	wid := s.workspace(r)
 	q := r.URL.Query()
 	workflowID := strings.TrimSpace(q.Get("workflowId"))
