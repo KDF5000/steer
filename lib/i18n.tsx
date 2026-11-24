@@ -18,6 +18,14 @@ const storageKey = 'steer.interface-language';
 const languageEvent = 'steer:interface-language';
 
 const zhCN: Record<string, string> = {
+  'Code block': '代码块',
+  "Enter another user's email address.":
+    '请输入其他账号的有效邮箱，不能邀请自己。',
+  'Enter a valid email address, without a display name.':
+    '请输入有效的邮箱地址，不要附带姓名。',
+  'You already own this resource. Invite a different account.':
+    '你已经是此资源的所有者，请填写其他账号的邮箱。',
+
   Result: '结果',
   'Search merge requests': '搜索 MR',
   'Workflow read only': '仅查看',

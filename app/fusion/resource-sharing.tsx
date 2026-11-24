@@ -502,7 +502,7 @@ export function ResourceSharingDialog({
       await fn();
       await onRefresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(t(e instanceof Error ? e.message : String(e)));
     } finally {
       setBusy(false);
     }
@@ -556,6 +556,15 @@ export function ResourceSharingDialog({
           onSubmit={(e) => {
             e.preventDefault();
             if (!target) return;
+            if (
+              user &&
+              email.trim().toLowerCase() === user.email.trim().toLowerCase()
+            ) {
+              setError(
+                t('You already own this resource. Invite a different account.'),
+              );
+              return;
+            }
             if (
               members.some(
                 (s) =>

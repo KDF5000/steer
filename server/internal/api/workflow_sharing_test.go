@@ -107,6 +107,23 @@ func TestWorkflowSharingAccessBoundaries(t *testing.T) {
 	invite := func(permission string) string {
 		return fmt.Sprintf(`{"email":%q,"permission":%q}`, guest.Email, permission)
 	}
+	for _, email := range []string{"", "not-an-email", "Colleague <" + guest.Email + ">"} {
+		body := fmt.Sprintf(`{"email":%q,"permission":"view"}`, email)
+		response := call(owner, ow.ID, "POST", "/resource-shares/workflow/"+wf.ID, body, 400)
+		if !strings.Contains(response, "Enter a valid email address") {
+			t.Fatal("Invalid email should have a format-specific error: " + response)
+		}
+	}
+	selfBody := fmt.Sprintf(`{"email":%q,"permission":"view"}`, "  "+strings.ToUpper(owner.Email)+"  ")
+	if response := call(owner, ow.ID, "POST", "/resource-shares/workflow/"+wf.ID, selfBody, 400); !strings.Contains(response, "You already own this resource") {
+		t.Fatal("Self invitation should have an ownership-specific error: " + response)
+	}
+	unknownEmail := "colleague+review." + uuid.NewString() + "@example.com"
+	unknownBody := fmt.Sprintf(`{"email":%q,"permission":"view"}`, "  "+strings.ToUpper(unknownEmail)+"  ")
+	var unknownShare store.ResourceShare
+	if err := json.Unmarshal([]byte(call(owner, ow.ID, "POST", "/resource-shares/workflow/"+wf.ID, unknownBody, 201)), &unknownShare); err != nil || unknownShare.RecipientEmail != unknownEmail || unknownShare.Status != "pending" {
+		t.Fatalf("Unregistered, mixed-case email with spaces should be accepted: %+v, %v", unknownShare, err)
+	}
 	call(owner, ow.ID, "POST", "/resource-shares/workflow/"+wf.ID, invite("execute"), 400)
 	call(owner, ow.ID, "POST", "/resource-shares/workflow/"+foreign.ID, invite("view"), 404)
 	var grant store.ResourceShare

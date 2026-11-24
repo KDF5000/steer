@@ -39,8 +39,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import ReactMarkdown, { type Components } from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { ReportMarkdown } from './report-markdown';
 import { CodebaseWebhookSettings } from './codebase-webhook';
 import {
   LeaveSharedWorkflowDialog,
@@ -147,14 +146,6 @@ const isLiveRun = (run: CodebaseRunRecord) =>
   ['pending', 'running'].includes(run.status) ||
   run.reportStatus === 'sending' ||
   (run.status === 'succeeded' && !run.reportStatus);
-
-const markdownComponents: Components = {
-  table: ({ children, ...props }) => (
-    <div className="ws-md-table-wrap">
-      <table {...props}>{children}</table>
-    </div>
-  ),
-};
 
 function AutomationFilter({
   label,
@@ -3963,12 +3954,9 @@ export function AutomationView({
               </header>
               <div className="ws-codebase-mr-body">
                 <div className="ws-codebase-description">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={markdownComponents}
-                  >
+                  <ReportMarkdown>
                     {selectedMR.description || t('No MR description.')}
-                  </ReactMarkdown>
+                  </ReportMarkdown>
                 </div>
               </div>
               <footer className="ws-codebase-mr-footer">
@@ -4135,12 +4123,7 @@ export function AutomationView({
                       <h3>{t('Run summary')}</h3>
                     </div>
                     <div className="ws-run-detail-summary">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={markdownComponents}
-                      >
-                        {detailRun.summary}
-                      </ReactMarkdown>
+                      <ReportMarkdown>{detailRun.summary}</ReportMarkdown>
                     </div>
                   </section>
                 )}

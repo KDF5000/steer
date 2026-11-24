@@ -51,8 +51,12 @@ func (s *Server) inviteResource(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
 	addr, err := mail.ParseAddress(in.Email)
-	if err != nil || addr.Address != in.Email || strings.EqualFold(in.Email, u.Email) {
-		writeJSON(w, 400, map[string]string{"error": "Enter another user's email address."})
+	if err != nil || addr.Address != in.Email {
+		writeJSON(w, 400, map[string]string{"error": "Enter a valid email address, without a display name."})
+		return
+	}
+	if strings.EqualFold(in.Email, strings.TrimSpace(u.Email)) {
+		writeJSON(w, 400, map[string]string{"error": "You already own this resource. Invite a different account."})
 		return
 	}
 	kind := r.PathValue("kind")
