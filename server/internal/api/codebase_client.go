@@ -76,6 +76,7 @@ type CodebaseMergeRequest struct {
 	WebURL       string   `json:"web_url"`
 	SourceBranch string   `json:"source_branch"`
 	TargetBranch string   `json:"target_branch"`
+	HeadSHA      string   `json:"head_sha"`
 	CreatedAt    string   `json:"created_at"`
 	UpdatedAt    string   `json:"updated_at"`
 	Draft        bool     `json:"draft"`
@@ -201,6 +202,12 @@ type codebaseMergeRequestPayload struct {
 	TargetRepoID     string `json:"TargetRepoId"`
 	SourceBranchName string `json:"SourceBranchName"`
 	TargetBranchName string `json:"TargetBranchName"`
+	SourceCommitID   string `json:"SourceCommitId"`
+	HeadCommitID     string `json:"HeadCommitId"`
+	Versions         []struct {
+		SourceCommitID string `json:"SourceCommitId"`
+		BaseCommitID   string `json:"BaseCommitId"`
+	} `json:"Versions"`
 	Title            string `json:"Title"`
 	Description      string `json:"Description"`
 	URL              string `json:"URL"`
@@ -232,6 +239,15 @@ func codebaseMergeRequestFromPayload(raw codebaseMergeRequestPayload, repoPath s
 	if err != nil || repoID <= 0 {
 		return item, incompatibleMergeRequest()
 	}
+	headSHA := strings.TrimSpace(raw.SourceCommitID)
+	if len(raw.Versions) > 0 {
+		if latest := strings.TrimSpace(raw.Versions[len(raw.Versions)-1].SourceCommitID); latest != "" {
+			headSHA = latest
+		}
+	}
+	if headSHA == "" {
+		headSHA = strings.TrimSpace(raw.HeadCommitID)
+	}
 	item = CodebaseMergeRequest{
 		ID:           id,
 		IID:          raw.Number,
@@ -242,6 +258,7 @@ func codebaseMergeRequestFromPayload(raw codebaseMergeRequestPayload, repoPath s
 		WebURL:       raw.URL,
 		SourceBranch: raw.SourceBranchName,
 		TargetBranch: raw.TargetBranchName,
+		HeadSHA:      headSHA,
 		CreatedAt:    raw.CreatedAt,
 		UpdatedAt:    raw.UpdatedAt,
 		Draft:        raw.Draft,
@@ -391,7 +408,7 @@ func codebaseMRDetail(ctx context.Context, baseURL string, credentials codebaseO
 	input := map[string]any{
 		"RepoId":   repoID,
 		"Number":   iid,
-		"Selector": map[string]any{"URL": true, "User": true},
+		"Selector": map[string]any{"URL": true, "User": true, "Version": true},
 	}
 	var detail struct {
 		MergeRequest codebaseMergeRequestPayload `json:"MergeRequest"`

@@ -8,7 +8,9 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/KDF5000/relay/controlplane"
 	"github.com/KDF5000/steer/server/internal/store"
 	"github.com/google/uuid"
 )
@@ -22,6 +24,8 @@ type codebaseWebhookReview struct {
 	MRIID    int
 	MRTitle  string
 	MRURL    string
+	HeadSHA  string
+	Draft    bool
 	Action   string
 	State    string
 }
@@ -62,12 +66,21 @@ func parseCodebaseMergeRequestWebhook(payload json.RawMessage) (codebaseWebhookR
 	if mrIID == 0 {
 		mrIID = webhookInt(root, "merge_request_iid", "iid", "number")
 	}
+	headSHA := webhookString(attributes, "source_commit_id", "SourceCommitId", "head_sha", "HeadSha", "head_commit_id", "HeadCommitId")
+	if headSHA == "" {
+		if lastCommit := firstWebhookMap(attributes, "last_commit", "LastCommit"); lastCommit != nil {
+			headSHA = webhookString(lastCommit, "id", "Id", "sha", "SHA")
+		}
+	}
+	draft := webhookBool(attributes, "draft", "Draft", "work_in_progress", "WorkInProgress")
 	review := codebaseWebhookReview{
 		Action:   action,
 		State:    state,
 		MRIID:    mrIID,
 		MRTitle:  webhookString(attributes, "title", "Title"),
 		MRURL:    webhookString(attributes, "url", "URL", "web_url"),
+		HeadSHA:  headSHA,
+		Draft:    draft,
 		RepoID:   webhookString(project, "id", "Id", "ID"),
 		RepoPath: webhookString(project, "path_with_namespace", "path", "Path", "name_with_namespace"),
 	}
@@ -120,6 +133,13 @@ func (s *Server) processCodebaseWebhookEvent(ctx context.Context, event store.Co
 		ok = ok && review.shouldStart()
 	}
 	if !ok {
+		// Record merged MR head SHA on prior succeeded runs for shadow-mode
+		// calibration (comparing AI merge_policy against actual merge outcomes).
+		if review.MRIID > 0 && review.RepoID != "" && (review.State == "merged" || review.Action == "merge" || review.Action == "merged") {
+			if err := s.store.RecordCodebaseMRMerged(ctx, event.WorkspaceID, review.RepoID, review.MRIID, review.HeadSHA, time.Now().UTC()); err != nil {
+				slog.Warn("codebase webhook record merged", "event_id", event.ID, "mr_iid", review.MRIID, "error", err)
+			}
+		}
 		reason := "unsupported or invalid MR event"
 		if review.MRIID > 0 {
 			reason = "MR state or action does not require a review"
@@ -145,15 +165,38 @@ func (s *Server) processCodebaseWebhookEvent(ctx context.Context, event store.Co
 		if !codebaseWorkflowMatchesRepo(workflow, review) {
 			continue
 		}
+		if workflow.SkipDraft && review.Draft {
+			continue
+		}
 		matched++
-		// A review that is still pending or running for this MR already covers
-		// the revision; do not queue a second Agent task for it.
-		if _, err := s.store.CodebaseRunForMergeRequest(ctx, event.WorkspaceID, workflow.ID, review.MRIID); err == nil {
-			alreadyRunning++
-			continue
-		} else if !errors.Is(err, store.ErrNotFound) {
-			failures = append(failures, err.Error())
-			continue
+		if review.HeadSHA != "" {
+			// Skip when this exact head_sha is already pending, running, or succeeded.
+			exists, err := s.store.HasCodebaseRunForSHA(ctx, event.WorkspaceID, workflow.ID, review.MRIID, review.HeadSHA)
+			if err != nil {
+				failures = append(failures, err.Error())
+				continue
+			}
+			if exists {
+				alreadyRunning++
+				continue
+			}
+			// If an older revision is still running, supersede and cancel it so
+			// the newer push is never silently dropped.
+			if active, err := s.store.CodebaseRunForMergeRequest(ctx, event.WorkspaceID, workflow.ID, review.MRIID); err == nil {
+				s.supersedeCodebaseRun(ctx, event.WorkspaceID, active, review.HeadSHA)
+			} else if !errors.Is(err, store.ErrNotFound) {
+				failures = append(failures, err.Error())
+				continue
+			}
+		} else {
+			// Without a head_sha, fall back to deduplicating any active run for this MR.
+			if _, err := s.store.CodebaseRunForMergeRequest(ctx, event.WorkspaceID, workflow.ID, review.MRIID); err == nil {
+				alreadyRunning++
+				continue
+			} else if !errors.Is(err, store.ErrNotFound) {
+				failures = append(failures, err.Error())
+				continue
+			}
 		}
 		run := store.CodebaseRun{
 			ID:          uuid.NewString(),
@@ -164,6 +207,7 @@ func (s *Server) processCodebaseWebhookEvent(ctx context.Context, event store.Co
 			MRIID:       review.MRIID,
 			MRTitle:     review.MRTitle,
 			MRURL:       sanitizeWebhookURL(review.MRURL),
+			HeadSHA:     review.HeadSHA,
 			Trigger:     "webhook",
 			Status:      "pending",
 		}
@@ -173,6 +217,9 @@ func (s *Server) processCodebaseWebhookEvent(ctx context.Context, event store.Co
 			}
 			if mr.WebURL != "" {
 				run.MRURL = mr.WebURL
+			}
+			if run.HeadSHA == "" && mr.HeadSHA != "" {
+				run.HeadSHA = mr.HeadSHA
 			}
 		}
 		key := "codebase:" + workflow.ID + ":" + strconv.Itoa(review.MRIID) + ":" + strconv.FormatInt(event.ID, 10)
@@ -246,6 +293,44 @@ func webhookInt(value map[string]any, keys ...string) int {
 		return 0
 	}
 	return parsed
+}
+
+func webhookBool(value map[string]any, keys ...string) bool {
+	for _, key := range keys {
+		raw, ok := value[key]
+		if !ok {
+			continue
+		}
+		switch typed := raw.(type) {
+		case bool:
+			return typed
+		case string:
+			if strings.EqualFold(strings.TrimSpace(typed), "true") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// supersedeCodebaseRun marks an in-flight review for an older head SHA as
+// skipped and best-effort cancels its Relay run so the newer push starts cleanly.
+func (s *Server) supersedeCodebaseRun(ctx context.Context, wid string, active store.CodebaseRun, newerSHA string) {
+	now := time.Now().UTC()
+	shortSHA := newerSHA
+	if len(shortSHA) > 12 {
+		shortSHA = shortSHA[:12]
+	}
+	reason := "Superseded by newer MR revision " + shortSHA
+	_, _ = s.store.UpdateCodebaseRun(ctx, wid, active.ID, "skipped", "", reason, "", "", nil, &now)
+	if active.TaskID != "" && s.relay != nil {
+		if task, err := s.store.Task(ctx, wid, active.TaskID); err == nil && task.RelayRunID != "" {
+			_, _ = s.relay.CancelRun(ctx, task.RelayRunID, controlplane.CancelRequest{
+				Reason:      reason,
+				RequestedBy: "steer-webhook",
+			})
+		}
+	}
 }
 
 // sanitizeWebhookURL keeps only absolute HTTP(S) URLs so a payload cannot inject

@@ -111,9 +111,13 @@ func (s *Server) writeCodebaseReport(ctx context.Context, wid string, workflow s
 	if err != nil {
 		return run, err
 	}
-	mrID, err := s.codebaseMergeRequestID(ctx, wid, connection.BaseURL, credentials, run)
+	mrID, liveHeadSHA, err := s.codebaseMergeRequestForWriteback(ctx, wid, connection.BaseURL, credentials, run)
 	if err != nil {
 		return run, err
+	}
+	if run.HeadSHA != "" && liveHeadSHA != "" && !strings.EqualFold(run.HeadSHA, liveHeadSHA) {
+		return s.store.UpdateCodebaseRunReport(ctx, wid, run.ID, "skipped",
+			fmt.Sprintf("Skipped writeback: MR head moved from %s to %s.", shortSHA(run.HeadSHA), shortSHA(liveHeadSHA)), "")
 	}
 	marker := fmt.Sprintf(codebaseReportMarker, run.WorkflowID)
 	content := buildCodebaseReport(workflow, run, marker)
@@ -143,24 +147,43 @@ func (s *Server) writeCodebaseReport(ctx context.Context, wid string, workflow s
 	return s.store.UpdateCodebaseRunReport(ctx, wid, run.ID, "sent", "", run.MRURL)
 }
 
-// codebaseMergeRequestID resolves the internal merge request ID used by the
-// comment API. The synced row is preferred; otherwise the MR is read live.
-func (s *Server) codebaseMergeRequestID(ctx context.Context, wid, baseURL string, credentials codebaseOpenAPICredentials, run store.CodebaseRun) (int64, error) {
+// codebaseMergeRequestForWriteback resolves the internal merge request ID and,
+// when the run is bound to a head SHA, verifies the live MR head SHA so stale
+// reviews never overwrite comments for newer commits.
+func (s *Server) codebaseMergeRequestForWriteback(ctx context.Context, wid, baseURL string, credentials codebaseOpenAPICredentials, run store.CodebaseRun) (int64, string, error) {
+	if run.HeadSHA != "" {
+		detail, err := codebaseMRDetail(ctx, baseURL, credentials, run.RepoID, run.MRIID)
+		if err != nil {
+			return 0, "", err
+		}
+		if detail.ID <= 0 {
+			return 0, "", upstreamCodebase("codebase_api_incompatible", "Codebase did not return a valid merge request.")
+		}
+		return detail.ID, detail.HeadSHA, nil
+	}
 	mr, err := s.store.CodebaseMergeRequest(ctx, wid, run.RepoID, run.MRIID)
 	if err == nil && mr.ID > 0 {
-		return mr.ID, nil
+		return mr.ID, mr.HeadSHA, nil
 	}
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
-		return 0, err
+		return 0, "", err
 	}
 	detail, err := codebaseMRDetail(ctx, baseURL, credentials, run.RepoID, run.MRIID)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if detail.ID <= 0 {
-		return 0, upstreamCodebase("codebase_api_incompatible", "Codebase did not return a valid merge request.")
+		return 0, "", upstreamCodebase("codebase_api_incompatible", "Codebase did not return a valid merge request.")
 	}
-	return detail.ID, nil
+	return detail.ID, detail.HeadSHA, nil
+}
+
+func shortSHA(sha string) string {
+	sha = strings.TrimSpace(sha)
+	if len(sha) > 12 {
+		return sha[:12]
+	}
+	return sha
 }
 
 func (s *Server) findCodebaseReviewComment(ctx context.Context, baseURL string, credentials codebaseOpenAPICredentials, repoID string, mrID int64, marker string) (string, error) {
@@ -205,6 +228,10 @@ func buildCodebaseReport(workflow store.CodebaseWorkflow, run store.CodebaseRun,
 	b.WriteString("### ")
 	b.WriteString(title)
 	b.WriteString("\n\n")
+	if badges := buildCodebaseReportBadges(run); badges != "" {
+		b.WriteString(badges)
+		b.WriteString("\n\n")
+	}
 	b.WriteString(summary)
 	b.WriteString("\n\n---\nPosted by Steer")
 	if run.Model != "" {
@@ -213,4 +240,31 @@ func buildCodebaseReport(workflow store.CodebaseWorkflow, run store.CodebaseRun,
 	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+func buildCodebaseReportBadges(run store.CodebaseRun) string {
+	var parts []string
+	if run.MergePolicy != "" {
+		parts = append(parts, "**Route:** `"+run.MergePolicy+"`")
+	}
+	if run.RiskLevel != "" {
+		risk := "`" + run.RiskLevel + "`"
+		if run.ReviewTrack != "" {
+			risk += " (`" + run.ReviewTrack + "`)"
+		}
+		parts = append(parts, "**Risk:** "+risk)
+	}
+	if run.Disposition != "" {
+		parts = append(parts, "**Disposition:** `"+run.Disposition+"`")
+	}
+	if run.HeadSHA != "" {
+		parts = append(parts, "**Commit:** `"+shortSHA(run.HeadSHA)+"`")
+	}
+	if run.Round > 1 {
+		parts = append(parts, "**Round:** "+strconv.Itoa(run.Round))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "> " + strings.Join(parts, " · ")
 }

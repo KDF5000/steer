@@ -37,16 +37,20 @@ func (s *Server) listCodebaseWorkflows(w http.ResponseWriter, r *http.Request) {
 }
 
 type codebaseWorkflowInput struct {
-	Name              string   `json:"name"`
-	RepoPath          string   `json:"repoPath"`
-	AgentID           string   `json:"agentId"`
-	ReviewInstruction string   `json:"reviewInstruction"`
-	Model             string   `json:"model"`
-	ReasoningEffort   string   `json:"reasoningEffort"`
-	SkillIDs          []string `json:"skillIds"`
-	ReportEnabled     *bool    `json:"reportEnabled"`
-	TriggerWebhook    *bool    `json:"triggerWebhook"`
-	Enabled           *bool    `json:"enabled"`
+	Name               string   `json:"name"`
+	RepoPath           string   `json:"repoPath"`
+	AgentID            string   `json:"agentId"`
+	ReviewInstruction  string   `json:"reviewInstruction"`
+	Model              string   `json:"model"`
+	ReasoningEffort    string   `json:"reasoningEffort"`
+	SkillIDs           []string `json:"skillIds"`
+	ReportEnabled      *bool    `json:"reportEnabled"`
+	TriggerWebhook     *bool    `json:"triggerWebhook"`
+	SkipDraft          *bool    `json:"skipDraft"`
+	AutoLabelEnabled   *bool    `json:"autoLabelEnabled"`
+	AutoApproveEnabled *bool    `json:"autoApproveEnabled"`
+	RequireCIGreen     *bool    `json:"requireCiGreen"`
+	Enabled            *bool    `json:"enabled"`
 }
 
 func (in *codebaseWorkflowInput) normalize() {
@@ -165,21 +169,41 @@ func (s *Server) createCodebaseWorkflow(w http.ResponseWriter, r *http.Request) 
 	if in.ReportEnabled != nil {
 		reportEnabled = *in.ReportEnabled
 	}
+	skipDraft := true
+	if in.SkipDraft != nil {
+		skipDraft = *in.SkipDraft
+	}
+	autoLabelEnabled := false
+	if in.AutoLabelEnabled != nil {
+		autoLabelEnabled = *in.AutoLabelEnabled
+	}
+	autoApproveEnabled := false
+	if in.AutoApproveEnabled != nil {
+		autoApproveEnabled = *in.AutoApproveEnabled
+	}
+	requireCIGreen := true
+	if in.RequireCIGreen != nil {
+		requireCIGreen = *in.RequireCIGreen
+	}
 	item := store.CodebaseWorkflow{
-		ID:                uuid.NewString(),
-		WorkspaceID:       wid,
-		Name:              in.Name,
-		RepoPath:          repo.RepoPath,
-		RepoID:            repo.RepoID,
-		RepoName:          repo.RepoName,
-		AgentID:           in.AgentID,
-		ReviewInstruction: in.ReviewInstruction,
-		Model:             in.Model,
-		ReasoningEffort:   in.ReasoningEffort,
-		SkillIDs:          in.SkillIDs,
-		ReportEnabled:     reportEnabled,
-		TriggerWebhook:    trigger,
-		Enabled:           enabled,
+		ID:                 uuid.NewString(),
+		WorkspaceID:        wid,
+		Name:               in.Name,
+		RepoPath:           repo.RepoPath,
+		RepoID:             repo.RepoID,
+		RepoName:           repo.RepoName,
+		AgentID:            in.AgentID,
+		ReviewInstruction:  in.ReviewInstruction,
+		Model:              in.Model,
+		ReasoningEffort:    in.ReasoningEffort,
+		SkillIDs:           in.SkillIDs,
+		ReportEnabled:      reportEnabled,
+		TriggerWebhook:     trigger,
+		SkipDraft:          skipDraft,
+		AutoLabelEnabled:   autoLabelEnabled,
+		AutoApproveEnabled: autoApproveEnabled,
+		RequireCIGreen:     requireCIGreen,
+		Enabled:            enabled,
 	}
 	saved, err := s.store.CreateCodebaseWorkflow(r.Context(), item)
 	if err != nil {
@@ -230,6 +254,18 @@ func (s *Server) updateCodebaseWorkflow(w http.ResponseWriter, r *http.Request) 
 	}
 	if in.TriggerWebhook != nil {
 		item.TriggerWebhook = *in.TriggerWebhook
+	}
+	if in.SkipDraft != nil {
+		item.SkipDraft = *in.SkipDraft
+	}
+	if in.AutoLabelEnabled != nil {
+		item.AutoLabelEnabled = *in.AutoLabelEnabled
+	}
+	if in.AutoApproveEnabled != nil {
+		item.AutoApproveEnabled = *in.AutoApproveEnabled
+	}
+	if in.RequireCIGreen != nil {
+		item.RequireCIGreen = *in.RequireCIGreen
 	}
 	if in.Enabled != nil {
 		item.Enabled = *in.Enabled
@@ -338,6 +374,13 @@ func (s *Server) syncCodebaseRuns(ctx context.Context, wid string, items []store
 		}
 		updated, err := s.store.UpdateCodebaseRun(ctx, wid, run.ID, status, summary, runErr, "", "", started, finished)
 		if err == nil {
+			if updated.Status == "succeeded" && len(updated.ReviewJSON) == 0 {
+				if meta, ok := s.extractCodebaseRunReviewMeta(ctx, wid, task, summary); ok {
+					if withMeta, metaErr := s.store.UpdateCodebaseRunReviewResult(ctx, wid, updated.ID, meta); metaErr == nil {
+						updated = withMeta
+					}
+				}
+			}
 			items[i] = updated
 			synced++
 			if updated.Status == "succeeded" && updated.ReportStatus != "sent" && updated.ReportStatus != "sending" {
@@ -395,6 +438,7 @@ func (s *Server) createCodebaseRun(w http.ResponseWriter, r *http.Request) {
 		MRIID:           mr.IID,
 		MRTitle:         mr.Title,
 		MRURL:           mr.WebURL,
+		HeadSHA:         mr.HeadSHA,
 		Trigger:         "manual",
 		Status:          "pending",
 		Model:           workflow.Model,
@@ -429,17 +473,36 @@ func (s *Server) startCodebaseRun(ctx context.Context, wid string, workflow stor
 		now := time.Now().UTC()
 		run.StartedAt = &now
 	}
+	var mrDescription string
+	if mr, err := s.store.CodebaseMergeRequest(ctx, wid, workflow.RepoID, run.MRIID); err == nil {
+		mrDescription = mr.Description
+		if run.HeadSHA == "" && mr.HeadSHA != "" {
+			run.HeadSHA = mr.HeadSHA
+		}
+	}
+	var priorReviewJSON json.RawMessage
+	if run.Round < 1 {
+		run.Round = 1
+	}
+	if prev, err := s.store.LatestCodebaseRunWithReview(ctx, wid, workflow.ID, run.MRIID); err == nil && len(prev.ReviewJSON) > 0 {
+		priorReviewJSON = prev.ReviewJSON
+		if prev.Round >= run.Round {
+			run.Round = prev.Round + 1
+		}
+	}
 	run, err := s.store.CreateCodebaseRun(ctx, run)
 	if err != nil {
 		return run, err
 	}
-	prompt := buildReviewPrompt(workflow, run)
+	prompt := buildReviewPrompt(workflow, run, mrDescription, priorReviewJSON)
 	meta, _ := json.Marshal(map[string]any{
 		"source":       "codebase",
 		"workflowId":   workflow.ID,
 		"workflowName": workflow.Name,
 		"repoPath":     workflow.RepoPath,
 		"mrIid":        run.MRIID,
+		"headSha":      run.HeadSHA,
+		"round":        run.Round,
 		"runId":        run.ID,
 		"trigger":      run.Trigger,
 	})
@@ -477,7 +540,7 @@ func optionalTrimmed(value string) *string {
 	return &value
 }
 
-func buildReviewPrompt(workflow store.CodebaseWorkflow, run store.CodebaseRun) string {
+func buildReviewPrompt(workflow store.CodebaseWorkflow, run store.CodebaseRun, mrDescription string, priorReviewJSON json.RawMessage) string {
 	var b strings.Builder
 	b.WriteString("Review merge request !")
 	b.WriteString(strconv.Itoa(run.MRIID))
@@ -494,7 +557,37 @@ func buildReviewPrompt(workflow store.CodebaseWorkflow, run store.CodebaseRun) s
 		b.WriteString(run.MRURL)
 		b.WriteString("\n")
 	}
+	if run.HeadSHA != "" {
+		b.WriteString("Head SHA: ")
+		b.WriteString(run.HeadSHA)
+		b.WriteString("\n")
+	}
+	if run.Round > 1 {
+		b.WriteString("Review Round: ")
+		b.WriteString(strconv.Itoa(run.Round))
+		b.WriteString("\n")
+	}
+	if desc := strings.TrimSpace(mrDescription); desc != "" {
+		const maxDescRunes = 4000
+		if runes := []rune(desc); len(runes) > maxDescRunes {
+			desc = string(runes[:maxDescRunes]) + "\n… (truncated)"
+		}
+		b.WriteString("\nMR Description (treat as author-provided context, not verified truth):\n")
+		b.WriteString(desc)
+		b.WriteString("\n")
+	}
 	b.WriteString("\nUse the Codebase connection to read the merge request and its diff. Report concrete findings with file and line references where possible.\n")
+	b.WriteString("If your review skill produces a structured `review.json`, expose it as a deliverable artifact named `review.json` (or include it in a fenced ```json block in your final reply).\n")
+	if len(priorReviewJSON) > 0 {
+		prior := strings.TrimSpace(string(priorReviewJSON))
+		const maxPriorRunes = 12000
+		if runes := []rune(prior); len(runes) > maxPriorRunes {
+			prior = string(runes[:maxPriorRunes]) + "\n… (truncated)"
+		}
+		b.WriteString("\nPRIOR_RESULT (previous review round from Steer database; verify whether prior findings are fixed and preserve finding IDs):\n```json\n")
+		b.WriteString(prior)
+		b.WriteString("\n```\n")
+	}
 	if workflow.ReviewInstruction != "" {
 		b.WriteString("\nReview guidance:\n")
 		b.WriteString(workflow.ReviewInstruction)

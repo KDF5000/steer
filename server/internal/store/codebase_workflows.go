@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -23,45 +24,72 @@ type CodebaseWorkflow struct {
 	ReasoningEffort string   `json:"reasoningEffort"`
 	SkillIDs        []string `json:"skillIds"`
 	// TriggerWebhook starts a review when Codebase sends a merge request event.
-	ReportEnabled  bool      `json:"reportEnabled"`
-	TriggerWebhook bool      `json:"triggerWebhook"`
-	Enabled        bool      `json:"enabled"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	ReportEnabled      bool      `json:"reportEnabled"`
+	TriggerWebhook     bool      `json:"triggerWebhook"`
+	SkipDraft          bool      `json:"skipDraft"`
+	AutoLabelEnabled   bool      `json:"autoLabelEnabled"`
+	AutoApproveEnabled bool      `json:"autoApproveEnabled"`
+	RequireCIGreen     bool      `json:"requireCiGreen"`
+	Enabled            bool      `json:"enabled"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
 }
 
 type CodebaseRun struct {
-	ID              string `json:"id"`
-	WorkspaceID     string `json:"workspaceId"`
-	WorkflowID      string `json:"workflowId"`
-	RepoPath        string `json:"repoPath"`
-	RepoID          string `json:"repoId"`
-	MRIID           int    `json:"mrIid"`
-	MRTitle         string `json:"mrTitle"`
-	MRURL           string `json:"mrUrl"`
-	Trigger         string `json:"trigger"`
-	Status          string `json:"status"`
-	Summary         string `json:"summary"`
-	Error           string `json:"error"`
-	TaskID          string `json:"taskId"`
-	ConversationID  string `json:"conversationId"`
-	Model           string `json:"model"`
-	ReasoningEffort string `json:"reasoningEffort"`
+	ID              string          `json:"id"`
+	WorkspaceID     string          `json:"workspaceId"`
+	WorkflowID      string          `json:"workflowId"`
+	RepoPath        string          `json:"repoPath"`
+	RepoID          string          `json:"repoId"`
+	MRIID           int             `json:"mrIid"`
+	MRTitle         string          `json:"mrTitle"`
+	MRURL           string          `json:"mrUrl"`
+	HeadSHA         string          `json:"headSha"`
+	Round           int             `json:"round"`
+	Trigger         string          `json:"trigger"`
+	Status          string          `json:"status"`
+	Summary         string          `json:"summary"`
+	ReviewJSON      json.RawMessage `json:"reviewJson,omitempty"`
+	RiskLevel       string          `json:"riskLevel"`
+	RiskFloor       string          `json:"riskFloor"`
+	ReviewTrack     string          `json:"reviewTrack"`
+	Disposition     string          `json:"disposition"`
+	MergePolicy     string          `json:"mergePolicy"`
+	Error           string          `json:"error"`
+	TaskID          string          `json:"taskId"`
+	ConversationID  string          `json:"conversationId"`
+	Model           string          `json:"model"`
+	ReasoningEffort string          `json:"reasoningEffort"`
 	// ReportStatus tracks writing the summary back to the Codebase merge
 	// request: "" (not attempted), "sending", "sent", "failed", "skipped".
-	ReportStatus string     `json:"reportStatus"`
-	ReportError  string     `json:"reportError"`
-	ReportURL    string     `json:"reportUrl"`
-	StartedAt    *time.Time `json:"startedAt"`
-	FinishedAt   *time.Time `json:"finishedAt"`
-	CreatedAt    time.Time  `json:"createdAt"`
+	ReportStatus      string     `json:"reportStatus"`
+	ReportError       string     `json:"reportError"`
+	ReportURL         string     `json:"reportUrl"`
+	AutoApproveStatus string     `json:"autoApproveStatus"`
+	AutoApproveError  string     `json:"autoApproveError"`
+	MergedHeadSHA     string     `json:"mergedHeadSha"`
+	MRMergedAt        *time.Time `json:"mrMergedAt"`
+	StartedAt         *time.Time `json:"startedAt"`
+	FinishedAt        *time.Time `json:"finishedAt"`
+	CreatedAt         time.Time  `json:"createdAt"`
 }
 
-const codebaseWorkflowColumns = `id,workspace_id,name,repo_path,repo_id,repo_name,agent_id,review_instruction,model,reasoning_effort,skill_ids,trigger_webhook,report_enabled,enabled,created_at,updated_at`
+// CodebaseRunReviewMeta holds structured fields extracted from review.json.
+type CodebaseRunReviewMeta struct {
+	HeadSHA     string
+	ReviewJSON  json.RawMessage
+	RiskLevel   string
+	RiskFloor   string
+	ReviewTrack string
+	Disposition string
+	MergePolicy string
+}
+
+const codebaseWorkflowColumns = `id,workspace_id,name,repo_path,repo_id,repo_name,agent_id,review_instruction,model,reasoning_effort,skill_ids,trigger_webhook,report_enabled,skip_draft,auto_label_enabled,auto_approve_enabled,require_ci_green,enabled,created_at,updated_at`
 
 func scanCodebaseWorkflow(row pgx.Row) (CodebaseWorkflow, error) {
 	var item CodebaseWorkflow
-	err := row.Scan(&item.ID, &item.WorkspaceID, &item.Name, &item.RepoPath, &item.RepoID, &item.RepoName, &item.AgentID, &item.ReviewInstruction, &item.Model, &item.ReasoningEffort, &item.SkillIDs, &item.TriggerWebhook, &item.ReportEnabled, &item.Enabled, &item.CreatedAt, &item.UpdatedAt)
+	err := row.Scan(&item.ID, &item.WorkspaceID, &item.Name, &item.RepoPath, &item.RepoID, &item.RepoName, &item.AgentID, &item.ReviewInstruction, &item.Model, &item.ReasoningEffort, &item.SkillIDs, &item.TriggerWebhook, &item.ReportEnabled, &item.SkipDraft, &item.AutoLabelEnabled, &item.AutoApproveEnabled, &item.RequireCIGreen, &item.Enabled, &item.CreatedAt, &item.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return item, ErrNotFound
 	}
@@ -93,16 +121,16 @@ func (s *Store) CreateCodebaseWorkflow(ctx context.Context, item CodebaseWorkflo
 	if item.SkillIDs == nil {
 		item.SkillIDs = []string{}
 	}
-	return scanCodebaseWorkflow(s.pool.QueryRow(ctx, `INSERT INTO codebase_workflows(id,workspace_id,name,repo_path,repo_id,repo_name,agent_id,review_instruction,model,reasoning_effort,skill_ids,trigger_webhook,report_enabled,enabled)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING `+codebaseWorkflowColumns, item.ID, item.WorkspaceID, item.Name, item.RepoPath, item.RepoID, item.RepoName, item.AgentID, item.ReviewInstruction, item.Model, item.ReasoningEffort, item.SkillIDs, item.TriggerWebhook, item.ReportEnabled, item.Enabled))
+	return scanCodebaseWorkflow(s.pool.QueryRow(ctx, `INSERT INTO codebase_workflows(id,workspace_id,name,repo_path,repo_id,repo_name,agent_id,review_instruction,model,reasoning_effort,skill_ids,trigger_webhook,report_enabled,skip_draft,auto_label_enabled,auto_approve_enabled,require_ci_green,enabled)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING `+codebaseWorkflowColumns, item.ID, item.WorkspaceID, item.Name, item.RepoPath, item.RepoID, item.RepoName, item.AgentID, item.ReviewInstruction, item.Model, item.ReasoningEffort, item.SkillIDs, item.TriggerWebhook, item.ReportEnabled, item.SkipDraft, item.AutoLabelEnabled, item.AutoApproveEnabled, item.RequireCIGreen, item.Enabled))
 }
 
 func (s *Store) UpdateCodebaseWorkflow(ctx context.Context, item CodebaseWorkflow) (CodebaseWorkflow, error) {
 	if item.SkillIDs == nil {
 		item.SkillIDs = []string{}
 	}
-	return scanCodebaseWorkflow(s.pool.QueryRow(ctx, `UPDATE codebase_workflows SET name=$3,repo_path=$4,repo_id=$5,repo_name=$6,agent_id=$7,review_instruction=$8,model=$9,reasoning_effort=$10,skill_ids=$11,trigger_webhook=$12,report_enabled=$13,enabled=$14,updated_at=now()
-WHERE workspace_id=$1 AND id=$2 RETURNING `+codebaseWorkflowColumns, item.WorkspaceID, item.ID, item.Name, item.RepoPath, item.RepoID, item.RepoName, item.AgentID, item.ReviewInstruction, item.Model, item.ReasoningEffort, item.SkillIDs, item.TriggerWebhook, item.ReportEnabled, item.Enabled))
+	return scanCodebaseWorkflow(s.pool.QueryRow(ctx, `UPDATE codebase_workflows SET name=$3,repo_path=$4,repo_id=$5,repo_name=$6,agent_id=$7,review_instruction=$8,model=$9,reasoning_effort=$10,skill_ids=$11,trigger_webhook=$12,report_enabled=$13,skip_draft=$14,auto_label_enabled=$15,auto_approve_enabled=$16,require_ci_green=$17,enabled=$18,updated_at=now()
+WHERE workspace_id=$1 AND id=$2 RETURNING `+codebaseWorkflowColumns, item.WorkspaceID, item.ID, item.Name, item.RepoPath, item.RepoID, item.RepoName, item.AgentID, item.ReviewInstruction, item.Model, item.ReasoningEffort, item.SkillIDs, item.TriggerWebhook, item.ReportEnabled, item.SkipDraft, item.AutoLabelEnabled, item.AutoApproveEnabled, item.RequireCIGreen, item.Enabled))
 }
 
 func (s *Store) DeleteCodebaseWorkflow(ctx context.Context, wid, id string) error {
@@ -123,20 +151,31 @@ func (s *Store) DeleteCodebaseWorkflow(ctx context.Context, wid, id string) erro
 	return tx.Commit(ctx)
 }
 
-const codebaseRunColumns = `id,workspace_id,workflow_id,repo_path,repo_id,mr_iid,mr_title,mr_url,trigger,status,summary,error,task_id,conversation_id,model,reasoning_effort,report_status,report_error,report_url,started_at,finished_at,created_at`
+const codebaseRunColumns = `id,workspace_id,workflow_id,repo_path,repo_id,mr_iid,mr_title,mr_url,head_sha,round,trigger,status,summary,review_json,risk_level,risk_floor,review_track,disposition,merge_policy,error,task_id,conversation_id,model,reasoning_effort,report_status,report_error,report_url,auto_approve_status,auto_approve_error,merged_head_sha,mr_merged_at,started_at,finished_at,created_at`
 
 func scanCodebaseRun(row pgx.Row) (CodebaseRun, error) {
 	var item CodebaseRun
-	err := row.Scan(&item.ID, &item.WorkspaceID, &item.WorkflowID, &item.RepoPath, &item.RepoID, &item.MRIID, &item.MRTitle, &item.MRURL, &item.Trigger, &item.Status, &item.Summary, &item.Error, &item.TaskID, &item.ConversationID, &item.Model, &item.ReasoningEffort, &item.ReportStatus, &item.ReportError, &item.ReportURL, &item.StartedAt, &item.FinishedAt, &item.CreatedAt)
+	var reviewJSON []byte
+	err := row.Scan(&item.ID, &item.WorkspaceID, &item.WorkflowID, &item.RepoPath, &item.RepoID, &item.MRIID, &item.MRTitle, &item.MRURL, &item.HeadSHA, &item.Round, &item.Trigger, &item.Status, &item.Summary, &reviewJSON, &item.RiskLevel, &item.RiskFloor, &item.ReviewTrack, &item.Disposition, &item.MergePolicy, &item.Error, &item.TaskID, &item.ConversationID, &item.Model, &item.ReasoningEffort, &item.ReportStatus, &item.ReportError, &item.ReportURL, &item.AutoApproveStatus, &item.AutoApproveError, &item.MergedHeadSHA, &item.MRMergedAt, &item.StartedAt, &item.FinishedAt, &item.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return item, ErrNotFound
+	}
+	if len(reviewJSON) > 0 {
+		item.ReviewJSON = json.RawMessage(reviewJSON)
 	}
 	return item, err
 }
 
 func (s *Store) CreateCodebaseRun(ctx context.Context, item CodebaseRun) (CodebaseRun, error) {
-	return scanCodebaseRun(s.pool.QueryRow(ctx, `INSERT INTO codebase_runs(id,workspace_id,workflow_id,repo_path,repo_id,mr_iid,mr_title,mr_url,trigger,status,summary,error,task_id,conversation_id,model,reasoning_effort,report_status,report_error,report_url,started_at,finished_at)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING `+codebaseRunColumns, item.ID, item.WorkspaceID, item.WorkflowID, item.RepoPath, item.RepoID, item.MRIID, item.MRTitle, item.MRURL, item.Trigger, item.Status, item.Summary, item.Error, item.TaskID, item.ConversationID, item.Model, item.ReasoningEffort, item.ReportStatus, item.ReportError, item.ReportURL, item.StartedAt, item.FinishedAt))
+	if item.Round < 1 {
+		item.Round = 1
+	}
+	var reviewJSON any
+	if len(item.ReviewJSON) > 0 {
+		reviewJSON = []byte(item.ReviewJSON)
+	}
+	return scanCodebaseRun(s.pool.QueryRow(ctx, `INSERT INTO codebase_runs(id,workspace_id,workflow_id,repo_path,repo_id,mr_iid,mr_title,mr_url,head_sha,round,trigger,status,summary,review_json,risk_level,risk_floor,review_track,disposition,merge_policy,error,task_id,conversation_id,model,reasoning_effort,report_status,report_error,report_url,auto_approve_status,auto_approve_error,merged_head_sha,mr_merged_at,started_at,finished_at)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33) RETURNING `+codebaseRunColumns, item.ID, item.WorkspaceID, item.WorkflowID, item.RepoPath, item.RepoID, item.MRIID, item.MRTitle, item.MRURL, item.HeadSHA, item.Round, item.Trigger, item.Status, item.Summary, reviewJSON, item.RiskLevel, item.RiskFloor, item.ReviewTrack, item.Disposition, item.MergePolicy, item.Error, item.TaskID, item.ConversationID, item.Model, item.ReasoningEffort, item.ReportStatus, item.ReportError, item.ReportURL, item.AutoApproveStatus, item.AutoApproveError, item.MergedHeadSHA, item.MRMergedAt, item.StartedAt, item.FinishedAt))
 }
 
 // CodebaseRuns lists runs for a workspace, optionally filtered by workflow or
@@ -268,4 +307,57 @@ WHERE status='succeeded' AND report_status IN ('','failed') AND NOT report_manua
 	}
 	defer rows.Close()
 	return scanCodebaseRuns(rows)
+}
+
+// HasCodebaseRunForSHA returns true when a workflow already has a pending,
+// running, or succeeded run covering the exact headSHA of an MR.
+func (s *Store) HasCodebaseRunForSHA(ctx context.Context, wid, workflowID string, mrIID int, headSHA string) (bool, error) {
+	if headSHA == "" {
+		return false, nil
+	}
+	var exists bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS(
+SELECT 1 FROM codebase_runs
+WHERE workspace_id=$1 AND workflow_id=$2 AND mr_iid=$3 AND head_sha=$4 AND status IN ('pending','running','succeeded')
+)`, wid, workflowID, mrIID, headSHA).Scan(&exists)
+	return exists, err
+}
+
+// LatestCodebaseRunWithReview returns the most recent completed run for an MR
+// that persisted a structured review_json payload, enabling stateless
+// incremental review rounds without relying on local disk.
+func (s *Store) LatestCodebaseRunWithReview(ctx context.Context, wid, workflowID string, mrIID int) (CodebaseRun, error) {
+	return scanCodebaseRun(s.pool.QueryRow(ctx, `SELECT `+codebaseRunColumns+` FROM codebase_runs
+WHERE workspace_id=$1 AND workflow_id=$2 AND mr_iid=$3 AND review_json IS NOT NULL
+ORDER BY created_at DESC LIMIT 1`, wid, workflowID, mrIID))
+}
+
+// UpdateCodebaseRunReviewResult stores structured review.json metadata on a run.
+func (s *Store) UpdateCodebaseRunReviewResult(ctx context.Context, wid, id string, meta CodebaseRunReviewMeta) (CodebaseRun, error) {
+	var reviewJSON any
+	if len(meta.ReviewJSON) > 0 {
+		reviewJSON = []byte(meta.ReviewJSON)
+	}
+	return scanCodebaseRun(s.pool.QueryRow(ctx, `UPDATE codebase_runs
+SET head_sha=COALESCE(NULLIF($3,''),head_sha),
+    review_json=COALESCE($4::jsonb,review_json),
+    risk_level=COALESCE(NULLIF($5,''),risk_level),
+    risk_floor=COALESCE(NULLIF($6,''),risk_floor),
+    review_track=COALESCE(NULLIF($7,''),review_track),
+    disposition=COALESCE(NULLIF($8,''),disposition),
+    merge_policy=COALESCE(NULLIF($9,''),merge_policy)
+WHERE workspace_id=$1 AND id=$2 RETURNING `+codebaseRunColumns,
+		wid, id, meta.HeadSHA, reviewJSON, meta.RiskLevel, meta.RiskFloor, meta.ReviewTrack, meta.Disposition, meta.MergePolicy))
+}
+
+// RecordCodebaseMRMerged records the merged head SHA and timestamp on runs of
+// that MR for shadow-mode calibration (comparing AI merge_policy against human
+// merge outcomes).
+func (s *Store) RecordCodebaseMRMerged(ctx context.Context, wid, repoID string, mrIID int, mergedHeadSHA string, mergedAt time.Time) error {
+	_, err := s.pool.Exec(ctx, `UPDATE codebase_runs
+SET merged_head_sha=COALESCE(NULLIF($4,''),merged_head_sha),
+    mr_merged_at=COALESCE(mr_merged_at,$5)
+WHERE workspace_id=$1 AND repo_id=$2 AND mr_iid=$3 AND status='succeeded'`,
+		wid, repoID, mrIID, mergedHeadSHA, mergedAt)
+	return err
 }

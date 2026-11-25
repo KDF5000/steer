@@ -55,7 +55,7 @@ func (s *Server) refreshCodebaseWebhookMR(ctx context.Context, wid string, revie
 	item := store.CodebaseMergeRequest{
 		ID: mr.ID, IID: mr.IID, ProjectID: mr.ProjectID,
 		Title: mr.Title, Description: mr.Description, State: mr.State, WebURL: mr.WebURL,
-		SourceBranch: mr.SourceBranch, TargetBranch: mr.TargetBranch,
+		SourceBranch: mr.SourceBranch, TargetBranch: mr.TargetBranch, HeadSHA: mr.HeadSHA,
 		CreatedAt: parseCodebaseTime(mr.CreatedAt), UpdatedAt: parseCodebaseTime(mr.UpdatedAt),
 		Draft: mr.Draft, Labels: mr.Labels,
 		Author: store.CodebaseMRAuthor{Name: mr.Author.Name, Username: mr.Author.Username},
@@ -83,5 +83,9 @@ func (s *Server) refreshCodebaseWebhookMR(ctx context.Context, wid string, revie
 	// cursor, which would skip other MRs updated since the last full sync.
 	review.RepoID, review.RepoPath = repo.RepoID, repo.RepoPath
 	review.State, review.MRTitle, review.MRURL = saved.State, saved.Title, saved.WebURL
+	review.Draft = saved.Draft
+	if saved.HeadSHA != "" {
+		review.HeadSHA = saved.HeadSHA
+	}
 	return review, nil
 }
