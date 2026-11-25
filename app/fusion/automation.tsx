@@ -11,6 +11,7 @@ import {
 import {
   AlertCircle,
   ArrowRight,
+  BarChart3,
   Check,
   CheckCircle2,
   Clock,
@@ -42,6 +43,7 @@ import {
 } from 'lucide-react';
 import { ReportMarkdown } from './report-markdown';
 import { CodebaseWebhookSettings } from './codebase-webhook';
+import { CodebaseCalibrationView } from './codebase-calibration';
 import {
   LeaveSharedWorkflowDialog,
   SharedWorkflowInfoDialog,
@@ -90,12 +92,19 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 
-type AutomationTab = 'codebase' | 'repos' | 'mrs' | 'flows' | 'runs';
+type AutomationTab =
+  | 'codebase'
+  | 'repos'
+  | 'mrs'
+  | 'flows'
+  | 'runs'
+  | 'calibration';
 
 const automationTabs = [
   { value: 'flows', label: 'Workflows', icon: Workflow },
   { value: 'mrs', label: 'Merge requests', icon: GitBranch },
   { value: 'runs', label: 'Run records', icon: History },
+  { value: 'calibration', label: 'Calibration', icon: BarChart3 },
   { value: 'repos', label: 'Repositories', icon: FolderGit2 },
   { value: 'codebase', label: 'Connection settings', icon: Code2 },
 ] as const;
@@ -3345,6 +3354,14 @@ export function AutomationView({
               </div>
             </nav>
           )}
+        </TabsContent>
+
+        <TabsContent value="calibration" hidden={tab !== 'calibration'}>
+          <CodebaseCalibrationView
+            active={tab === 'calibration'}
+            repositories={repositories}
+            workflows={workflows}
+          />
         </TabsContent>
       </Tabs>
 
