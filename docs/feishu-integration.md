@@ -73,12 +73,13 @@ console.
   and supported images as explicit context for the Agent. Replies in an
   existing session submit only the current message and its own attachments;
   previous exchanges already belong to the runtime session.
-- Starting a new group conversation requires explicitly mentioning the bot.
-  Replies in a thread already connected to Steer can omit the mention if the
-  Feishu app has the `im:message.group_msg` permission. Without that permission,
-  Feishu only delivers messages that mention the bot. Other group messages and
-  messages from bots are ignored. After `/new` or a Project switch, the known
-  thread can still be continued without a mention.
+- Every group message requires explicitly mentioning the current bot, including
+  follow-up questions and commands inside an existing topic. Unmentioned chatter,
+  mentions of other people/bots, mention-all messages and messages from bots
+  are ignored before conversation lookup or event recording, even when the app
+  has the `im:message.group_msg` permission. Mentioned follow-ups reuse the topic's
+  existing session. After `/new` or a Project switch, mention the bot again to
+  continue in that topic. Direct chats do not require mentions.
 - `/projects` opens a Project selection card for the connected Workspace.
 - Integration settings can specify an optional default Project. New private
   and group conversations use the chat's Project binding first, then the

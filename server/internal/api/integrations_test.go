@@ -98,22 +98,40 @@ func TestFeishuReplyContextOnlyForNewSession(t *testing.T) {
 func TestFeishuMessagePolicy(t *testing.T) {
 	botSender := "app"
 	for _, test := range []struct {
-		name        string
-		msg         channeltypes.NormalizedMessage
-		knownThread bool
-		want        bool
+		name string
+		msg  channeltypes.NormalizedMessage
+		want bool
 	}{
 		{name: "direct message", msg: channeltypes.NormalizedMessage{ChatType: "p2p"}, want: true},
 		{name: "new group mention", msg: channeltypes.NormalizedMessage{ChatType: "group", MentionedBot: true}, want: true},
 		{name: "new group without mention", msg: channeltypes.NormalizedMessage{ChatType: "group"}},
-		{name: "known thread without mention", msg: channeltypes.NormalizedMessage{ChatType: "group"}, knownThread: true, want: true},
-		{name: "known thread with mention", msg: channeltypes.NormalizedMessage{ChatType: "group", MentionedBot: true}, knownThread: true, want: true},
-		{name: "mention all ignored", msg: channeltypes.NormalizedMessage{ChatType: "group", MentionAll: true}, knownThread: true},
-		{name: "bot reply ignored", msg: channeltypes.NormalizedMessage{ChatType: "group", RawEvent: &larkim.P2MessageReceiveV1{Event: &larkim.P2MessageReceiveV1Data{Sender: &larkim.EventSender{SenderType: &botSender}}}}, knownThread: true},
+		{name: "other bot mention", msg: channeltypes.NormalizedMessage{ChatType: "group", Mentions: []channeltypes.Mention{{Name: "Other bot", Key: "other-bot"}}}},
+		{name: "known thread without mention", msg: channeltypes.NormalizedMessage{ChatType: "group"}},
+		{name: "known thread with mention", msg: channeltypes.NormalizedMessage{ChatType: "group", MentionedBot: true}, want: true},
+		{name: "mention all ignored", msg: channeltypes.NormalizedMessage{ChatType: "group", MentionAll: true}},
+		{name: "bot reply ignored", msg: channeltypes.NormalizedMessage{ChatType: "group", RawEvent: &larkim.P2MessageReceiveV1{Event: &larkim.P2MessageReceiveV1Data{Sender: &larkim.EventSender{SenderType: &botSender}}}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if got := feishuShouldAcceptMessage(&test.msg, test.knownThread); got != test.want {
+			if got := feishuShouldAcceptMessage(&test.msg); got != test.want {
 				t.Fatalf("accept message = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestFeishuTopicChatterIgnoredBeforeLookup(t *testing.T) {
+	root, thread := "original-message", "native-topic"
+	for _, content := range []string{"闲聊消息", "/status", "/new", "@OtherBot 帮我看看"} {
+		t.Run(content, func(t *testing.T) {
+			msg := &channeltypes.NormalizedMessage{
+				ChatID: "chat", ChatType: "group", MessageID: "reply", Content: content,
+				RawEvent: &larkim.P2MessageReceiveV1{Event: &larkim.P2MessageReceiveV1Data{Message: &larkim.EventMessage{RootId: &root, ThreadId: &thread}}},
+			}
+			// No store or channel is available: ignored topic messages must return
+			// before any alias lookup, event write, command handling or reply.
+			manager := &integrationManager{}
+			if err := manager.acceptMessage(context.Background(), store.WorkspaceIntegration{}, nil, nil, msg); err != nil {
+				t.Fatalf("unmentioned topic message was processed: %v", err)
 			}
 		})
 	}

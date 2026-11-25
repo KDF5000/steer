@@ -128,8 +128,8 @@ func TestFeishuRepliesStayInOriginalTopic(t *testing.T) {
 		mu.Lock()
 		before := len(requests)
 		mu.Unlock()
-		// Unmentioned replies are accepted only because the native alias resolves
-		// to this already connected session.
+		// Explicitly mentioned replies reuse the existing native alias/session.
+		msg.MentionedBot = true
 		if err = m.acceptMessage(ctx, integration, client, bot, msg); err != nil {
 			t.Fatal(err)
 		}

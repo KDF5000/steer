@@ -112,9 +112,9 @@ func (m *integrationManager) start(parent context.Context, id string) {
 
 	apiClient := lark.NewClient(item.ExternalAppID, secret, lark.WithLogLevel(larkcore.LogLevelWarn))
 	wsClient := newFeishuWSClient(item.ExternalAppID, secret)
-	// Steer enforces mentions for new group conversations, while allowing
-	// unmentioned replies in threads that are already bound to a conversation.
-	requireMention := false
+	// Require an explicit bot mention for every group message, including
+	// existing topics. Direct chats do not require mentions.
+	requireMention := true
 	bot := channel.NewChannel(apiClient, wsClient, channeltypes.WithPolicyConfig(channeltypes.PolicyConfig{RequireMention: &requireMention}))
 	ctx, cancel := context.WithCancel(parent)
 	running := &runningIntegration{cancel: cancel, channel: bot}
@@ -204,24 +204,16 @@ func (m *integrationManager) acceptMessage(ctx context.Context, integration stor
 	if msg == nil || msg.MessageID == "" || msg.ChatID == "" {
 		return nil
 	}
+	// Ignore group chatter before resolving aliases or recording any event.
+	if !feishuShouldAcceptMessage(msg) {
+		return nil
+	}
 	threadKey := feishuThreadKey(msg)
 	if msg.ChatType == "group" {
 		var err error
 		threadKey, err = m.server.store.ResolveIntegrationThread(ctx, integration.ID, msg.ChatID, feishuThreadKeys(msg))
 		if err != nil {
 			return err
-		}
-	}
-	if !feishuShouldAcceptMessage(msg, false) {
-		if msg.ChatType != "group" || threadKey == "thread:"+msg.MessageID {
-			return nil
-		}
-		_, err := m.server.store.IntegrationConversation(ctx, integration.ID, msg.ChatID, threadKey)
-		if err != nil && !errors.Is(err, store.ErrNotFound) {
-			return err
-		}
-		if !feishuShouldAcceptMessage(msg, err == nil) {
-			return nil
 		}
 	}
 	if msg.ChatType == "group" {
@@ -248,13 +240,13 @@ func (m *integrationManager) acceptMessage(ctx context.Context, integration stor
 	return nil
 }
 
-func feishuShouldAcceptMessage(msg *channeltypes.NormalizedMessage, knownThread bool) bool {
+func feishuShouldAcceptMessage(msg *channeltypes.NormalizedMessage) bool {
 	if event, ok := msg.RawEvent.(*larkim.P2MessageReceiveV1); ok && event.Event != nil && event.Event.Sender != nil {
 		if senderType := event.Event.Sender.SenderType; senderType != nil && *senderType != "user" {
 			return false
 		}
 	}
-	return msg.ChatType == "p2p" || (msg.ChatType == "group" && !msg.MentionAll && (msg.MentionedBot || knownThread))
+	return msg.ChatType == "p2p" || (msg.ChatType == "group" && !msg.MentionAll && msg.MentionedBot)
 }
 
 func feishuPrompt(msg *channeltypes.NormalizedMessage) string {
