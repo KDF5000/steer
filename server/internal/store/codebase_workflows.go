@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -307,6 +308,90 @@ WHERE status='succeeded' AND report_status IN ('','failed') AND NOT report_manua
 	}
 	defer rows.Close()
 	return scanCodebaseRuns(rows)
+}
+
+// ReserveWebhookCodebaseRun atomically deduplicates and inserts a webhook-triggered
+// run inside a single PostgreSQL transaction protected by a per-(workspace,
+// workflow, mr_iid) transaction advisory lock. This prevents concurrent webhook
+// deliveries (across goroutines or server replicas) from starting duplicate
+// reviews for the same MR revision.
+//
+// Returns:
+//   - created=false when this exact headSHA is already pending/running/succeeded
+//     (or when headSHA is empty and an active run already exists).
+//   - superseded!=nil when an in-flight run for an older headSHA was marked
+//     skipped so the caller can best-effort cancel its Relay task.
+func (s *Store) ReserveWebhookCodebaseRun(ctx context.Context, item CodebaseRun) (run CodebaseRun, created bool, superseded *CodebaseRun, err error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return run, false, nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	lockKey := item.WorkspaceID + ":" + item.WorkflowID + ":" + strconv.Itoa(item.MRIID)
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+		return run, false, nil, err
+	}
+
+	if item.HeadSHA != "" {
+		var exists bool
+		err = tx.QueryRow(ctx, `SELECT EXISTS(
+SELECT 1 FROM codebase_runs
+WHERE workspace_id=$1 AND workflow_id=$2 AND mr_iid=$3 AND head_sha=$4 AND status IN ('pending','running','succeeded')
+)`, item.WorkspaceID, item.WorkflowID, item.MRIID, item.HeadSHA).Scan(&exists)
+		if err != nil {
+			return run, false, nil, err
+		}
+		if exists {
+			return run, false, nil, nil
+		}
+	}
+
+	active, activeErr := scanCodebaseRun(tx.QueryRow(ctx, `SELECT `+codebaseRunColumns+` FROM codebase_runs
+WHERE workspace_id=$1 AND workflow_id=$2 AND mr_iid=$3 AND status IN ('pending','running')
+ORDER BY created_at DESC LIMIT 1`, item.WorkspaceID, item.WorkflowID, item.MRIID))
+	if activeErr == nil {
+		if item.HeadSHA == "" || active.HeadSHA == item.HeadSHA {
+			return active, false, nil, nil
+		}
+		short := item.HeadSHA
+		if len(short) > 12 {
+			short = short[:12]
+		}
+		reason := "Superseded by newer MR revision " + short
+		now := time.Now().UTC()
+		if _, err = tx.Exec(ctx, `UPDATE codebase_runs SET status='skipped', error=$3, finished_at=COALESCE(finished_at,$4)
+WHERE workspace_id=$1 AND id=$2`, item.WorkspaceID, active.ID, reason, now); err != nil {
+			return run, false, nil, err
+		}
+		superseded = &active
+	} else if !errors.Is(activeErr, ErrNotFound) {
+		return run, false, nil, activeErr
+	}
+
+	if item.Round < 1 {
+		item.Round = 1
+	}
+	if prev, prevErr := scanCodebaseRun(tx.QueryRow(ctx, `SELECT `+codebaseRunColumns+` FROM codebase_runs
+WHERE workspace_id=$1 AND workflow_id=$2 AND mr_iid=$3 AND review_json IS NOT NULL
+ORDER BY created_at DESC LIMIT 1`, item.WorkspaceID, item.WorkflowID, item.MRIID)); prevErr == nil && prev.Round >= item.Round {
+		item.Round = prev.Round + 1
+	}
+
+	var reviewJSON any
+	if len(item.ReviewJSON) > 0 {
+		reviewJSON = []byte(item.ReviewJSON)
+	}
+	inserted, err := scanCodebaseRun(tx.QueryRow(ctx, `INSERT INTO codebase_runs(id,workspace_id,workflow_id,repo_path,repo_id,mr_iid,mr_title,mr_url,head_sha,round,trigger,status,summary,review_json,risk_level,risk_floor,review_track,disposition,merge_policy,error,task_id,conversation_id,model,reasoning_effort,report_status,report_error,report_url,auto_approve_status,auto_approve_error,merged_head_sha,mr_merged_at,started_at,finished_at)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33) RETURNING `+codebaseRunColumns,
+		item.ID, item.WorkspaceID, item.WorkflowID, item.RepoPath, item.RepoID, item.MRIID, item.MRTitle, item.MRURL, item.HeadSHA, item.Round, item.Trigger, item.Status, item.Summary, reviewJSON, item.RiskLevel, item.RiskFloor, item.ReviewTrack, item.Disposition, item.MergePolicy, item.Error, item.TaskID, item.ConversationID, item.Model, item.ReasoningEffort, item.ReportStatus, item.ReportError, item.ReportURL, item.AutoApproveStatus, item.AutoApproveError, item.MergedHeadSHA, item.MRMergedAt, item.StartedAt, item.FinishedAt))
+	if err != nil {
+		return run, false, nil, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return run, false, nil, err
+	}
+	return inserted, true, superseded, nil
 }
 
 // HasCodebaseRunForSHA returns true when a workflow already has a pending,
