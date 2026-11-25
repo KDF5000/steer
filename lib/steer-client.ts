@@ -250,9 +250,20 @@ export type CodebaseRunRecord = {
   mrIid: number;
   mrTitle: string;
   mrUrl: string;
+  headSha?: string;
+  round?: number;
   trigger: string;
   status: string;
   summary: string;
+  riskLevel?: string;
+  riskFloor?: string;
+  reviewTrack?: string;
+  disposition?: string;
+  mergePolicy?: string;
+  autoApproveStatus?: string;
+  autoApproveError?: string;
+  mergedHeadSha?: string;
+  mrMergedAt?: string | null;
   error: string;
   taskId: string;
   conversationId: string;
@@ -264,6 +275,80 @@ export type CodebaseRunRecord = {
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;
+};
+
+export type CodebaseCalibrationOverview = {
+  totalRuns: number;
+  succeededRuns: number;
+  failedRuns: number;
+  skippedRuns: number;
+  structuredRuns: number;
+  uniqueMrs: number;
+  multiRoundMrs: number;
+  fastTrackRuns: number;
+  deepTrackRuns: number;
+  autoApproveEligibleRuns: number;
+  autoApproveMergedTotal: number;
+  autoApproveMergedUnchanged: number;
+  autoApproveModifiedBeforeMerge: number;
+  blockedRuns: number;
+  humanRequiredRuns: number;
+  humanLightRuns: number;
+  avgDurationSec: number;
+  p50DurationSec: number;
+  p95DurationSec: number;
+};
+
+export type CodebaseCalibrationMatrixRow = {
+  riskLevel: string;
+  mergePolicy: string;
+  totalRuns: number;
+  mergedTotal: number;
+  mergedUnchanged: number;
+  modifiedBeforeMerge: number;
+  avgDurationSec: number;
+};
+
+export type CodebaseCalibrationRiskRow = {
+  riskLevel: string;
+  totalRuns: number;
+  fastTrackRuns: number;
+  deepTrackRuns: number;
+  changesRequested: number;
+  needsHumanReview: number;
+  noConfirmedFindings: number;
+  avgDurationSec: number;
+};
+
+export type CodebaseCalibrationDailyRow = {
+  day: string;
+  totalRuns: number;
+  succeededRuns: number;
+  autoApproveEligible: number;
+  humanRequiredOrBlock: number;
+};
+
+export type CodebaseCalibrationDriftItem = {
+  runId: string;
+  workflowId: string;
+  repoPath: string;
+  mrIid: number;
+  mrTitle: string;
+  mrUrl: string;
+  riskLevel: string;
+  headSha: string;
+  mergedHeadSha: string;
+  mrMergedAt: string | null;
+  createdAt: string;
+};
+
+export type CodebaseCalibrationStats = {
+  days: number;
+  overview: CodebaseCalibrationOverview;
+  matrix: CodebaseCalibrationMatrixRow[];
+  byRisk: CodebaseCalibrationRiskRow[];
+  dailyTrend: CodebaseCalibrationDailyRow[];
+  driftSamples: CodebaseCalibrationDriftItem[];
 };
 
 export type RelayNodeEnrollment = {
@@ -969,6 +1054,22 @@ export const steer = {
     request<CodebaseRunRecord>(
       `/codebase/runs/${encodeURIComponent(id)}/report`,
       { method: 'POST', signal },
+    ),
+  codebaseCalibration: (
+    query: {
+      workflowId?: string;
+      repoId?: string;
+      days?: number;
+    },
+    signal?: AbortSignal,
+  ) =>
+    request<CodebaseCalibrationStats>(
+      `/codebase/calibration?${new URLSearchParams({
+        ...(query.workflowId ? { workflowId: query.workflowId } : {}),
+        ...(query.repoId ? { repoId: query.repoId } : {}),
+        ...(query.days !== undefined ? { days: String(query.days) } : {}),
+      })}`,
+      { signal },
     ),
   createFeishuIntegration: (input: FeishuIntegrationInput) =>
     request<WorkspaceIntegrationRecord>('/integrations/feishu', {

@@ -109,6 +109,38 @@ func extractCodebaseReviewJSONFromText(text string) ([]byte, bool) {
 	}
 }
 
+// extractCodebaseRunReviewMarkdown prefers the review.md Relay artifact when
+// present so MR comments always use the finalized human-readable report instead
+// of intermediate subagent or verification logs.
+func (s *Server) extractCodebaseRunReviewMarkdown(ctx context.Context, wid string, task store.Task) (string, bool) {
+	if task.RelayRunID == "" || s.relayHTTP == nil {
+		return "", false
+	}
+	artifacts, err := s.store.RunArtifacts(ctx, wid, task.RelayRunID)
+	if err != nil {
+		return "", false
+	}
+	for _, artifact := range artifacts {
+		name := strings.ToLower(path.Base(strings.TrimSpace(artifact.Name)))
+		if name != "review.md" || artifact.RelayArtifactID == nil || *artifact.RelayArtifactID == "" {
+			continue
+		}
+		reader, openErr := s.relayHTTP.OpenArtifact(ctx, *artifact.RelayArtifactID)
+		if openErr != nil {
+			continue
+		}
+		data, readErr := io.ReadAll(io.LimitReader(reader, maxReviewJSONBytes+1))
+		_ = reader.Close()
+		if readErr != nil || len(data) > maxReviewJSONBytes {
+			continue
+		}
+		if content := strings.TrimSpace(string(data)); content != "" {
+			return content, true
+		}
+	}
+	return "", false
+}
+
 // extractCodebaseRunReviewMeta prefers the review.json Relay artifact produced
 // by the run, and falls back to extracting a structured JSON block from summary.
 func (s *Server) extractCodebaseRunReviewMeta(ctx context.Context, wid string, task store.Task, summary string) (store.CodebaseRunReviewMeta, bool) {
