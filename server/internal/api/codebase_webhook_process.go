@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/url"
 	"strconv"
@@ -169,47 +168,25 @@ func (s *Server) processCodebaseWebhookEvent(ctx context.Context, event store.Co
 			continue
 		}
 		matched++
-		if review.HeadSHA != "" {
-			// Skip when this exact head_sha is already pending, running, or succeeded.
-			exists, err := s.store.HasCodebaseRunForSHA(ctx, event.WorkspaceID, workflow.ID, review.MRIID, review.HeadSHA)
-			if err != nil {
-				failures = append(failures, err.Error())
-				continue
-			}
-			if exists {
-				alreadyRunning++
-				continue
-			}
-			// If an older revision is still running, supersede and cancel it so
-			// the newer push is never silently dropped.
-			if active, err := s.store.CodebaseRunForMergeRequest(ctx, event.WorkspaceID, workflow.ID, review.MRIID); err == nil {
-				s.supersedeCodebaseRun(ctx, event.WorkspaceID, active, review.HeadSHA)
-			} else if !errors.Is(err, store.ErrNotFound) {
-				failures = append(failures, err.Error())
-				continue
-			}
-		} else {
-			// Without a head_sha, fall back to deduplicating any active run for this MR.
-			if _, err := s.store.CodebaseRunForMergeRequest(ctx, event.WorkspaceID, workflow.ID, review.MRIID); err == nil {
-				alreadyRunning++
-				continue
-			} else if !errors.Is(err, store.ErrNotFound) {
-				failures = append(failures, err.Error())
-				continue
-			}
-		}
+		now := time.Now().UTC()
 		run := store.CodebaseRun{
-			ID:          uuid.NewString(),
-			WorkspaceID: event.WorkspaceID,
-			WorkflowID:  workflow.ID,
-			RepoPath:    workflow.RepoPath,
-			RepoID:      workflow.RepoID,
-			MRIID:       review.MRIID,
-			MRTitle:     review.MRTitle,
-			MRURL:       sanitizeWebhookURL(review.MRURL),
-			HeadSHA:     review.HeadSHA,
-			Trigger:     "webhook",
-			Status:      "pending",
+			ID:              uuid.NewString(),
+			WorkspaceID:     event.WorkspaceID,
+			WorkflowID:      workflow.ID,
+			RepoPath:        workflow.RepoPath,
+			RepoID:          workflow.RepoID,
+			MRIID:           review.MRIID,
+			MRTitle:         review.MRTitle,
+			MRURL:           sanitizeWebhookURL(review.MRURL),
+			HeadSHA:         review.HeadSHA,
+			Trigger:         "webhook",
+			Status:          "pending",
+			Model:           workflow.Model,
+			ReasoningEffort: workflow.ReasoningEffort,
+			StartedAt:       &now,
+		}
+		if !workflow.ReportEnabled {
+			run.ReportStatus = "skipped"
 		}
 		if mr, err := s.store.CodebaseMergeRequest(ctx, event.WorkspaceID, workflow.RepoID, review.MRIID); err == nil {
 			if mr.Title != "" {
@@ -222,8 +199,26 @@ func (s *Server) processCodebaseWebhookEvent(ctx context.Context, event store.Co
 				run.HeadSHA = mr.HeadSHA
 			}
 		}
+		// Atomically deduplicate and insert the run under a per-MR PostgreSQL
+		// advisory lock so simultaneous webhook deliveries cannot start two
+		// reviews for the same MR revision.
+		reserved, created, superseded, err := s.store.ReserveWebhookCodebaseRun(ctx, run)
+		if err != nil {
+			failures = append(failures, err.Error())
+			continue
+		}
+		if !created {
+			alreadyRunning++
+			continue
+		}
+		if superseded != nil {
+			s.cancelSupersededCodebaseRun(ctx, event.WorkspaceID, *superseded, reserved.HeadSHA)
+		}
 		key := "codebase:" + workflow.ID + ":" + strconv.Itoa(review.MRIID) + ":" + strconv.FormatInt(event.ID, 10)
-		if _, err := s.startCodebaseRun(ctx, event.WorkspaceID, workflow, run, key); err != nil {
+		if reserved.HeadSHA != "" {
+			key = "codebase:" + workflow.ID + ":" + strconv.Itoa(review.MRIID) + ":" + reserved.HeadSHA
+		}
+		if _, err := s.submitReservedCodebaseRun(ctx, event.WorkspaceID, workflow, reserved, key); err != nil {
 			slog.Warn("codebase webhook review start", "workflow_id", workflow.ID, "mr_iid", review.MRIID, "error", err)
 			failures = append(failures, err.Error())
 			continue
@@ -313,16 +308,11 @@ func webhookBool(value map[string]any, keys ...string) bool {
 	return false
 }
 
-// supersedeCodebaseRun marks an in-flight review for an older head SHA as
-// skipped and best-effort cancels its Relay run so the newer push starts cleanly.
-func (s *Server) supersedeCodebaseRun(ctx context.Context, wid string, active store.CodebaseRun, newerSHA string) {
-	now := time.Now().UTC()
-	shortSHA := newerSHA
-	if len(shortSHA) > 12 {
-		shortSHA = shortSHA[:12]
-	}
-	reason := "Superseded by newer MR revision " + shortSHA
-	_, _ = s.store.UpdateCodebaseRun(ctx, wid, active.ID, "skipped", "", reason, "", "", nil, &now)
+// cancelSupersededCodebaseRun best-effort cancels the Relay run of an older
+// review that ReserveWebhookCodebaseRun already marked skipped.
+func (s *Server) cancelSupersededCodebaseRun(ctx context.Context, wid string, active store.CodebaseRun, newerSHA string) {
+	short := shortSHA(newerSHA)
+	reason := "Superseded by newer MR revision " + short
 	if active.TaskID != "" && s.relay != nil {
 		if task, err := s.store.Task(ctx, wid, active.TaskID); err == nil && task.RelayRunID != "" {
 			_, _ = s.relay.CancelRun(ctx, task.RelayRunID, controlplane.CancelRequest{

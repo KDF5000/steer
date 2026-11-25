@@ -473,19 +473,15 @@ func (s *Server) startCodebaseRun(ctx context.Context, wid string, workflow stor
 		now := time.Now().UTC()
 		run.StartedAt = &now
 	}
-	var mrDescription string
 	if mr, err := s.store.CodebaseMergeRequest(ctx, wid, workflow.RepoID, run.MRIID); err == nil {
-		mrDescription = mr.Description
 		if run.HeadSHA == "" && mr.HeadSHA != "" {
 			run.HeadSHA = mr.HeadSHA
 		}
 	}
-	var priorReviewJSON json.RawMessage
 	if run.Round < 1 {
 		run.Round = 1
 	}
 	if prev, err := s.store.LatestCodebaseRunWithReview(ctx, wid, workflow.ID, run.MRIID); err == nil && len(prev.ReviewJSON) > 0 {
-		priorReviewJSON = prev.ReviewJSON
 		if prev.Round >= run.Round {
 			run.Round = prev.Round + 1
 		}
@@ -493,6 +489,20 @@ func (s *Server) startCodebaseRun(ctx context.Context, wid string, workflow stor
 	run, err := s.store.CreateCodebaseRun(ctx, run)
 	if err != nil {
 		return run, err
+	}
+	return s.submitReservedCodebaseRun(ctx, wid, workflow, run, idempotencyKey)
+}
+
+// submitReservedCodebaseRun dispatches the Agent task for an already-persisted
+// codebase_runs row (used by both manual runs and atomically reserved webhook runs).
+func (s *Server) submitReservedCodebaseRun(ctx context.Context, wid string, workflow store.CodebaseWorkflow, run store.CodebaseRun, idempotencyKey string) (store.CodebaseRun, error) {
+	var mrDescription string
+	if mr, err := s.store.CodebaseMergeRequest(ctx, wid, workflow.RepoID, run.MRIID); err == nil {
+		mrDescription = mr.Description
+	}
+	var priorReviewJSON json.RawMessage
+	if prev, err := s.store.LatestCodebaseRunWithReview(ctx, wid, workflow.ID, run.MRIID); err == nil && prev.ID != run.ID && len(prev.ReviewJSON) > 0 {
+		priorReviewJSON = prev.ReviewJSON
 	}
 	prompt := buildReviewPrompt(workflow, run, mrDescription, priorReviewJSON)
 	meta, _ := json.Marshal(map[string]any{
