@@ -23,6 +23,7 @@ type CodebaseMergeRequest struct {
 	WebURL       string               `json:"web_url"`
 	SourceBranch string               `json:"source_branch"`
 	TargetBranch string               `json:"target_branch"`
+	HeadSHA      string               `json:"head_sha"`
 	CreatedAt    *time.Time           `json:"created_at"`
 	UpdatedAt    *time.Time           `json:"updated_at"`
 	Draft        bool                 `json:"draft"`
@@ -68,7 +69,7 @@ type CodebaseRepo struct {
 	LastError       string     `json:"lastError"`
 }
 
-const codebaseMRColumns = `repo_id,repo_path,mr_number,mr_id,title,description,state,web_url,source_branch,target_branch,author_name,author_username,draft,labels,mr_created_at,mr_updated_at,synced_at`
+const codebaseMRColumns = `repo_id,repo_path,mr_number,mr_id,title,description,state,web_url,source_branch,target_branch,head_sha,author_name,author_username,draft,labels,mr_created_at,mr_updated_at,synced_at`
 
 func scanCodebaseMR(row pgx.Row) (CodebaseMergeRequest, error) {
 	var item CodebaseMergeRequest
@@ -77,7 +78,7 @@ func scanCodebaseMR(row pgx.Row) (CodebaseMergeRequest, error) {
 	err := row.Scan(
 		&repoID, &repoPath, &item.IID, &item.ID, &item.Title, &item.Description,
 		&item.State,
-		&item.WebURL, &item.SourceBranch, &item.TargetBranch,
+		&item.WebURL, &item.SourceBranch, &item.TargetBranch, &item.HeadSHA,
 		&item.Author.Name, &item.Author.Username, &item.Draft, &labels,
 		&item.CreatedAt, &item.UpdatedAt, &item.SyncedAt,
 	)
@@ -114,9 +115,9 @@ func (s *Store) UpsertCodebaseMergeRequests(ctx context.Context, wid, repoID, re
 		}
 		var inserted bool
 		err = tx.QueryRow(ctx, `INSERT INTO codebase_merge_requests(
-workspace_id,repo_id,repo_path,mr_number,mr_id,title,description,state,web_url,source_branch,target_branch,
+workspace_id,repo_id,repo_path,mr_number,mr_id,title,description,state,web_url,source_branch,target_branch,head_sha,
 author_name,author_username,draft,labels,mr_created_at,mr_updated_at,synced_at)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17,now())
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18,now())
 ON CONFLICT (workspace_id,repo_id,mr_number) DO UPDATE SET
   repo_path=EXCLUDED.repo_path,
   mr_id=EXCLUDED.mr_id,
@@ -126,6 +127,7 @@ ON CONFLICT (workspace_id,repo_id,mr_number) DO UPDATE SET
   web_url=EXCLUDED.web_url,
   source_branch=EXCLUDED.source_branch,
   target_branch=EXCLUDED.target_branch,
+  head_sha=COALESCE(NULLIF(EXCLUDED.head_sha,''),codebase_merge_requests.head_sha),
   author_name=EXCLUDED.author_name,
   author_username=EXCLUDED.author_username,
   draft=EXCLUDED.draft,
@@ -143,6 +145,7 @@ WHERE (EXCLUDED.mr_updated_at IS NULL OR codebase_merge_requests.mr_updated_at I
    OR codebase_merge_requests.web_url IS DISTINCT FROM EXCLUDED.web_url
    OR codebase_merge_requests.source_branch IS DISTINCT FROM EXCLUDED.source_branch
    OR codebase_merge_requests.target_branch IS DISTINCT FROM EXCLUDED.target_branch
+   OR (EXCLUDED.head_sha <> '' AND codebase_merge_requests.head_sha IS DISTINCT FROM EXCLUDED.head_sha)
    OR codebase_merge_requests.author_name IS DISTINCT FROM EXCLUDED.author_name
    OR codebase_merge_requests.author_username IS DISTINCT FROM EXCLUDED.author_username
    OR codebase_merge_requests.draft IS DISTINCT FROM EXCLUDED.draft
@@ -150,7 +153,7 @@ WHERE (EXCLUDED.mr_updated_at IS NULL OR codebase_merge_requests.mr_updated_at I
    OR codebase_merge_requests.mr_created_at IS DISTINCT FROM EXCLUDED.mr_created_at
    OR codebase_merge_requests.mr_updated_at IS DISTINCT FROM EXCLUDED.mr_updated_at)
 RETURNING (xmax = 0)`, wid, repoID, repoPath, item.IID, item.ID, item.Title, item.Description,
-			item.State, item.WebURL, item.SourceBranch, item.TargetBranch, item.Author.Name,
+			item.State, item.WebURL, item.SourceBranch, item.TargetBranch, item.HeadSHA, item.Author.Name,
 			item.Author.Username, item.Draft, string(labels), item.CreatedAt, item.UpdatedAt,
 		).Scan(&inserted)
 		if errors.Is(err, pgx.ErrNoRows) {

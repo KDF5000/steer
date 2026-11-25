@@ -96,10 +96,14 @@ func (s *Store) VisibleCodebaseRunPage(ctx context.Context, wid string, user Use
 	}
 	for rows.Next() {
 		var entry CodebaseRunPageEntry
+		var reviewJSON []byte
 		r := &entry.Run
-		if err = rows.Scan(&r.ID, &r.WorkspaceID, &r.WorkflowID, &r.RepoPath, &r.RepoID, &r.MRIID, &r.MRTitle, &r.MRURL, &r.Trigger, &r.Status, &r.Summary, &r.Error, &r.TaskID, &r.ConversationID, &r.Model, &r.ReasoningEffort, &r.ReportStatus, &r.ReportError, &r.ReportURL, &r.StartedAt, &r.FinishedAt, &r.CreatedAt, &entry.ShareID); err != nil {
+		if err = rows.Scan(&r.ID, &r.WorkspaceID, &r.WorkflowID, &r.RepoPath, &r.RepoID, &r.MRIID, &r.MRTitle, &r.MRURL, &r.HeadSHA, &r.Round, &r.Trigger, &r.Status, &r.Summary, &reviewJSON, &r.RiskLevel, &r.RiskFloor, &r.ReviewTrack, &r.Disposition, &r.MergePolicy, &r.Error, &r.TaskID, &r.ConversationID, &r.Model, &r.ReasoningEffort, &r.ReportStatus, &r.ReportError, &r.ReportURL, &r.AutoApproveStatus, &r.AutoApproveError, &r.MergedHeadSHA, &r.MRMergedAt, &r.StartedAt, &r.FinishedAt, &r.CreatedAt, &entry.ShareID); err != nil {
 			rows.Close()
 			return page, err
+		}
+		if len(reviewJSON) > 0 {
+			r.ReviewJSON = reviewJSON
 		}
 		page.Items = append(page.Items, entry)
 	}
