@@ -592,8 +592,8 @@ func buildReviewPrompt(workflow store.CodebaseWorkflow, run store.CodebaseRun, m
 		b.WriteString("\n")
 	}
 	b.WriteString("\nUse the Codebase connection to read the merge request and its diff. Report concrete findings with file and line references where possible.\n")
-	b.WriteString("Output format for your final reply (which may be posted directly as an MR comment): start with a concise conclusion, risk/route, and plain-language findings (each with a one-line title, 2-3 sentence explanation of trigger and impact, exact file:line, and concrete fix suggestion). Put long call-chain derivations or counterevidence inside `<details>` collapsible blocks. Never output raw internal verification logs or local temp paths.\n")
-	b.WriteString("If your review skill produces `review.md` and `review.json`, expose them as deliverable artifacts named `review.md` and `review.json` (and include the `review.json` payload in a fenced ```json block if not exposed as an artifact).\n")
+	b.WriteString("Output format for your final reply (which may be posted directly as an MR comment): use clean, concise GitHub-Flavored Markdown (do NOT use raw HTML tags like `<details>` or `<summary>`, and do NOT paste raw `review.json` into the reply body). Start with a compact conclusion table and 1-2 sentence summary, then list each finding with a one-line title, exact `file:line`, 2-3 sentence cause & impact, and a concrete fix suggestion.\n")
+	b.WriteString("If your review skill produces `review.md` and `review.json`, expose them as deliverable artifacts named `review.md` and `review.json`.\n")
 	if len(priorReviewJSON) > 0 {
 		prior := strings.TrimSpace(string(priorReviewJSON))
 		const maxPriorRunes = 12000

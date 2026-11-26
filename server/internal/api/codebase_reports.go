@@ -214,7 +214,7 @@ func (s *Server) findCodebaseReviewComment(ctx context.Context, baseURL string, 
 }
 
 func buildCodebaseReport(workflow store.CodebaseWorkflow, run store.CodebaseRun, marker string) string {
-	summary := strings.TrimSpace(run.Summary)
+	summary := stripEmbeddedMetadataBlock(strings.TrimSpace(run.Summary))
 	if runes := []rune(summary); len(runes) > maxCodebaseReportRunes {
 		summary = string(runes[:maxCodebaseReportRunes]) + "\n\n… (truncated)"
 	}
@@ -267,4 +267,28 @@ func buildCodebaseReportBadges(run store.CodebaseRun) string {
 		return ""
 	}
 	return "> " + strings.Join(parts, " · ")
+}
+
+// stripEmbeddedMetadataBlock removes trailing machine-readable review.json
+// <details> blocks before posting a human-facing comment to Codebase.
+func stripEmbeddedMetadataBlock(summary string) string {
+	idx := strings.Index(summary, "<details>")
+	for idx >= 0 {
+		end := strings.Index(summary[idx:], "</details>")
+		if end < 0 {
+			break
+		}
+		block := summary[idx : idx+end+len("</details>")]
+		if strings.Contains(block, `"schema_version"`) && (strings.Contains(block, `"merge_policy"`) || strings.Contains(block, `"disposition"`)) {
+			summary = strings.TrimSpace(summary[:idx] + "\n" + summary[idx+end+len("</details>"):])
+			idx = strings.Index(summary, "<details>")
+			continue
+		}
+		next := strings.Index(summary[idx+end+len("</details>"):], "<details>")
+		if next < 0 {
+			break
+		}
+		idx = idx + end + len("</details>") + next
+	}
+	return strings.TrimSpace(summary)
 }
