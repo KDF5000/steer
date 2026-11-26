@@ -107,7 +107,7 @@ func TestBuildReviewPromptAndReportBadges(t *testing.T) {
 	}
 	prior := json.RawMessage(`{"schema_version":"0.2","findings":[]}`)
 	prompt := buildReviewPrompt(wf, run, "Fix deadlock in MS2", prior)
-	for _, want := range []string{"Head SHA: abcdef123456", "Review Round: 2", "Fix deadlock in MS2", "PRIOR_RESULT"} {
+	for _, want := range []string{"Head SHA: abcdef123456", "Review Round: 2", "Fix deadlock in MS2", "PRIOR_RESULT", ".relay/artifacts.json"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt missing %q:\n%s", want, prompt)
 		}
