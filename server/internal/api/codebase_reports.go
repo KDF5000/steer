@@ -214,7 +214,7 @@ func (s *Server) findCodebaseReviewComment(ctx context.Context, baseURL string, 
 }
 
 func buildCodebaseReport(workflow store.CodebaseWorkflow, run store.CodebaseRun, marker string) string {
-	summary := stripEmbeddedMetadataBlock(strings.TrimSpace(run.Summary))
+	summary := cleanCodebaseReviewSummary(run.Summary)
 	if runes := []rune(summary); len(runes) > maxCodebaseReportRunes {
 		summary = string(runes[:maxCodebaseReportRunes]) + "\n\n… (truncated)"
 	}

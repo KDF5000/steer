@@ -120,3 +120,16 @@ func TestBuildReviewPromptAndReportBadges(t *testing.T) {
 		}
 	}
 }
+
+func TestCleanCodebaseReviewSummary(t *testing.T) {
+	raw := "结论如下。\n\n<details> <summary>展开代码依据</summary>\n- 要点 1\n</details>\n交付：[review.md](file:///tmp/review.md) · [review.json](file:///tmp/review.json)\n<details><summary>结构化审查元数据</summary>\n```json\n{\"schema_version\":\"0.2\",\"merge_policy\":\"human_review_required\"}\n```\n</details>"
+	cleaned := cleanCodebaseReviewSummary(raw)
+	for _, forbidden := range []string{"<details>", "</details>", "<summary>", "</summary>", "review.md", "review.json", "schema_version"} {
+		if strings.Contains(cleaned, forbidden) {
+			t.Fatalf("cleaned summary still contains %q:\n%s", forbidden, cleaned)
+		}
+	}
+	if !strings.Contains(cleaned, "### 展开代码依据") || !strings.Contains(cleaned, "- 要点 1") {
+		t.Fatalf("expected details summary converted to heading:\n%s", cleaned)
+	}
+}

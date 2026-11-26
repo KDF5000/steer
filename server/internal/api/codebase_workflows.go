@@ -358,10 +358,13 @@ func (s *Server) syncCodebaseRuns(ctx context.Context, wid string, items []store
 		if task.Result != nil {
 			summary = *task.Result
 		}
+		var rawSummaryForMeta string
 		if status == "succeeded" {
+			rawSummaryForMeta = summary
 			if md, ok := s.extractCodebaseRunReviewMarkdown(ctx, wid, task); ok {
 				summary = md
 			}
+			summary = cleanCodebaseReviewSummary(summary)
 		}
 		if task.Error != nil {
 			runErr = *task.Error
@@ -380,7 +383,7 @@ func (s *Server) syncCodebaseRuns(ctx context.Context, wid string, items []store
 		updated, err := s.store.UpdateCodebaseRun(ctx, wid, run.ID, status, summary, runErr, "", "", started, finished)
 		if err == nil {
 			if updated.Status == "succeeded" && len(updated.ReviewJSON) == 0 {
-				if meta, ok := s.extractCodebaseRunReviewMeta(ctx, wid, task, summary); ok {
+				if meta, ok := s.extractCodebaseRunReviewMeta(ctx, wid, task, rawSummaryForMeta); ok {
 					if withMeta, metaErr := s.store.UpdateCodebaseRunReviewResult(ctx, wid, updated.ID, meta); metaErr == nil {
 						updated = withMeta
 					}

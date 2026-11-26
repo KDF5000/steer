@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/KDF5000/steer/server/internal/store"
@@ -170,4 +171,36 @@ func (s *Server) extractCodebaseRunReviewMeta(ctx context.Context, wid string, t
 		return parseCodebaseReviewJSON(raw)
 	}
 	return store.CodebaseRunReviewMeta{}, false
+}
+
+var (
+	detailsOpenSummaryRe = regexp.MustCompile(`(?is)<details>\s*<summary>(.*?)</summary>`)
+	detailsTagRe         = regexp.MustCompile(`(?i)</?details\s*>|</?summary\s*>`)
+	artifactDeliveryRe   = regexp.MustCompile(`(?m)^\s*(?:交付|产物|Deliverables?|Artifacts?)\s*[：:]\s*.*(?:review\.md|review\.json|verification\.md).*$\n?`)
+)
+
+// cleanCodebaseReviewSummary sanitizes agent review output for human display in
+// Steer UI and Codebase MR comments: strips embedded review.json blocks (after
+// metadata extraction), removes process-file delivery footers (review.md /
+// review.json / verification.md), and converts raw HTML <details>/<summary>
+// tags into clean Markdown headings.
+func cleanCodebaseReviewSummary(summary string) string {
+	text := stripEmbeddedMetadataBlock(strings.TrimSpace(summary))
+	text = detailsOpenSummaryRe.ReplaceAllStringFunc(text, func(match string) string {
+		sub := detailsOpenSummaryRe.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return ""
+		}
+		title := strings.TrimSpace(sub[1])
+		if title == "" {
+			return ""
+		}
+		return "\n### " + title + "\n"
+	})
+	text = detailsTagRe.ReplaceAllString(text, "")
+	text = artifactDeliveryRe.ReplaceAllString(text, "")
+	for strings.Contains(text, "\n\n\n") {
+		text = strings.ReplaceAll(text, "\n\n\n", "\n\n")
+	}
+	return strings.TrimSpace(text)
 }
