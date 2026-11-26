@@ -176,7 +176,8 @@ func (s *Server) extractCodebaseRunReviewMeta(ctx context.Context, wid string, t
 var (
 	detailsOpenSummaryRe = regexp.MustCompile(`(?is)<details>\s*<summary>(.*?)</summary>`)
 	detailsTagRe         = regexp.MustCompile(`(?i)</?details\s*>|</?summary\s*>`)
-	artifactDeliveryRe   = regexp.MustCompile(`(?m)^\s*(?:交付|产物|Deliverables?|Artifacts?)\s*[：:]\s*.*(?:review\.md|review\.json|verification\.md).*$\n?`)
+	artifactTokenPattern = `(?:\[[^\]]*(?:review\.md|review\.json|verification\.md)[^\]]*\]\([^)]*\)|` + "`" + `[^` + "`" + `]*(?:review\.md|review\.json|verification\.md)[^` + "`" + `]*` + "`" + `|\S*(?:review\.md|review\.json|verification\.md)\S*)`
+	artifactDeliveryRe   = regexp.MustCompile(`(?m)^\s*(?:(?:交付|产物|报告文件|相关文件|Deliverables?|Artifacts?)\s*[：:]\s*)?` + artifactTokenPattern + `(?:\s*[·•,|/、]\s*` + artifactTokenPattern + `)*\s*$\n?`)
 )
 
 // cleanCodebaseReviewSummary sanitizes agent review output for human display in
