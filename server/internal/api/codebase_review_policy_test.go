@@ -106,11 +106,14 @@ func TestBuildReviewPromptAndReportBadges(t *testing.T) {
 		Summary:     "All checks reviewed.",
 	}
 	prior := json.RawMessage(`{"schema_version":"0.2","findings":[]}`)
-	prompt := buildReviewPrompt(wf, run, "Fix deadlock in MS2", prior)
-	for _, want := range []string{"Head SHA: abcdef123456", "Review Round: 2", "Fix deadlock in MS2", "PRIOR_RESULT", ".relay/artifacts.json"} {
+	prompt := buildReviewPrompt(wf, run, "Fix deadlock in MS2", prior, "zh-CN")
+	for _, want := range []string{"Head SHA: abcdef123456", "Review Round: 2", "Fix deadlock in MS2", "PRIOR_RESULT", ".relay/artifacts.json", "Simplified Chinese"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt missing %q:\n%s", want, prompt)
 		}
+	}
+	if got := resolveCodebaseReviewLanguage(store.WorkspaceSettings{AIOutputLanguage: "auto", InterfaceLanguage: "zh-CN"}); got != "zh-CN" {
+		t.Fatalf("resolveCodebaseReviewLanguage fallback = %q, want zh-CN", got)
 	}
 
 	report := buildCodebaseReport(wf, run, "<!-- steer-review:wf1 -->")
