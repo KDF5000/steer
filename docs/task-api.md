@@ -548,3 +548,18 @@ ZIP 的可执行权限会保留；旧包中以 shebang 开头的文本脚本也�
 完整 Skill 支持要求 Relay `v0.5.15` 或更新版本。`server/go.mod`、
 `.env.example` 和 Compose/Dockerfile 的默认版本统一使用 `v0.5.15`；
 已有部署若配置了 `RELAY_VERSION`，升级时也需更新该覆盖值。
+
+### 更新 AgentBuddy Skill
+
+`POST /api/v1/skills/{skillId}/sync` 从 Skill 已保存的 AgentBuddy 来源获取
+`newest` 版本，并原地替换名称、说明、`SKILL.md` 和完整附属文件包。
+Skill ID、创建时间以及 Agent／审查流程的关联保持不变。
+请求可带 `{"updatedAt":"2026-11-25T00:00:00Z"}`，使用读取详情时的时间戳，
+防止旧页面覆盖别人已保存的修改。响应为 `{"skill":{...},"changed":true}`；
+内容相同则 `changed` 为 `false`。仅支持当前工作区内从 AgentBuddy 导入的 Skill。
+
+同步会覆盖已保存的本地修改，并移除上游已删除的文件。未保存的页面草稿
+会禁用更新入口；下载失败、包校验失败或下载期间 Skill 被修改时，不覆盖
+现有数据。并发修改返回 HTTP 409，需要重新读取详情后再更新。
+新任务读取更新后的完整包；已提交任务继续使用提交时的 Skill 快照。
+该功能由用户手动触发，没有新增定时同步任务或数据库迁移。

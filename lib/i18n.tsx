@@ -18,6 +18,18 @@ const storageKey = 'steer.interface-language';
 const languageEvent = 'steer:interface-language';
 
 const zhCN: Record<string, string> = {
+  'Update from AgentBuddy': '从 AgentBuddy 更新',
+  'Skill updated from AgentBuddy.': 'Skill 已同步 AgentBuddy 最新内容。',
+  'Skill is already up to date.': 'Skill 已是最新版本。',
+  'Could not update Skill from AgentBuddy.': '无法从 AgentBuddy 更新 Skill。',
+  'Save your changes before updating from AgentBuddy.':
+    '请先保存未保存的修改，再从 AgentBuddy 更新。',
+  'Sync the latest name, description and files from AgentBuddy. Local changes will be replaced.':
+    '同步 AgentBuddy 最新的名称、说明和完整文件包，将覆盖本地修改。',
+  'Skill changed while updating. Reload it and try again.':
+    'Skill 已发生修改，请重新打开详情后再更新。',
+  'Only Skills imported from AgentBuddy can be updated from source.':
+    '只有从 AgentBuddy 导入的 Skill 支持从来源更新。',
   'Automatically write back to MR': '自动回写到 MR',
   'When disabled, review the result in Steer and manually write it back from run details.':
     '关闭后，先在 Steer 检查结果，再从运行详情中手动回写到 MR。',

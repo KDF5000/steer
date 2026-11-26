@@ -11,6 +11,8 @@ import {
   Trash2,
   Wrench,
   Import,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
@@ -51,6 +53,13 @@ export function SkillDetailView({
   const [tab, setTab] = useState<'files' | 'settings'>('files');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const syncController = useRef<AbortController | null>(null);
+  const [settingsDraft, setSettingsDraft] = useState({
+    name: '',
+    description: '',
+    content: '',
+  });
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState('');
   const [addingFile, setAddingFile] = useState(false);
@@ -73,6 +82,11 @@ export function SkillDetailView({
               },
             ];
         setSkill(detail);
+        setSettingsDraft({
+          name: detail.name,
+          description: detail.description,
+          content: detail.content,
+        });
         setFiles(nextFiles);
         setSelectedPath(nextFiles[0]?.path || 'SKILL.md');
       })
@@ -91,6 +105,70 @@ export function SkillDetailView({
       cancelled = true;
     };
   }, [skillId, t]);
+
+  useEffect(() => () => syncController.current?.abort(), [skillId]);
+
+  const settingsDirty = Boolean(
+    skill &&
+    (settingsDraft.name !== skill.name ||
+      settingsDraft.description !== skill.description ||
+      settingsDraft.content !== skill.content),
+  );
+
+  const syncFromAgentBuddy = async () => {
+    if (!skill || saving || dirty || settingsDirty || syncController.current)
+      return;
+    const controller = new AbortController();
+    syncController.current = controller;
+    setUpdating(true);
+    setError('');
+    try {
+      const result = await steer.syncSkill(
+        skill.id,
+        skill.updatedAt,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+      const saved = result.skill;
+      setSkill(saved);
+      setFiles(saved.files || []);
+      setSettingsDraft({
+        name: saved.name,
+        description: saved.description,
+        content: saved.content,
+      });
+      setSelectedPath((current) =>
+        saved.files?.some((file) => file.path === current)
+          ? current
+          : saved.files?.[0]?.path || 'SKILL.md',
+      );
+      setDirty(false);
+      setAddingFile(false);
+      setNewFilePath('');
+      onSkill(saved);
+      onNotice(
+        t(
+          result.changed
+            ? 'Skill updated from AgentBuddy.'
+            : 'Skill is already up to date.',
+        ),
+      );
+    } catch (reason) {
+      if (!controller.signal.aborted)
+        setError(
+          t(
+            reason instanceof Error
+              ? reason.message
+              : 'Could not update Skill from AgentBuddy.',
+          ),
+        );
+    } finally {
+      if (syncController.current === controller) {
+        syncController.current = null;
+        setUpdating(false);
+      }
+    }
+  };
 
   useEffect(() => {
     if (addingFile) newFileInputRef.current?.focus();
@@ -137,12 +215,18 @@ export function SkillDetailView({
   };
 
   const saveFiles = async () => {
-    if (!skill || saving) return;
+    if (!skill || saving || updating) return;
     setSaving(true);
     setError('');
     try {
       const saved = await steer.updateSkillFiles(skill.id, files);
       setSkill(saved);
+      if (!settingsDirty)
+        setSettingsDraft({
+          name: saved.name,
+          description: saved.description,
+          content: saved.content,
+        });
       setFiles(saved.files || []);
       setDirty(false);
       onSkill(saved);
@@ -160,7 +244,7 @@ export function SkillDetailView({
 
   const saveSettings = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!skill || saving) return;
+    if (!skill || saving || updating) return;
     setSaving(true);
     setError('');
     const data = new FormData(event.currentTarget);
@@ -184,6 +268,12 @@ export function SkillDetailView({
         setDirty(false);
       }
       setSkill(saved);
+      setSettingsDraft({
+        name: saved.name,
+        description: saved.description,
+        content: saved.content,
+      });
+      setFiles(saved.files || []);
       onSkill(saved);
       onNotice(t('Skill saved.'));
     } catch (reason) {
@@ -249,6 +339,31 @@ export function SkillDetailView({
             </span>
           </div>
         </div>
+        {skill.sourceKind === 'agentbuddy' && (
+          <div className="ws-skill-detail-footer">
+            <span className="ws-form-hint">
+              {dirty || settingsDirty
+                ? t('Save your changes before updating from AgentBuddy.')
+                : t(
+                    'Sync the latest name, description and files from AgentBuddy. Local changes will be replaced.',
+                  )}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void syncFromAgentBuddy()}
+              disabled={updating || saving || dirty || settingsDirty}
+              aria-busy={updating}
+            >
+              {updating ? (
+                <Loader2 aria-hidden="true" className="is-spinning" />
+              ) : (
+                <RefreshCw aria-hidden="true" />
+              )}
+              {t(updating ? 'Updating…' : 'Update from AgentBuddy')}
+            </Button>
+          </div>
+        )}
       </header>
 
       <div className="ws-skill-detail-tabs" role="tablist">
@@ -258,6 +373,7 @@ export function SkillDetailView({
           aria-selected={tab === 'files'}
           className={tab === 'files' ? 'active' : undefined}
           onClick={() => setTab('files')}
+          disabled={updating}
         >
           {t('Files')}
           <span>{files.length || undefined}</span>
@@ -268,6 +384,7 @@ export function SkillDetailView({
           aria-selected={tab === 'settings'}
           className={tab === 'settings' ? 'active' : undefined}
           onClick={() => setTab('settings')}
+          disabled={updating}
         >
           {t('Settings')}
         </button>
@@ -285,6 +402,7 @@ export function SkillDetailView({
                   type="button"
                   aria-label={t('Add file')}
                   onClick={() => setAddingFile(true)}
+                  disabled={updating}
                 >
                   <Plus />
                 </button>
@@ -294,6 +412,7 @@ export function SkillDetailView({
                   <input
                     ref={newFileInputRef}
                     value={newFilePath}
+                    disabled={updating}
                     placeholder="e.g. scripts/check.sh"
                     onChange={(event) => setNewFilePath(event.target.value)}
                     onKeyDown={(event) => {
@@ -311,6 +430,7 @@ export function SkillDetailView({
                     type="button"
                     aria-label={t('Add file')}
                     onClick={addFile}
+                    disabled={updating}
                   >
                     <Check />
                   </button>
@@ -321,7 +441,9 @@ export function SkillDetailView({
                   <li key={file.path}>
                     <button
                       type="button"
-                      className={file.path === selectedPath ? 'active' : undefined}
+                      className={
+                        file.path === selectedPath ? 'active' : undefined
+                      }
                       onClick={() => setSelectedPath(file.path)}
                     >
                       <FileText />
@@ -334,6 +456,7 @@ export function SkillDetailView({
                         className="ws-skill-file-remove"
                         aria-label={`${t('Delete file')} ${file.path}`}
                         onClick={() => removeFile(file.path)}
+                        disabled={updating}
                       >
                         <Trash2 />
                       </button>
@@ -360,6 +483,7 @@ export function SkillDetailView({
                 ) : (
                   <textarea
                     value={currentFile.content}
+                    disabled={updating}
                     onChange={(event) => updateFile(event.target.value)}
                     aria-label={currentFile.path}
                     spellCheck={false}
@@ -390,7 +514,7 @@ export function SkillDetailView({
             <Button
               type="button"
               onClick={() => void saveFiles()}
-              disabled={saving || !dirty}
+              disabled={saving || updating || !dirty}
             >
               {saving ? 'Saving…' : t('Save files')}
             </Button>
@@ -404,15 +528,46 @@ export function SkillDetailView({
         >
           <label>
             Name
-            <input name="name" defaultValue={skill.name} />
+            <input
+              name="name"
+              value={settingsDraft.name}
+              disabled={updating}
+              onChange={(e) =>
+                setSettingsDraft((draft) => ({
+                  ...draft,
+                  name: e.target.value,
+                }))
+              }
+            />
           </label>
           <label>
             Description
-            <input name="description" defaultValue={skill.description} />
+            <input
+              name="description"
+              value={settingsDraft.description}
+              disabled={updating}
+              onChange={(e) =>
+                setSettingsDraft((draft) => ({
+                  ...draft,
+                  description: e.target.value,
+                }))
+              }
+            />
           </label>
           <label>
             Instructions
-            <textarea name="content" defaultValue={skill.content} rows={14} />
+            <textarea
+              name="content"
+              value={settingsDraft.content}
+              rows={14}
+              disabled={updating}
+              onChange={(e) =>
+                setSettingsDraft((draft) => ({
+                  ...draft,
+                  content: e.target.value,
+                }))
+              }
+            />
           </label>
           <p className="ws-form-hint">
             {t(
@@ -425,7 +580,7 @@ export function SkillDetailView({
             </p>
           )}
           <footer>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || updating}>
               {saving ? 'Saving…' : t('Save')}
             </Button>
           </footer>

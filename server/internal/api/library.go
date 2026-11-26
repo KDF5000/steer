@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -157,6 +158,52 @@ func (s *Server) createImportedSkill(w http.ResponseWriter, r *http.Request, ski
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) syncSkill(w http.ResponseWriter, r *http.Request) {
+	wid := s.workspace(r)
+	current, err := s.store.Skill(r.Context(), wid, r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if current.SourceKind != "agentbuddy" || current.SourceURL == nil || !isAgentBuddyInput(*current.SourceURL) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Only Skills imported from AgentBuddy can be updated from source."})
+		return
+	}
+	var input struct {
+		UpdatedAt *time.Time `json:"updatedAt"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if input.UpdatedAt != nil && !input.UpdatedAt.Equal(current.UpdatedAt) {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "Skill changed while updating. Reload it and try again.", "code": "skill_update_conflict"})
+		return
+	}
+	// Resolve the stored source, never a URL supplied by the caller. Passing an
+	// empty display URL stores a canonical package link after legacy short-link
+	// resolution, keeping subsequent updates tied to the same package.
+	latest, err := importAgentBuddySkill(r.Context(), *current.SourceURL, "")
+	if err != nil {
+		writeCodebaseError(w, err)
+		return
+	}
+	if !normalizeSkillPayload(w, &latest) {
+		return
+	}
+	changed := current.Name != latest.Name || current.Description != latest.Description || current.Content != latest.Content || !reflect.DeepEqual(current.Files, latest.Files)
+	updated, err := s.store.SyncAgentBuddySkill(r.Context(), wid, current.ID, current.UpdatedAt, latest)
+	if err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "Skill changed while updating. Reload it and try again.", "code": "skill_update_conflict"})
+			return
+		}
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"skill": updated, "changed": changed})
 }
 
 // searchAgentBuddySkills proxies the internal AgentBuddy registry so users can

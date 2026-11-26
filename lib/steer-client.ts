@@ -1180,6 +1180,15 @@ export const steer = {
       method: 'POST',
       body: JSON.stringify(identifier ? { url, identifier } : { url }),
     }),
+  syncSkill: (id: string, updatedAt: string, signal?: AbortSignal) =>
+    request<{ skill: SkillRecord; changed: boolean }>(
+      `/skills/${encodeURIComponent(id)}/sync`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ updatedAt }),
+        signal,
+      },
+    ),
   searchAgentBuddySkills: (query: string, signal?: AbortSignal) =>
     request<{ items: AgentBuddySkillRecord[] }>(
       `/skills/agentbuddy/search?q=${encodeURIComponent(query)}`,

@@ -153,6 +153,25 @@ func (s *Store) UpdateSkillFiles(ctx context.Context, workspaceID, id string, fi
 	return updated, err
 }
 
+// SyncAgentBuddySkill replaces the complete package in one statement. A fetch
+// must not overwrite edits or another sync committed while it was downloading.
+func (s *Store) SyncAgentBuddySkill(ctx context.Context, workspaceID, id string, expectedUpdatedAt time.Time, skill Skill) (Skill, error) {
+	raw, err := skillFilesJSON(skill.Files)
+	if err != nil {
+		return Skill{}, err
+	}
+	updated, err := scanSkillDetail(s.pool.QueryRow(ctx, `UPDATE skills SET name=$3,description=$4,content=$5,source_url=$6,files=$7::jsonb,updated_at=now()
+WHERE workspace_id=$1 AND id=$2 AND source_kind='agentbuddy' AND updated_at=$8 RETURNING `+skillDetailColumns,
+		workspaceID, id, skill.Name, skill.Description, skill.Content, skill.SourceURL, raw, expectedUpdatedAt))
+	if errors.Is(err, pgx.ErrNoRows) {
+		if _, lookupErr := s.Skill(ctx, workspaceID, id); lookupErr != nil {
+			return Skill{}, lookupErr
+		}
+		return Skill{}, ErrConflict
+	}
+	return updated, err
+}
+
 func (s *Store) DeleteSkill(ctx context.Context, workspaceID, id string) (Skill, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
